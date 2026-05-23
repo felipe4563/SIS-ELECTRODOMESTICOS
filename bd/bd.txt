@@ -1,0 +1,1017 @@
+MariaDB [(none)]> use bd_sistema_electrodomesticos;
+Database changed
+MariaDB [bd_sistema_electrodomesticos]> show tables;
++----------------------------------------+
+| Tables_in_bd_sistema_electrodomesticos |
++----------------------------------------+
+| ajuste_inventario_detalle              |
+| ajustes_inventario                     |
+| alertas_stock                          |
+| arqueos_caja                           |
+| auditoria                              |
+| cajas                                  |
+| categorias                             |
+| categorias_gasto                       |
+| cliente_direcciones                    |
+| clientes                               |
+| compra_cuotas                          |
+| compra_detalle                         |
+| compras                                |
+| configuracion_sistema                  |
+| depositos                              |
+| devolucion_venta_detalle               |
+| devoluciones_venta                     |
+| empresas                               |
+| gastos                                 |
+| kardex                                 |
+| marcas                                 |
+| modulos                                |
+| monedas                                |
+| pagos_compra                           |
+| pagos_venta                            |
+| permisos                               |
+| producto_precio_historico              |
+| productos                              |
+| proveedor_contactos                    |
+| proveedor_cuentas_pago                 |
+| proveedores                            |
+| rol_permiso                            |
+| roles                                  |
+| sesiones                               |
+| stock                                  |
+| sucursales                             |
+| tipos_cambio                           |
+| tipos_movimiento                       |
+| transferencia_detalle                  |
+| transferencias                         |
+| unidades_medida                        |
+| usuario_sucursal                       |
+| usuarios                               |
+| venta_cuotas                           |
+| venta_detalle                          |
+| ventas                                 |
++----------------------------------------+
+46 rows in set (0.001 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe ajuste_inventario_detalle;
++------------------+---------------+------+-----+---------+------------------+
+| Field            | Type          | Null | Key | Default | Extra            |
++------------------+---------------+------+-----+---------+------------------+
+| id_detalle       | bigint(20)    | NO   | PRI | NULL    | auto_increment   |
+| id_ajuste        | bigint(20)    | NO   | MUL | NULL    |                  |
+| id_producto      | int(11)       | NO   | MUL | NULL    |                  |
+| cantidad_sistema | decimal(14,2) | NO   |     | NULL    |                  |
+| cantidad_fisica  | decimal(14,2) | NO   |     | NULL    |                  |
+| diferencia       | decimal(14,2) | YES  |     | NULL    | STORED GENERATED |
+| observacion      | varchar(255)  | YES  |     | NULL    |                  |
++------------------+---------------+------+-----+---------+------------------+
+7 rows in set (0.006 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe ajustes_inventario;
++-------------+---------------------------------------+------+-----+---------------------+----------------+
+| Field       | Type                                  | Null | Key | Default             | Extra          |
++-------------+---------------------------------------+------+-----+---------------------+----------------+
+| id_ajuste   | bigint(20)                            | NO   | PRI | NULL                | auto_increment |
+| numero      | varchar(30)                           | NO   | UNI | NULL                |                |
+| id_deposito | int(11)                               | NO   | MUL | NULL                |                |
+| fecha       | datetime                              | NO   |     | current_timestamp() |                |
+| motivo      | varchar(255)                          | YES  |     | NULL                |                |
+| id_usuario  | int(11)                               | NO   | MUL | NULL                |                |
+| estado      | enum('BORRADOR','APROBADO','ANULADO') | NO   |     | BORRADOR            |                |
++-------------+---------------------------------------+------+-----+---------------------+----------------+
+7 rows in set (0.010 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe  alertas_stock;
++--------------------+---------------+------+-----+---------------------+----------------+
+| Field              | Type          | Null | Key | Default             | Extra          |
++--------------------+---------------+------+-----+---------------------+----------------+
+| id_alerta          | bigint(20)    | NO   | PRI | NULL                | auto_increment |
+| id_producto        | int(11)       | NO   | MUL | NULL                |                |
+| id_deposito        | int(11)       | NO   | MUL | NULL                |                |
+| cantidad_actual    | decimal(14,2) | NO   |     | NULL                |                |
+| stock_minimo       | decimal(14,2) | NO   |     | NULL                |                |
+| fecha_generada     | datetime      | NO   |     | current_timestamp() |                |
+| atendida           | tinyint(1)    | NO   | MUL | 0                   |                |
+| fecha_atendida     | datetime      | YES  |     | NULL                |                |
+| id_usuario_atendio | int(11)       | YES  | MUL | NULL                |                |
++--------------------+---------------+------+-----+---------------------+----------------+
+9 rows in set (0.005 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe  arqueos_caja;
++----------------------+---------------------------+------+-----+---------------------+------------------+
+| Field                | Type                      | Null | Key | Default             | Extra            |
++----------------------+---------------------------+------+-----+---------------------+------------------+
+| id_arqueo            | bigint(20)                | NO   | PRI | NULL                | auto_increment   |
+| id_caja              | int(11)                   | NO   | MUL | NULL                |                  |
+| id_usuario           | int(11)                   | NO   | MUL | NULL                |                  |
+| fecha_apertura       | datetime                  | NO   |     | current_timestamp() |                  |
+| fecha_cierre         | datetime                  | YES  |     | NULL                |                  |
+| monto_apertura       | decimal(14,2)             | NO   |     | 0.00                |                  |
+| monto_cierre_sistema | decimal(14,2)             | YES  |     | 0.00                |                  |
+| monto_cierre_real    | decimal(14,2)             | YES  |     | 0.00                |                  |
+| diferencia           | decimal(14,2)             | YES  |     | NULL                | STORED GENERATED |
+| estado               | enum('ABIERTA','CERRADA') | NO   |     | ABIERTA             |                  |
+| observaciones        | text                      | YES  |     | NULL                |                  |
++----------------------+---------------------------+------+-----+---------------------+------------------+
+11 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe auditoria;
++---------------+----------------------------------------------------------+------+-----+---------------------+----------------+
+| Field         | Type                                                     | Null | Key | Default             | Extra          |
++---------------+----------------------------------------------------------+------+-----+---------------------+----------------+
+| id_auditoria  | bigint(20)                                               | NO   | PRI | NULL                | auto_increment |
+| id_usuario    | int(11)                                                  | YES  | MUL | NULL                |                |
+| tabla         | varchar(80)                                              | NO   | MUL | NULL                |                |
+| id_registro   | bigint(20)                                               | YES  |     | NULL                |                |
+| accion        | enum('INSERT','UPDATE','DELETE','LOGIN','LOGOUT','OTRO') | NO   |     | NULL                |                |
+| datos_antes   | longtext                                                 | YES  |     | NULL                |                |
+| datos_despues | longtext                                                 | YES  |     | NULL                |                |
+| ip_origen     | varchar(45)                                              | YES  |     | NULL                |                |
+| fecha         | datetime                                                 | NO   | MUL | current_timestamp() |                |
++---------------+----------------------------------------------------------+------+-----+---------------------+----------------+
+9 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe cajas;
++-------------+-------------+------+-----+---------+----------------+
+| Field       | Type        | Null | Key | Default | Extra          |
++-------------+-------------+------+-----+---------+----------------+
+| id_caja     | int(11)     | NO   | PRI | NULL    | auto_increment |
+| id_sucursal | int(11)     | NO   | MUL | NULL    |                |
+| nombre      | varchar(60) | NO   |     | NULL    |                |
+| activo      | tinyint(1)  | NO   |     | 1       |                |
++-------------+-------------+------+-----+---------+----------------+
+4 rows in set (0.006 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe categorias;
++--------------------+--------------+------+-----+---------+----------------+
+| Field              | Type         | Null | Key | Default | Extra          |
++--------------------+--------------+------+-----+---------+----------------+
+| id_categoria       | int(11)      | NO   | PRI | NULL    | auto_increment |
+| id_categoria_padre | int(11)      | YES  | MUL | NULL    |                |
+| nombre             | varchar(80)  | NO   |     | NULL    |                |
+| descripcion        | varchar(255) | YES  |     | NULL    |                |
+| activo             | tinyint(1)   | NO   |     | 1       |                |
++--------------------+--------------+------+-----+---------+----------------+
+5 rows in set (0.005 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe categorias_gasto;
++--------------------+--------------+------+-----+---------+----------------+
+| Field              | Type         | Null | Key | Default | Extra          |
++--------------------+--------------+------+-----+---------+----------------+
+| id_categoria_gasto | int(11)      | NO   | PRI | NULL    | auto_increment |
+| nombre             | varchar(80)  | NO   | UNI | NULL    |                |
+| descripcion        | varchar(255) | YES  |     | NULL    |                |
+| activo             | tinyint(1)   | NO   |     | 1       |                |
++--------------------+--------------+------+-----+---------+----------------+
+4 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe cliente_direcciones;
++--------------+--------------+------+-----+---------+----------------+
+| Field        | Type         | Null | Key | Default | Extra          |
++--------------+--------------+------+-----+---------+----------------+
+| id_direccion | int(11)      | NO   | PRI | NULL    | auto_increment |
+| id_cliente   | int(11)      | NO   | MUL | NULL    |                |
+| etiqueta     | varchar(40)  | YES  |     | NULL    |                |
+| direccion    | varchar(255) | NO   |     | NULL    |                |
+| ciudad       | varchar(80)  | YES  |     | NULL    |                |
+| referencias  | varchar(255) | YES  |     | NULL    |                |
+| es_principal | tinyint(1)   | NO   |     | 0       |                |
++--------------+--------------+------+-----+---------+----------------+
+7 rows in set (0.006 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> describe clientes;
++-------------------+-------------------------------------------------+------+-----+---------------------+----------------+
+| Field             | Type                                            | Null | Key | Default             | Extra          |
++-------------------+-------------------------------------------------+------+-----+---------------------+----------------+
+| id_cliente        | int(11)                                         | NO   | PRI | NULL                | auto_increment |
+| codigo            | varchar(20)                                     | NO   | UNI | NULL                |                |
+| tipo_cliente      | enum('MAYORISTA','MINORISTA','VIP','OCASIONAL') | NO   |     | MINORISTA           |                |
+| tipo_documento    | enum('CI','NIT','PASAPORTE','RUC','OTRO')       | YES  |     | CI                  |                |
+| documento         | varchar(20)                                     | YES  | MUL | NULL                |                |
+| razon_social      | varchar(200)                                    | YES  |     | NULL                |                |
+| nombres           | varchar(120)                                    | YES  |     | NULL                |                |
+| apellidos         | varchar(120)                                    | YES  |     | NULL                |                |
+| telefono          | varchar(30)                                     | YES  |     | NULL                |                |
+| celular           | varchar(30)                                     | YES  |     | NULL                |                |
+| email             | varchar(120)                                    | YES  |     | NULL                |                |
+| fecha_nacimiento  | date                                            | YES  |     | NULL                |                |
+| permite_credito   | tinyint(1)                                      | NO   |     | 0                   |                |
+| limite_credito    | decimal(14,2)                                   | YES  |     | 0.00                |                |
+| saldo_actual      | decimal(14,2)                                   | YES  |     | 0.00                |                |
+| dias_credito      | int(11)                                         | YES  |     | 0                   |                |
+| descuento_default | decimal(5,2)                                    | YES  |     | 0.00                |                |
+| activo            | tinyint(1)                                      | NO   |     | 1                   |                |
+| fecha_creacion    | datetime                                        | NO   |     | current_timestamp() |                |
++-------------------+-------------------------------------------------+------+-----+---------------------+----------------+
+19 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE compra_cuotas;
++-------------------+------------------------------------------------+------+-----+-----------+----------------+
+| Field             | Type                                           | Null | Key | Default   | Extra          |
++-------------------+------------------------------------------------+------+-----+-----------+----------------+
+| id_cuota          | bigint(20)                                     | NO   | PRI | NULL      | auto_increment |
+| id_compra         | bigint(20)                                     | NO   | MUL | NULL      |                |
+| numero_cuota      | int(11)                                        | NO   |     | NULL      |                |
+| fecha_vencimiento | date                                           | NO   |     | NULL      |                |
+| monto             | decimal(14,2)                                  | NO   |     | NULL      |                |
+| monto_pagado      | decimal(14,2)                                  | NO   |     | 0.00      |                |
+| estado            | enum('PENDIENTE','PARCIAL','PAGADA','VENCIDA') | NO   |     | PENDIENTE |                |
++-------------------+------------------------------------------------+------+-----+-----------+----------------+
+7 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE compra_detalle;
++-------------------+---------------+------+-----+---------+----------------+
+| Field             | Type          | Null | Key | Default | Extra          |
++-------------------+---------------+------+-----+---------+----------------+
+| id_detalle        | bigint(20)    | NO   | PRI | NULL    | auto_increment |
+| id_compra         | bigint(20)    | NO   | MUL | NULL    |                |
+| id_producto       | int(11)       | NO   | MUL | NULL    |                |
+| cantidad          | decimal(14,2) | NO   |     | NULL    |                |
+| cantidad_recibida | decimal(14,2) | NO   |     | 0.00    |                |
+| precio_unitario   | decimal(14,4) | NO   |     | NULL    |                |
+| descuento_porc    | decimal(5,2)  | YES  |     | 0.00    |                |
+| descuento_monto   | decimal(14,2) | YES  |     | 0.00    |                |
+| impuesto_porc     | decimal(5,2)  | YES  |     | 0.00    |                |
+| subtotal          | decimal(14,2) | NO   |     | NULL    |                |
+| observacion       | varchar(255)  | YES  |     | NULL    |                |
++-------------------+---------------+------+-----+---------+----------------+
+11 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE compras;
++---------------------+-----------------------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field               | Type                                                                        | Null | Key | Default             | Extra          |
++---------------------+-----------------------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_compra           | bigint(20)                                                                  | NO   | PRI | NULL                | auto_increment |
+| numero              | varchar(30)                                                                 | NO   | UNI | NULL                |                |
+| numero_factura      | varchar(40)                                                                 | YES  |     | NULL                |                |
+| id_proveedor        | int(11)                                                                     | NO   | MUL | NULL                |                |
+| id_sucursal         | int(11)                                                                     | NO   | MUL | NULL                |                |
+| id_deposito_destino | int(11)                                                                     | NO   | MUL | NULL                |                |
+| id_moneda           | int(11)                                                                     | NO   | MUL | NULL                |                |
+| tipo_cambio         | decimal(18,6)                                                               | NO   |     | 1.000000            |                |
+| estado              | enum('PRE_PEDIDO','POR_LLEGAR','CONFIRMADO','RECIBIDO','PARCIAL','ANULADO') | NO   | MUL | PRE_PEDIDO          |                |
+| condicion_pago      | enum('CONTADO','CREDITO')                                                   | NO   |     | CONTADO             |                |
+| dias_credito        | int(11)                                                                     | YES  |     | 0                   |                |
+| fecha_pedido        | date                                                                        | NO   | MUL | NULL                |                |
+| fecha_estim_llegada | date                                                                        | YES  |     | NULL                |                |
+| fecha_confirmacion  | date                                                                        | YES  |     | NULL                |                |
+| fecha_recepcion     | date                                                                        | YES  |     | NULL                |                |
+| subtotal            | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| descuento           | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| impuesto            | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| flete               | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| otros_costos        | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| total               | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| saldo_pendiente     | decimal(14,2)                                                               | NO   |     | 0.00                |                |
+| id_usuario_crea     | int(11)                                                                     | NO   | MUL | NULL                |                |
+| id_usuario_aprueba  | int(11)                                                                     | YES  | MUL | NULL                |                |
+| id_usuario_recibe   | int(11)                                                                     | YES  | MUL | NULL                |                |
+| observaciones       | text                                                                        | YES  |     | NULL                |                |
+| fecha_creacion      | datetime                                                                    | NO   |     | current_timestamp() |                |
++---------------------+-----------------------------------------------------------------------------+------+-----+---------------------+----------------+
+27 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE configuracion_sistema;
++--------------------+-------------------------------------------------+------+-----+---------------------+-------------------------------+
+| Field              | Type                                            | Null | Key | Default             | Extra                         |
++--------------------+-------------------------------------------------+------+-----+---------------------+-------------------------------+
+| id_config          | int(11)                                         | NO   | PRI | NULL                | auto_increment                |
+| clave              | varchar(80)                                     | NO   | UNI | NULL                |                               |
+| valor              | text                                            | YES  |     | NULL                |                               |
+| descripcion        | varchar(255)                                    | YES  |     | NULL                |                               |
+| tipo_dato          | enum('STRING','INT','DECIMAL','BOOLEAN','JSON') | YES  |     | STRING              |                               |
+| fecha_modificacion | datetime                                        | NO   |     | current_timestamp() | on update current_timestamp() |
++--------------------+-------------------------------------------------+------+-----+---------------------+-------------------------------+
+6 rows in set (0.005 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE depositos;
++----------------+-------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field          | Type                                                        | Null | Key | Default             | Extra          |
++----------------+-------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_deposito    | int(11)                                                     | NO   | PRI | NULL                | auto_increment |
+| id_sucursal    | int(11)                                                     | NO   | MUL | NULL                |                |
+| codigo         | varchar(20)                                                 | NO   | UNI | NULL                |                |
+| nombre         | varchar(100)                                                | NO   |     | NULL                |                |
+| tipo           | enum('ALMACEN','DEPOSITO_PEQUENO','PUNTO_VENTA','TRANSITO') | NO   |     | DEPOSITO_PEQUENO    |                |
+| direccion      | varchar(255)                                                | YES  |     | NULL                |                |
+| encargado      | varchar(120)                                                | YES  |     | NULL                |                |
+| permite_venta  | tinyint(1)                                                  | NO   |     | 1                   |                |
+| activo         | tinyint(1)                                                  | NO   |     | 1                   |                |
+| fecha_creacion | datetime                                                    | NO   |     | current_timestamp() |                |
++----------------+-------------------------------------------------------------+------+-----+---------------------+----------------+
+10 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE devolucion_venta_detalle;
++-----------------+---------------+------+-----+---------+----------------+
+| Field           | Type          | Null | Key | Default | Extra          |
++-----------------+---------------+------+-----+---------+----------------+
+| id_detalle      | bigint(20)    | NO   | PRI | NULL    | auto_increment |
+| id_devolucion   | bigint(20)    | NO   | MUL | NULL    |                |
+| id_producto     | int(11)       | NO   | MUL | NULL    |                |
+| cantidad        | decimal(14,2) | NO   |     | NULL    |                |
+| precio_unitario | decimal(14,2) | NO   |     | NULL    |                |
+| subtotal        | decimal(14,2) | NO   |     | NULL    |                |
+| motivo          | varchar(255)  | YES  |     | NULL    |                |
++-----------------+---------------+------+-----+---------+----------------+
+7 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE devoluciones_venta;
++---------------+------------------------------------------+------+-----+---------------------+----------------+
+| Field         | Type                                     | Null | Key | Default             | Extra          |
++---------------+------------------------------------------+------+-----+---------------------+----------------+
+| id_devolucion | bigint(20)                               | NO   | PRI | NULL                | auto_increment |
+| numero        | varchar(30)                              | NO   | UNI | NULL                |                |
+| id_venta      | bigint(20)                               | NO   | MUL | NULL                |                |
+| id_deposito   | int(11)                                  | NO   | MUL | NULL                |                |
+| fecha         | datetime                                 | NO   |     | current_timestamp() |                |
+| motivo        | varchar(255)                             | YES  |     | NULL                |                |
+| total         | decimal(14,2)                            | NO   |     | 0.00                |                |
+| estado        | enum('PENDIENTE','APROBADA','RECHAZADA') | NO   |     | PENDIENTE           |                |
+| id_usuario    | int(11)                                  | NO   | MUL | NULL                |                |
++---------------+------------------------------------------+------+-----+---------------------+----------------+
+9 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE empresas;
++------------------+--------------+------+-----+---------------------+----------------+
+| Field            | Type         | Null | Key | Default             | Extra          |
++------------------+--------------+------+-----+---------------------+----------------+
+| id_empresa       | int(11)      | NO   | PRI | NULL                | auto_increment |
+| razon_social     | varchar(200) | NO   |     | NULL                |                |
+| nombre_comercial | varchar(150) | YES  |     | NULL                |                |
+| nit              | varchar(20)  | YES  | UNI | NULL                |                |
+| direccion        | varchar(255) | YES  |     | NULL                |                |
+| telefono         | varchar(30)  | YES  |     | NULL                |                |
+| email            | varchar(120) | YES  |     | NULL                |                |
+| logo_url         | varchar(255) | YES  |     | NULL                |                |
+| activo           | tinyint(1)   | NO   |     | 1                   |                |
+| fecha_creacion   | datetime     | NO   |     | current_timestamp() |                |
++------------------+--------------+------+-----+---------------------+----------------+
+10 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE gastos;
++--------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field              | Type                                                            | Null | Key | Default             | Extra          |
++--------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_gasto           | bigint(20)                                                      | NO   | PRI | NULL                | auto_increment |
+| numero             | varchar(30)                                                     | NO   | UNI | NULL                |                |
+| id_categoria_gasto | int(11)                                                         | NO   | MUL | NULL                |                |
+| id_sucursal        | int(11)                                                         | NO   | MUL | NULL                |                |
+| id_proveedor       | int(11)                                                         | YES  | MUL | NULL                |                |
+| descripcion        | varchar(255)                                                    | NO   |     | NULL                |                |
+| fecha              | date                                                            | NO   | MUL | NULL                |                |
+| id_moneda          | int(11)                                                         | NO   | MUL | NULL                |                |
+| tipo_cambio        | decimal(18,6)                                                   | YES  |     | 1.000000            |                |
+| monto              | decimal(14,2)                                                   | NO   |     | NULL                |                |
+| metodo_pago        | enum('EFECTIVO','TRANSFERENCIA','QR','CHEQUE','TARJETA','OTRO') | NO   |     | NULL                |                |
+| numero_comprobante | varchar(60)                                                     | YES  |     | NULL                |                |
+| comprobante_url    | varchar(255)                                                    | YES  |     | NULL                |                |
+| id_usuario         | int(11)                                                         | NO   | MUL | NULL                |                |
+| estado             | enum('REGISTRADO','APROBADO','PAGADO','ANULADO')                | NO   |     | REGISTRADO          |                |
+| observaciones      | text                                                            | YES  |     | NULL                |                |
+| fecha_creacion     | datetime                                                        | NO   |     | current_timestamp() |                |
++--------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+17 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE kardex;
++--------------------+-------------------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field              | Type                                                                    | Null | Key | Default             | Extra          |
++--------------------+-------------------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_kardex          | bigint(20)                                                              | NO   | PRI | NULL                | auto_increment |
+| id_producto        | int(11)                                                                 | NO   | MUL | NULL                |                |
+| id_deposito        | int(11)                                                                 | NO   | MUL | NULL                |                |
+| id_tipo_movimiento | int(11)                                                                 | NO   | MUL | NULL                |                |
+| fecha              | datetime                                                                | NO   |     | current_timestamp() |                |
+| cantidad           | decimal(14,2)                                                           | NO   |     | NULL                |                |
+| costo_unitario     | decimal(14,4)                                                           | YES  |     | 0.0000              |                |
+| saldo_cantidad     | decimal(14,2)                                                           | NO   |     | 0.00                |                |
+| saldo_costo        | decimal(14,4)                                                           | NO   |     | 0.0000              |                |
+| documento_tipo     | enum('COMPRA','VENTA','TRANSFERENCIA','AJUSTE','DEVOLUCION','APERTURA') | NO   |     | NULL                |                |
+| documento_id       | bigint(20)                                                              | YES  |     | NULL                |                |
+| documento_numero   | varchar(40)                                                             | YES  |     | NULL                |                |
+| id_usuario         | int(11)                                                                 | YES  | MUL | NULL                |                |
+| observaciones      | varchar(255)                                                            | YES  |     | NULL                |                |
++--------------------+-------------------------------------------------------------------------+------+-----+---------------------+----------------+
+14 rows in set (0.005 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE marcas;
++-------------+--------------+------+-----+---------+----------------+
+| Field       | Type         | Null | Key | Default | Extra          |
++-------------+--------------+------+-----+---------+----------------+
+| id_marca    | int(11)      | NO   | PRI | NULL    | auto_increment |
+| nombre      | varchar(80)  | NO   | UNI | NULL    |                |
+| pais_origen | varchar(60)  | YES  |     | NULL    |                |
+| logo_url    | varchar(255) | YES  |     | NULL    |                |
+| activo      | tinyint(1)   | NO   |     | 1       |                |
++-------------+--------------+------+-----+---------+----------------+
+5 rows in set (0.005 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE modulos;
++-----------+-------------+------+-----+---------+----------------+
+| Field     | Type        | Null | Key | Default | Extra          |
++-----------+-------------+------+-----+---------+----------------+
+| id_modulo | int(11)     | NO   | PRI | NULL    | auto_increment |
+| codigo    | varchar(40) | NO   | UNI | NULL    |                |
+| nombre    | varchar(80) | NO   |     | NULL    |                |
+| icono     | varchar(40) | YES  |     | NULL    |                |
+| orden     | int(11)     | YES  |     | 0       |                |
++-----------+-------------+------+-----+---------+----------------+
+5 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE monedas;
++----------------+-------------+------+-----+---------+----------------+
+| Field          | Type        | Null | Key | Default | Extra          |
++----------------+-------------+------+-----+---------+----------------+
+| id_moneda      | int(11)     | NO   | PRI | NULL    | auto_increment |
+| codigo         | varchar(5)  | NO   | UNI | NULL    |                |
+| nombre         | varchar(50) | NO   |     | NULL    |                |
+| simbolo        | varchar(5)  | NO   |     | NULL    |                |
+| decimales      | tinyint(4)  | NO   |     | 2       |                |
+| es_moneda_base | tinyint(1)  | NO   |     | 0       |                |
+| activo         | tinyint(1)  | NO   |     | 1       |                |
++----------------+-------------+------+-----+---------+----------------+
+7 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE pagos_compra;
++---------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field               | Type                                                            | Null | Key | Default             | Extra          |
++---------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_pago             | bigint(20)                                                      | NO   | PRI | NULL                | auto_increment |
+| numero              | varchar(30)                                                     | NO   | UNI | NULL                |                |
+| id_compra           | bigint(20)                                                      | YES  | MUL | NULL                |                |
+| id_cuota            | bigint(20)                                                      | YES  | MUL | NULL                |                |
+| id_proveedor        | int(11)                                                         | NO   | MUL | NULL                |                |
+| id_sucursal         | int(11)                                                         | NO   | MUL | NULL                |                |
+| fecha               | datetime                                                        | NO   | MUL | current_timestamp() |                |
+| metodo_pago         | enum('EFECTIVO','TRANSFERENCIA','QR','CHEQUE','TARJETA','OTRO') | NO   |     | NULL                |                |
+| id_cuenta_proveedor | int(11)                                                         | YES  | MUL | NULL                |                |
+| id_moneda           | int(11)                                                         | NO   | MUL | NULL                |                |
+| tipo_cambio         | decimal(18,6)                                                   | YES  |     | 1.000000            |                |
+| monto               | decimal(14,2)                                                   | NO   |     | NULL                |                |
+| numero_referencia   | varchar(60)                                                     | YES  |     | NULL                |                |
+| comprobante_url     | varchar(255)                                                    | YES  |     | NULL                |                |
+| id_usuario          | int(11)                                                         | NO   | MUL | NULL                |                |
+| observaciones       | text                                                            | YES  |     | NULL                |                |
++---------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+16 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE pagos_venta;
++-------------------+------------------------------------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field             | Type                                                                                     | Null | Key | Default             | Extra          |
++-------------------+------------------------------------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_pago           | bigint(20)                                                                               | NO   | PRI | NULL                | auto_increment |
+| numero            | varchar(30)                                                                              | NO   | UNI | NULL                |                |
+| id_venta          | bigint(20)                                                                               | YES  | MUL | NULL                |                |
+| id_cuota          | bigint(20)                                                                               | YES  | MUL | NULL                |                |
+| id_cliente        | int(11)                                                                                  | NO   | MUL | NULL                |                |
+| id_sucursal       | int(11)                                                                                  | NO   | MUL | NULL                |                |
+| fecha             | datetime                                                                                 | NO   | MUL | current_timestamp() |                |
+| metodo_pago       | enum('EFECTIVO','TRANSFERENCIA','QR','CHEQUE','TARJETA_DEBITO','TARJETA_CREDITO','OTRO') | NO   |     | NULL                |                |
+| id_moneda         | int(11)                                                                                  | NO   | MUL | NULL                |                |
+| tipo_cambio       | decimal(18,6)                                                                            | YES  |     | 1.000000            |                |
+| monto             | decimal(14,2)                                                                            | NO   |     | NULL                |                |
+| numero_referencia | varchar(60)                                                                              | YES  |     | NULL                |                |
+| comprobante_url   | varchar(255)                                                                             | YES  |     | NULL                |                |
+| id_usuario        | int(11)                                                                                  | NO   | MUL | NULL                |                |
+| observaciones     | text                                                                                     | YES  |     | NULL                |                |
++-------------------+------------------------------------------------------------------------------------------+------+-----+---------------------+----------------+
+15 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE permisos;
++-------------+--------------+------+-----+---------+----------------+
+| Field       | Type         | Null | Key | Default | Extra          |
++-------------+--------------+------+-----+---------+----------------+
+| id_permiso  | int(11)      | NO   | PRI | NULL    | auto_increment |
+| id_modulo   | int(11)      | NO   | MUL | NULL    |                |
+| codigo      | varchar(80)  | NO   | UNI | NULL    |                |
+| nombre      | varchar(120) | NO   |     | NULL    |                |
+| descripcion | varchar(255) | YES  |     | NULL    |                |
++-------------+--------------+------+-----+---------+----------------+
+5 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE producto_precio_historico;
++-------------------+---------------+------+-----+---------------------+----------------+
+| Field             | Type          | Null | Key | Default             | Extra          |
++-------------------+---------------+------+-----+---------------------+----------------+
+| id_historico      | bigint(20)    | NO   | PRI | NULL                | auto_increment |
+| id_producto       | int(11)       | NO   | MUL | NULL                |                |
+| precio_real_ant   | decimal(14,2) | YES  |     | NULL                |                |
+| precio_real_nuevo | decimal(14,2) | YES  |     | NULL                |                |
+| precio_pub_ant    | decimal(14,2) | YES  |     | NULL                |                |
+| precio_pub_nuevo  | decimal(14,2) | YES  |     | NULL                |                |
+| id_usuario        | int(11)       | YES  | MUL | NULL                |                |
+| fecha             | datetime      | NO   |     | current_timestamp() |                |
++-------------------+---------------+------+-----+---------------------+----------------+
+8 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE productos;
++----------------------+---------------+------+-----+---------------------+-------------------------------+
+| Field                | Type          | Null | Key | Default             | Extra                         |
++----------------------+---------------+------+-----+---------------------+-------------------------------+
+| id_producto          | int(11)       | NO   | PRI | NULL                | auto_increment                |
+| codigo_interno       | varchar(40)   | NO   | UNI | NULL                |                               |
+| codigo_barras        | varchar(60)   | YES  | UNI | NULL                |                               |
+| id_marca             | int(11)       | NO   | MUL | NULL                |                               |
+| id_categoria         | int(11)       | NO   | MUL | NULL                |                               |
+| id_unidad            | int(11)       | NO   | MUL | NULL                |                               |
+| producto             | varchar(120)  | NO   |     | NULL                |                               |
+| detalle              | varchar(255)  | YES  |     | NULL                |                               |
+| capacidad            | varchar(40)   | YES  |     | NULL                |                               |
+| caracteristicas      | varchar(255)  | YES  |     | NULL                |                               |
+| modelo               | varchar(80)   | YES  | MUL | NULL                |                               |
+| color                | varchar(40)   | YES  |     | NULL                |                               |
+| id_moneda_costo      | int(11)       | NO   | MUL | NULL                |                               |
+| precio_real          | decimal(14,2) | NO   |     | 0.00                |                               |
+| costo_logistica      | decimal(14,2) | NO   |     | 0.00                |                               |
+| costo_mcm            | decimal(14,2) | NO   |     | 0.00                |                               |
+| costo_total          | decimal(14,2) | YES  |     | NULL                | STORED GENERATED              |
+| precio_publico       | decimal(14,2) | NO   |     | 0.00                |                               |
+| utilidad             | decimal(14,2) | YES  |     | NULL                | STORED GENERATED              |
+| bono                 | decimal(14,2) | NO   |     | 0.00                |                               |
+| precio_mayor         | decimal(14,2) | YES  |     | 0.00                |                               |
+| id_proveedor_default | int(11)       | YES  | MUL | NULL                |                               |
+| stock_minimo         | decimal(14,2) | NO   |     | 0.00                |                               |
+| stock_maximo         | decimal(14,2) | YES  |     | 0.00                |                               |
+| imagen_url           | varchar(255)  | YES  |     | NULL                |                               |
+| notas                | text          | YES  |     | NULL                |                               |
+| activo               | tinyint(1)    | NO   |     | 1                   |                               |
+| fecha_creacion       | datetime      | NO   |     | current_timestamp() |                               |
+| fecha_modificacion   | datetime      | NO   |     | current_timestamp() | on update current_timestamp() |
++----------------------+---------------+------+-----+---------------------+-------------------------------+
+29 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE proveedor_contactos;
++--------------+--------------+------+-----+---------+----------------+
+| Field        | Type         | Null | Key | Default | Extra          |
++--------------+--------------+------+-----+---------+----------------+
+| id_contacto  | int(11)      | NO   | PRI | NULL    | auto_increment |
+| id_proveedor | int(11)      | NO   | MUL | NULL    |                |
+| nombre       | varchar(120) | NO   |     | NULL    |                |
+| cargo        | varchar(80)  | YES  |     | NULL    |                |
+| telefono     | varchar(30)  | YES  |     | NULL    |                |
+| email        | varchar(120) | YES  |     | NULL    |                |
++--------------+--------------+------+-----+---------+----------------+
+6 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE proveedor_cuentas_pago;
++---------------+-------------------------------------------------------+------+-----+---------+----------------+
+| Field         | Type                                                  | Null | Key | Default | Extra          |
++---------------+-------------------------------------------------------+------+-----+---------+----------------+
+| id_cuenta     | int(11)                                               | NO   | PRI | NULL    | auto_increment |
+| id_proveedor  | int(11)                                               | NO   | MUL | NULL    |                |
+| metodo        | enum('EFECTIVO','TRANSFERENCIA','QR','CHEQUE','OTRO') | NO   |     | NULL    |                |
+| banco         | varchar(80)                                           | YES  |     | NULL    |                |
+| tipo_cuenta   | varchar(30)                                           | YES  |     | NULL    |                |
+| numero_cuenta | varchar(60)                                           | YES  |     | NULL    |                |
+| titular       | varchar(150)                                          | YES  |     | NULL    |                |
+| qr_url        | varchar(255)                                          | YES  |     | NULL    |                |
+| id_moneda     | int(11)                                               | YES  | MUL | NULL    |                |
+| es_principal  | tinyint(1)                                            | NO   |     | 0       |                |
+| activo        | tinyint(1)                                            | NO   |     | 1       |                |
++---------------+-------------------------------------------------------+------+-----+---------+----------------+
+11 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE proveedores;
++--------------------+----------------------------------+------+-----+---------------------+----------------+
+| Field              | Type                             | Null | Key | Default             | Extra          |
++--------------------+----------------------------------+------+-----+---------------------+----------------+
+| id_proveedor       | int(11)                          | NO   | PRI | NULL                | auto_increment |
+| codigo             | varchar(20)                      | NO   | UNI | NULL                |                |
+| razon_social       | varchar(200)                     | NO   |     | NULL                |                |
+| nombre_comercial   | varchar(150)                     | YES  |     | NULL                |                |
+| nit                | varchar(20)                      | YES  |     | NULL                |                |
+| tipo_proveedor     | enum('NACIONAL','INTERNACIONAL') | YES  |     | NACIONAL            |                |
+| direccion          | varchar(255)                     | YES  |     | NULL                |                |
+| ciudad             | varchar(80)                      | YES  |     | NULL                |                |
+| pais               | varchar(80)                      | YES  |     | NULL                |                |
+| telefono           | varchar(30)                      | YES  |     | NULL                |                |
+| email              | varchar(120)                     | YES  |     | NULL                |                |
+| contacto_principal | varchar(120)                     | YES  |     | NULL                |                |
+| plazo_credito_dias | int(11)                          | YES  |     | 0                   |                |
+| saldo_actual       | decimal(14,2)                    | YES  |     | 0.00                |                |
+| activo             | tinyint(1)                       | NO   |     | 1                   |                |
+| fecha_creacion     | datetime                         | NO   |     | current_timestamp() |                |
++--------------------+----------------------------------+------+-----+---------------------+----------------+
+16 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE rol_permiso;
++------------+---------+------+-----+---------+-------+
+| Field      | Type    | Null | Key | Default | Extra |
++------------+---------+------+-----+---------+-------+
+| id_rol     | int(11) | NO   | PRI | NULL    |       |
+| id_permiso | int(11) | NO   | PRI | NULL    |       |
++------------+---------+------+-----+---------+-------+
+2 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE roles;
++-------------+--------------+------+-----+---------+----------------+
+| Field       | Type         | Null | Key | Default | Extra          |
++-------------+--------------+------+-----+---------+----------------+
+| id_rol      | int(11)      | NO   | PRI | NULL    | auto_increment |
+| nombre      | varchar(60)  | NO   | UNI | NULL    |                |
+| descripcion | varchar(255) | YES  |     | NULL    |                |
+| es_sistema  | tinyint(1)   | NO   |     | 0       |                |
+| activo      | tinyint(1)   | NO   |     | 1       |                |
++-------------+--------------+------+-----+---------+----------------+
+5 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE sesiones;
++------------------+--------------+------+-----+---------------------+----------------+
+| Field            | Type         | Null | Key | Default             | Extra          |
++------------------+--------------+------+-----+---------------------+----------------+
+| id_sesion        | bigint(20)   | NO   | PRI | NULL                | auto_increment |
+| id_usuario       | int(11)      | NO   | MUL | NULL                |                |
+| token            | varchar(255) | NO   | UNI | NULL                |                |
+| ip_origen        | varchar(45)  | YES  |     | NULL                |                |
+| user_agent       | varchar(255) | YES  |     | NULL                |                |
+| fecha_inicio     | datetime     | NO   |     | current_timestamp() |                |
+| fecha_expiracion | datetime     | YES  |     | NULL                |                |
+| cerrada          | tinyint(1)   | NO   |     | 0                   |                |
++------------------+--------------+------+-----+---------------------+----------------+
+8 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE stock;
++----------------------+---------------+------+-----+---------+------------------+
+| Field                | Type          | Null | Key | Default | Extra            |
++----------------------+---------------+------+-----+---------+------------------+
+| id_stock             | bigint(20)    | NO   | PRI | NULL    | auto_increment   |
+| id_producto          | int(11)       | NO   | MUL | NULL    |                  |
+| id_deposito          | int(11)       | NO   | MUL | NULL    |                  |
+| cantidad             | decimal(14,2) | NO   |     | 0.00    |                  |
+| cantidad_reservada   | decimal(14,2) | NO   |     | 0.00    |                  |
+| cantidad_disponible  | decimal(14,2) | YES  |     | NULL    | STORED GENERATED |
+| costo_promedio       | decimal(14,4) | YES  |     | 0.0000  |                  |
+| fecha_ult_movimiento | datetime      | YES  |     | NULL    |                  |
++----------------------+---------------+------+-----+---------+------------------+
+8 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE sucursales;
++----------------+------------------------------+------+-----+---------------------+----------------+
+| Field          | Type                         | Null | Key | Default             | Extra          |
++----------------+------------------------------+------+-----+---------------------+----------------+
+| id_sucursal    | int(11)                      | NO   | PRI | NULL                | auto_increment |
+| id_empresa     | int(11)                      | NO   | MUL | NULL                |                |
+| codigo         | varchar(20)                  | NO   | UNI | NULL                |                |
+| nombre         | varchar(100)                 | NO   |     | NULL                |                |
+| tipo           | enum('PRINCIPAL','SUCURSAL') | NO   |     | NULL                |                |
+| direccion      | varchar(255)                 | YES  |     | NULL                |                |
+| ciudad         | varchar(80)                  | YES  |     | NULL                |                |
+| telefono       | varchar(30)                  | YES  |     | NULL                |                |
+| responsable    | varchar(120)                 | YES  |     | NULL                |                |
+| es_punto_venta | tinyint(1)                   | NO   |     | 1                   |                |
+| activo         | tinyint(1)                   | NO   |     | 1                   |                |
+| fecha_creacion | datetime                     | NO   |     | current_timestamp() |                |
++----------------+------------------------------+------+-----+---------------------+----------------+
+12 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE tipos_cambio;
++-------------------+---------------+------+-----+---------+----------------+
+| Field             | Type          | Null | Key | Default | Extra          |
++-------------------+---------------+------+-----+---------+----------------+
+| id_tipo_cambio    | int(11)       | NO   | PRI | NULL    | auto_increment |
+| id_moneda_origen  | int(11)       | NO   | MUL | NULL    |                |
+| id_moneda_destino | int(11)       | NO   | MUL | NULL    |                |
+| fecha             | date          | NO   |     | NULL    |                |
+| tasa_compra       | decimal(18,6) | NO   |     | NULL    |                |
+| tasa_venta        | decimal(18,6) | NO   |     | NULL    |                |
++-------------------+---------------+------+-----+---------+----------------+
+6 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE tipos_movimiento;
++--------------------+---------------------------------------------------+------+-----+---------+----------------+
+| Field              | Type                                              | Null | Key | Default | Extra          |
++--------------------+---------------------------------------------------+------+-----+---------+----------------+
+| id_tipo_movimiento | int(11)                                           | NO   | PRI | NULL    | auto_increment |
+| codigo             | varchar(20)                                       | NO   | UNI | NULL    |                |
+| nombre             | varchar(80)                                       | NO   |     | NULL    |                |
+| efecto             | enum('ENTRADA','SALIDA','TRANSFERENCIA','AJUSTE') | NO   |     | NULL    |                |
+| afecta_costo       | tinyint(1)                                        | NO   |     | 1       |                |
++--------------------+---------------------------------------------------+------+-----+---------+----------------+
+5 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE transferencia_detalle;
++-------------------+---------------+------+-----+---------+----------------+
+| Field             | Type          | Null | Key | Default | Extra          |
++-------------------+---------------+------+-----+---------+----------------+
+| id_detalle        | bigint(20)    | NO   | PRI | NULL    | auto_increment |
+| id_transferencia  | bigint(20)    | NO   | MUL | NULL    |                |
+| id_producto       | int(11)       | NO   | MUL | NULL    |                |
+| cantidad_enviada  | decimal(14,2) | NO   |     | NULL    |                |
+| cantidad_recibida | decimal(14,2) | YES  |     | 0.00    |                |
+| observacion       | varchar(255)  | YES  |     | NULL    |                |
++-------------------+---------------+------+-----+---------+----------------+
+6 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE transferencias;
++---------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field               | Type                                                            | Null | Key | Default             | Extra          |
++---------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_transferencia    | bigint(20)                                                      | NO   | PRI | NULL                | auto_increment |
+| numero              | varchar(30)                                                     | NO   | UNI | NULL                |                |
+| id_deposito_origen  | int(11)                                                         | NO   | MUL | NULL                |                |
+| id_deposito_destino | int(11)                                                         | NO   | MUL | NULL                |                |
+| fecha_solicitud     | datetime                                                        | NO   |     | current_timestamp() |                |
+| fecha_envio         | datetime                                                        | YES  |     | NULL                |                |
+| fecha_recepcion     | datetime                                                        | YES  |     | NULL                |                |
+| estado              | enum('SOLICITADA','EN_TRANSITO','RECIBIDA','PARCIAL','ANULADA') | NO   |     | SOLICITADA          |                |
+| id_usuario_solicita | int(11)                                                         | YES  | MUL | NULL                |                |
+| id_usuario_envia    | int(11)                                                         | YES  | MUL | NULL                |                |
+| id_usuario_recibe   | int(11)                                                         | YES  | MUL | NULL                |                |
+| observaciones       | text                                                            | YES  |     | NULL                |                |
++---------------------+-----------------------------------------------------------------+------+-----+---------------------+----------------+
+12 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE unidades_medida;
++-----------+-------------+------+-----+---------+----------------+
+| Field     | Type        | Null | Key | Default | Extra          |
++-----------+-------------+------+-----+---------+----------------+
+| id_unidad | int(11)     | NO   | PRI | NULL    | auto_increment |
+| codigo    | varchar(10) | NO   | UNI | NULL    |                |
+| nombre    | varchar(40) | NO   |     | NULL    |                |
+| activo    | tinyint(1)  | NO   |     | 1       |                |
++-----------+-------------+------+-----+---------+----------------+
+4 rows in set (0.003 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE usuario_sucursal;
++-------------+---------+------+-----+---------+-------+
+| Field       | Type    | Null | Key | Default | Extra |
++-------------+---------+------+-----+---------+-------+
+| id_usuario  | int(11) | NO   | PRI | NULL    |       |
+| id_sucursal | int(11) | NO   | PRI | NULL    |       |
++-------------+---------+------+-----+---------+-------+
+2 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE usuarios;
++---------------------+--------------+------+-----+---------------------+----------------+
+| Field               | Type         | Null | Key | Default             | Extra          |
++---------------------+--------------+------+-----+---------------------+----------------+
+| id_usuario          | int(11)      | NO   | PRI | NULL                | auto_increment |
+| username            | varchar(50)  | NO   | UNI | NULL                |                |
+| password_hash       | varchar(255) | NO   |     | NULL                |                |
+| nombres             | varchar(100) | NO   |     | NULL                |                |
+| apellidos           | varchar(100) | NO   |     | NULL                |                |
+| documento           | varchar(20)  | YES  |     | NULL                |                |
+| email               | varchar(120) | YES  | UNI | NULL                |                |
+| telefono            | varchar(30)  | YES  |     | NULL                |                |
+| id_rol              | int(11)      | NO   | MUL | NULL                |                |
+| id_sucursal_default | int(11)      | YES  | MUL | NULL                |                |
+| foto_url            | varchar(255) | YES  |     | NULL                |                |
+| debe_cambiar_pass   | tinyint(1)   | NO   |     | 1                   |                |
+| ultimo_login        | datetime     | YES  |     | NULL                |                |
+| activo              | tinyint(1)   | NO   |     | 1                   |                |
+| fecha_creacion      | datetime     | NO   |     | current_timestamp() |                |
++---------------------+--------------+------+-----+---------------------+----------------+
+15 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE venta_cuotas;
++-------------------+------------------------------------------------+------+-----+-----------+----------------+
+| Field             | Type                                           | Null | Key | Default   | Extra          |
++-------------------+------------------------------------------------+------+-----+-----------+----------------+
+| id_cuota          | bigint(20)                                     | NO   | PRI | NULL      | auto_increment |
+| id_venta          | bigint(20)                                     | NO   | MUL | NULL      |                |
+| numero_cuota      | int(11)                                        | NO   |     | NULL      |                |
+| fecha_vencimiento | date                                           | NO   |     | NULL      |                |
+| monto             | decimal(14,2)                                  | NO   |     | NULL      |                |
+| monto_pagado      | decimal(14,2)                                  | NO   |     | 0.00      |                |
+| estado            | enum('PENDIENTE','PARCIAL','PAGADA','VENCIDA') | NO   |     | PENDIENTE |                |
++-------------------+------------------------------------------------+------+-----+-----------+----------------+
+7 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE venta_detalle;
++-----------------+---------------+------+-----+---------+----------------+
+| Field           | Type          | Null | Key | Default | Extra          |
++-----------------+---------------+------+-----+---------+----------------+
+| id_detalle      | bigint(20)    | NO   | PRI | NULL    | auto_increment |
+| id_venta        | bigint(20)    | NO   | MUL | NULL    |                |
+| id_producto     | int(11)       | NO   | MUL | NULL    |                |
+| cantidad        | decimal(14,2) | NO   |     | NULL    |                |
+| precio_unitario | decimal(14,2) | NO   |     | NULL    |                |
+| descuento_porc  | decimal(5,2)  | YES  |     | 0.00    |                |
+| descuento_monto | decimal(14,2) | YES  |     | 0.00    |                |
+| impuesto_porc   | decimal(5,2)  | YES  |     | 0.00    |                |
+| subtotal        | decimal(14,2) | NO   |     | NULL    |                |
+| costo_unitario  | decimal(14,4) | YES  |     | 0.0000  |                |
+| bono_vendedor   | decimal(14,2) | YES  |     | 0.00    |                |
+| observacion     | varchar(255)  | YES  |     | NULL    |                |
++-----------------+---------------+------+-----+---------+----------------+
+12 rows in set (0.004 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> DESCRIBE ventas;
++-------------------+--------------------------------------------------------------------+------+-----+---------------------+----------------+
+| Field             | Type                                                               | Null | Key | Default             | Extra          |
++-------------------+--------------------------------------------------------------------+------+-----+---------------------+----------------+
+| id_venta          | bigint(20)                                                         | NO   | PRI | NULL                | auto_increment |
+| numero            | varchar(30)                                                        | NO   | UNI | NULL                |                |
+| numero_factura    | varchar(40)                                                        | YES  | UNI | NULL                |                |
+| tipo_venta        | enum('MAYOR','MENOR')                                              | NO   |     | MENOR               |                |
+| id_sucursal       | int(11)                                                            | NO   | MUL | NULL                |                |
+| id_deposito       | int(11)                                                            | NO   | MUL | NULL                |                |
+| id_cliente        | int(11)                                                            | NO   | MUL | NULL                |                |
+| id_vendedor       | int(11)                                                            | NO   | MUL | NULL                |                |
+| fecha             | datetime                                                           | NO   | MUL | current_timestamp() |                |
+| id_moneda         | int(11)                                                            | NO   | MUL | NULL                |                |
+| tipo_cambio       | decimal(18,6)                                                      | YES  |     | 1.000000            |                |
+| condicion_pago    | enum('CONTADO','CREDITO')                                          | NO   |     | CONTADO             |                |
+| dias_credito      | int(11)                                                            | YES  |     | 0                   |                |
+| fecha_vencimiento | date                                                               | YES  |     | NULL                |                |
+| subtotal          | decimal(14,2)                                                      | NO   |     | 0.00                |                |
+| descuento_porc    | decimal(5,2)                                                       | YES  |     | 0.00                |                |
+| descuento_monto   | decimal(14,2)                                                      | YES  |     | 0.00                |                |
+| impuesto          | decimal(14,2)                                                      | YES  |     | 0.00                |                |
+| total             | decimal(14,2)                                                      | NO   |     | 0.00                |                |
+| saldo_pendiente   | decimal(14,2)                                                      | NO   |     | 0.00                |                |
+| estado            | enum('BORRADOR','EMITIDA','PAGADA','PARCIAL','ANULADA','DEVUELTA') | NO   | MUL | BORRADOR            |                |
+| requiere_entrega  | tinyint(1)                                                         | NO   |     | 0                   |                |
+| direccion_entrega | varchar(255)                                                       | YES  |     | NULL                |                |
+| fecha_entrega     | datetime                                                           | YES  |     | NULL                |                |
+| observaciones     | text                                                               | YES  |     | NULL                |                |
+| fecha_creacion    | datetime                                                           | NO   |     | current_timestamp() |                |
++-------------------+--------------------------------------------------------------------+------+-----+---------------------+----------------+
+26 rows in set (0.006 sec)
+
+MariaDB [bd_sistema_electrodomesticos]> select *from permisos;
++------------+-----------+---------------------------------+---------------------------------------+---------------------------------------------------+
+| id_permiso | id_modulo | codigo                          | nombre                                | descripcion                                       |
++------------+-----------+---------------------------------+---------------------------------------+---------------------------------------------------+
+|          1 |         1 | dashboard.ver                   | Ver Dashboard                         | Acceder al panel principal con indicadores        |
+|          2 |         1 | dashboard.ver_todas_sucursales  | Ver Dashboard de todas las sucursales | Consolidar indicadores de todas las sucursales    |
+|          3 |         2 | configuracion.ver               | Ver Configuración                     | Acceder al módulo de configuración                |
+|          4 |         2 | empresa.editar                  | Editar datos de Empresa               | Modificar razón social, NIT, logo                 |
+|          5 |         2 | sucursales.ver                  | Ver Sucursales                        | Listar sucursales                                 |
+|          6 |         2 | sucursales.crear                | Crear Sucursal                        | Registrar nueva sucursal                          |
+|          7 |         2 | sucursales.editar               | Editar Sucursal                       | Modificar datos de sucursal                       |
+|          8 |         2 | sucursales.eliminar             | Eliminar/Desactivar Sucursal          | Dar de baja una sucursal                          |
+|          9 |         2 | depositos.ver                   | Ver Depósitos                         | Listar depósitos                                  |
+|         10 |         2 | depositos.crear                 | Crear Depósito                        | Registrar nuevo depósito o almacén                |
+|         11 |         2 | depositos.editar                | Editar Depósito                       | Modificar datos de depósito                       |
+|         12 |         2 | depositos.eliminar              | Eliminar/Desactivar Depósito          | Dar de baja un depósito                           |
+|         13 |         2 | monedas.ver                     | Ver Monedas                           | Listar monedas configuradas                       |
+|         14 |         2 | monedas.gestionar               | Gestionar Monedas                     | Crear, editar y desactivar monedas                |
+|         15 |         2 | tipos_cambio.ver                | Ver Tipos de Cambio                   | Consultar tipos de cambio                         |
+|         16 |         2 | tipos_cambio.gestionar          | Gestionar Tipos de Cambio             | Registrar y actualizar tasas diarias              |
+|         17 |         2 | parametros.ver                  | Ver Parámetros del Sistema            | Consultar configuración general                   |
+|         18 |         2 | parametros.editar               | Editar Parámetros del Sistema         | Modificar IVA, prefijos, días alerta, etc.        |
+|         19 |         3 | usuarios.ver                    | Ver Usuarios                          | Listar usuarios del sistema                       |
+|         20 |         3 | usuarios.crear                  | Crear Usuario                         | Registrar nuevo usuario                           |
+|         21 |         3 | usuarios.editar                 | Editar Usuario                        | Modificar datos de usuario                        |
+|         22 |         3 | usuarios.eliminar               | Eliminar/Desactivar Usuario           | Dar de baja un usuario                            |
+|         23 |         3 | usuarios.resetear_password      | Resetear Contraseña                   | Forzar cambio de contraseña a otro usuario        |
+|         24 |         3 | usuarios.asignar_sucursales     | Asignar Sucursales                    | Definir a qué sucursales puede acceder un usuario |
+|         25 |         3 | usuarios.cerrar_sesiones        | Cerrar Sesiones                       | Invalidar sesiones activas de otros usuarios      |
+|         26 |         3 | roles.ver                       | Ver Roles                             | Listar roles existentes                           |
+|         27 |         3 | roles.crear                     | Crear Rol                             | Registrar nuevo rol                               |
+|         28 |         3 | roles.editar                    | Editar Rol                            | Modificar nombre y descripción de rol             |
+|         29 |         3 | roles.eliminar                  | Eliminar Rol                          | Eliminar un rol (no del sistema)                  |
+|         30 |         3 | roles.asignar_permisos          | Asignar Permisos a Rol                | Configurar permisos por rol                       |
+|         31 |         3 | permisos.ver                    | Ver Permisos                          | Consultar catálogo de permisos                    |
+|         32 |         4 | productos.ver                   | Ver Productos                         | Listar y buscar productos                         |
+|         33 |         4 | productos.crear                 | Crear Producto                        | Registrar nuevo producto                          |
+|         34 |         4 | productos.editar                | Editar Producto                       | Modificar datos generales del producto            |
+|         35 |         4 | productos.editar_precio         | Editar Precio                         | Modificar precio real y precio público            |
+|         36 |         4 | productos.editar_costos         | Editar Costos (LOG, MCM)              | Modificar costos de logística y MCM               |
+|         37 |         4 | productos.editar_bono           | Editar Bono Vendedor                  | Modificar bono asignado al producto               |
+|         38 |         4 | productos.eliminar              | Eliminar/Desactivar Producto          | Dar de baja un producto                           |
+|         39 |         4 | productos.exportar              | Exportar Productos                    | Exportar catálogo a Excel/PDF                     |
+|         40 |         4 | productos.importar              | Importar Productos                    | Carga masiva desde Excel                          |
+|         41 |         4 | productos.ver_historico_precios | Ver Histórico de Precios              | Consultar cambios históricos de precio            |
+|         42 |         4 | marcas.ver                      | Ver Marcas                            | Listar marcas                                     |
+|         43 |         4 | marcas.gestionar                | Gestionar Marcas                      | Crear, editar y desactivar marcas                 |
+|         44 |         4 | categorias.ver                  | Ver Categorías                        | Listar categorías                                 |
+|         45 |         4 | categorias.gestionar            | Gestionar Categorías                  | Crear, editar y desactivar categorías             |
+|         46 |         4 | unidades.ver                    | Ver Unidades de Medida                | Listar unidades de medida                         |
+|         47 |         4 | unidades.gestionar              | Gestionar Unidades de Medida          | Crear, editar y desactivar unidades               |
+|         48 |         5 | proveedores.ver                 | Ver Proveedores                       | Listar proveedores                                |
+|         49 |         5 | proveedores.crear               | Crear Proveedor                       | Registrar nuevo proveedor                         |
+|         50 |         5 | proveedores.editar              | Editar Proveedor                      | Modificar datos de proveedor                      |
+|         51 |         5 | proveedores.eliminar            | Eliminar/Desactivar Proveedor         | Dar de baja un proveedor                          |
+|         52 |         5 | proveedores.ver_saldo           | Ver Saldo del Proveedor               | Consultar cuenta por pagar                        |
+|         53 |         5 | proveedores.gestionar_cuentas   | Gestionar Cuentas de Pago             | Agregar/editar cuentas (efectivo, QR, banco)      |
+|         54 |         5 | proveedores.gestionar_contactos | Gestionar Contactos                   | Agregar y editar contactos del proveedor          |
+|         55 |         5 | proveedores.exportar            | Exportar Proveedores                  | Exportar a Excel/PDF                              |
+|         56 |         6 | clientes.ver                    | Ver Clientes                          | Listar y buscar clientes                          |
+|         57 |         6 | clientes.crear                  | Crear Cliente                         | Registrar nuevo cliente                           |
+|         58 |         6 | clientes.editar                 | Editar Cliente                        | Modificar datos de cliente                        |
+|         59 |         6 | clientes.eliminar               | Eliminar/Desactivar Cliente           | Dar de baja un cliente                            |
+|         60 |         6 | clientes.dar_credito            | Otorgar Crédito                       | Activar permite_credito y definir límite          |
+|         61 |         6 | clientes.modificar_limite       | Modificar Límite de Crédito           | Cambiar el límite de crédito de un cliente        |
+|         62 |         6 | clientes.ver_saldo              | Ver Saldo del Cliente                 | Consultar cuenta por cobrar                       |
+|         63 |         6 | clientes.ver_historial          | Ver Historial de Compras              | Ver todas las ventas del cliente                  |
+|         64 |         6 | clientes.gestionar_direcciones  | Gestionar Direcciones                 | Agregar/editar direcciones de entrega             |
+|         65 |         6 | clientes.exportar               | Exportar Clientes                     | Exportar a Excel/PDF                              |
+|         66 |         7 | compras.ver                     | Ver Compras                           | Listar compras de su sucursal                     |
+|         67 |         7 | compras.ver_todas               | Ver Compras de Todas las Sucursales   | Acceso a compras de cualquier sucursal            |
+|         68 |         7 | compras.crear_pre_pedido        | Crear Pre-Pedido                      | Iniciar un pre-pedido a proveedor                 |
+|         69 |         7 | compras.editar_pre_pedido       | Editar Pre-Pedido                     | Modificar pre-pedido antes de confirmar           |
+|         70 |         7 | compras.confirmar_pedido        | Confirmar Pedido (Por Llegar)         | Pasar pre-pedido a estado por llegar              |
+|         71 |         7 | compras.aprobar                 | Aprobar Compra                        | Aprobar compras de alto monto                     |
+|         72 |         7 | compras.recibir                 | Recibir Mercadería                    | Confirmar recepción y actualizar stock            |
+|         73 |         7 | compras.recibir_parcial         | Recibir Mercadería Parcial            | Permitir recepción parcial                        |
+|         74 |         7 | compras.anular                  | Anular Compra                         | Cancelar/anular una compra                        |
+|         75 |         7 | compras.ver_costos              | Ver Costos de Compra                  | Visualizar precios reales y márgenes              |
+|         76 |         7 | compras.pagar                   | Registrar Pago a Proveedor            | Registrar pago de una compra                      |
+|         77 |         7 | compras.anular_pago             | Anular Pago a Proveedor               | Anular un pago registrado                         |
+|         78 |         7 | compras.gestionar_cuotas        | Gestionar Cuotas de Compra            | Modificar plan de cuotas                          |
+|         79 |         7 | compras.imprimir                | Imprimir Documento de Compra          | Generar PDF de orden de compra                    |
+|         80 |         7 | compras.exportar                | Exportar Compras                      | Exportar listado a Excel/PDF                      |
+|         81 |         8 | inventario.ver                  | Ver Inventario                        | Consultar stock de su depósito asignado           |
+|         82 |         8 | inventario.ver_todos_depositos  | Ver Inventario de Todos los Depósitos | Stock consolidado multi-depósito                  |
+|         83 |         8 | inventario.ver_kardex           | Ver Kardex                            | Consultar historial de movimientos                |
+|         84 |         8 | inventario.transferir_solicitar | Solicitar Transferencia               | Crear solicitud de transferencia entre depósitos  |
+|         85 |         8 | inventario.transferir_enviar    | Enviar Transferencia                  | Confirmar envío de mercadería                     |
+|         86 |         8 | inventario.transferir_recibir   | Recibir Transferencia                 | Confirmar recepción en depósito destino           |
+|         87 |         8 | inventario.transferir_anular    | Anular Transferencia                  | Cancelar una transferencia                        |
+|         88 |         8 | inventario.ajuste_crear         | Crear Ajuste de Inventario            | Registrar ajuste por conteo físico                |
+|         89 |         8 | inventario.ajuste_aprobar       | Aprobar Ajuste de Inventario          | Aprobar ajustes de stock                          |
+|         90 |         8 | inventario.ajuste_anular        | Anular Ajuste de Inventario           | Cancelar un ajuste pendiente                      |
+|         91 |         8 | inventario.stock_minimo_editar  | Editar Stock Mínimo por Producto      | Modificar umbral de alerta                        |
+|         92 |         8 | inventario.alertas_ver          | Ver Alertas de Stock Mínimo           | Listar productos bajo stock mínimo                |
+|         93 |         8 | inventario.alertas_atender      | Atender Alertas                       | Marcar alertas como atendidas                     |
+|         94 |         8 | inventario.exportar             | Exportar Inventario                   | Exportar reporte de stock a Excel                 |
+|         95 |         9 | ventas.ver_propias              | Ver Ventas Propias                    | Ver sólo las ventas que el vendedor realizó       |
+|         96 |         9 | ventas.ver_sucursal             | Ver Ventas de la Sucursal             | Ver todas las ventas de su sucursal               |
+|         97 |         9 | ventas.ver_todas                | Ver Ventas de Todas las Sucursales    | Ver ventas a nivel global                         |
+|         98 |         9 | ventas.crear_menor              | Crear Venta al Por Menor              | Registrar venta minorista                         |
+|         99 |         9 | ventas.crear_mayor              | Crear Venta al Por Mayor              | Registrar venta mayorista                         |
+|        100 |         9 | ventas.editar_borrador          | Editar Venta en Borrador              | Modificar venta antes de emitirla                 |
+|        101 |         9 | ventas.emitir                   | Emitir Venta                          | Confirmar y emitir la venta                       |
+|        102 |         9 | ventas.aplicar_descuento        | Aplicar Descuento                     | Otorgar descuento dentro de margen permitido      |
+|        103 |         9 | ventas.aplicar_descuento_alto   | Aplicar Descuento Alto                | Otorgar descuentos sobre el límite estándar       |
+|        104 |         9 | ventas.vender_credito           | Vender a Crédito                      | Realizar ventas a crédito                         |
+|        105 |         9 | ventas.aprobar_credito          | Aprobar Crédito sobre Límite          | Autorizar venta que excede el límite del cliente  |
+|        106 |         9 | ventas.cobrar                   | Registrar Cobro                       | Registrar pagos de ventas                         |
+|        107 |         9 | ventas.anular_cobro             | Anular Cobro                          | Anular un cobro registrado                        |
+|        108 |         9 | ventas.anular                   | Anular Venta                          | Anular una venta emitida                          |
+|        109 |         9 | ventas.devolucion_crear         | Crear Devolución                      | Iniciar proceso de devolución                     |
+|        110 |         9 | ventas.devolucion_aprobar       | Aprobar Devolución                    | Aprobar devolución y reingresar stock             |
+|        111 |         9 | ventas.cambiar_vendedor         | Cambiar Vendedor de la Venta          | Reasignar vendedor                                |
+|        112 |         9 | ventas.ver_utilidad             | Ver Utilidad de la Venta              | Visualizar costo y rentabilidad                   |
+|        113 |         9 | ventas.imprimir                 | Imprimir/Reimprimir Factura           | Generar PDF o reimprimir comprobante              |
+|        114 |         9 | ventas.exportar                 | Exportar Ventas                       | Exportar a Excel/PDF                              |
+|        115 |        10 | caja.ver                        | Ver Cajas                             | Listar cajas configuradas                         |
+|        116 |        10 | caja.gestionar                  | Gestionar Cajas                       | Crear, editar y desactivar cajas                  |
+|        117 |        10 | caja.abrir                      | Abrir Caja                            | Iniciar turno de caja                             |
+|        118 |        10 | caja.cerrar                     | Cerrar Caja                           | Cerrar turno y registrar arqueo                   |
+|        119 |        10 | caja.ver_arqueo_propio          | Ver Arqueo Propio                     | Ver sus propios arqueos                           |
+|        120 |        10 | caja.ver_arqueo_todos           | Ver Arqueos de Todos                  | Ver arqueos de todos los cajeros                  |
+|        121 |        10 | caja.cuadrar_diferencia         | Cuadrar Diferencia                    | Justificar diferencias en arqueo                  |
+|        122 |        10 | caja.forzar_cierre              | Forzar Cierre de Caja                 | Cerrar caja de otro usuario en casos especiales   |
+|        123 |        10 | caja.exportar                   | Exportar Arqueos                      | Exportar arqueos a Excel/PDF                      |
+|        124 |        11 | gastos.ver                      | Ver Gastos                            | Listar gastos de su sucursal                      |
+|        125 |        11 | gastos.ver_todos                | Ver Gastos de Todas las Sucursales    | Ver gastos a nivel global                         |
+|        126 |        11 | gastos.crear                    | Registrar Gasto                       | Crear nuevo gasto                                 |
+|        127 |        11 | gastos.editar                   | Editar Gasto                          | Modificar gasto en estado REGISTRADO              |
+|        128 |        11 | gastos.aprobar                  | Aprobar Gasto                         | Aprobar gastos registrados                        |
+|        129 |        11 | gastos.pagar                    | Marcar Gasto como Pagado              | Registrar el pago del gasto                       |
+|        130 |        11 | gastos.anular                   | Anular Gasto                          | Anular un gasto                                   |
+|        131 |        11 | gastos.categorias_ver           | Ver Categorías de Gasto               | Listar categorías                                 |
+|        132 |        11 | gastos.categorias_gestionar     | Gestionar Categorías de Gasto         | Crear, editar y desactivar categorías             |
+|        133 |        11 | gastos.adjuntar_comprobante     | Adjuntar Comprobante                  | Subir comprobante de gasto                        |
+|        134 |        11 | gastos.exportar                 | Exportar Gastos                       | Exportar a Excel/PDF                              |
+|        135 |        12 | reportes.ver                    | Acceder a Reportes                    | Acceso general al módulo                          |
+|        136 |        12 | reportes.stock_consolidado      | Reporte Stock Consolidado             | Ver stock por depósito (formato Excel)            |
+|        137 |        12 | reportes.ventas_periodo         | Reporte Ventas por Período            | Ventas filtradas por fecha                        |
+|        138 |        12 | reportes.ventas_vendedor        | Reporte Ventas por Vendedor           | Ranking y detalle por vendedor                    |
+|        139 |        12 | reportes.ventas_producto        | Reporte Ventas por Producto           | Top productos vendidos                            |
+|        140 |        12 | reportes.ventas_cliente         | Reporte Ventas por Cliente            | Compras por cliente                               |
+|        141 |        12 | reportes.compras_periodo        | Reporte Compras por Período           | Compras filtradas por fecha                       |
+|        142 |        12 | reportes.compras_proveedor      | Reporte Compras por Proveedor         | Total comprado por proveedor                      |
+|        143 |        12 | reportes.cuentas_cobrar         | Reporte Cuentas por Cobrar            | Clientes con saldo pendiente                      |
+|        144 |        12 | reportes.cuentas_pagar          | Reporte Cuentas por Pagar             | Proveedores con saldo pendiente                   |
+|        145 |        12 | reportes.alertas_stock          | Reporte Alertas Stock Mínimo          | Productos bajo stock mínimo                       |
+|        146 |        12 | reportes.kardex                 | Reporte Kardex por Producto           | Movimientos detallados de un producto             |
+|        147 |        12 | reportes.rentabilidad           | Reporte Rentabilidad                  | Utilidad por producto/marca/categoría             |
+|        148 |        12 | reportes.estado_resultados      | Reporte Estado de Resultados          | Ingresos - costos - gastos                        |
+|        149 |        12 | reportes.bonos_vendedores       | Reporte Bonos a Vendedores            | Bonos generados por vendedor                      |
+|        150 |        12 | reportes.arqueos_caja           | Reporte Arqueos de Caja               | Arqueos por sucursal/período                      |
+|        151 |        12 | reportes.gastos_categoria       | Reporte Gastos por Categoría          | Distribución de gastos                            |
+|        152 |        12 | reportes.transferencias         | Reporte Transferencias                | Histórico de transferencias entre depósitos       |
+|        153 |        12 | reportes.devoluciones           | Reporte Devoluciones                  | Devoluciones por período/causa                    |
+|        154 |        12 | reportes.exportar               | Exportar Reportes                     | Descargar reportes en Excel/PDF                   |
+|        155 |        12 | reportes.dashboard_financiero   | Dashboard Financiero                  | Indicadores financieros consolidados              |
+|        156 |        13 | auditoria.ver                   | Ver Auditoría                         | Acceder al log de auditoría                       |
+|        157 |        13 | auditoria.filtrar               | Filtrar Auditoría                     | Filtrar por usuario, tabla, fecha                 |
+|        158 |        13 | auditoria.exportar              | Exportar Auditoría                    | Exportar log a Excel/PDF                          |
+|        159 |        13 | sesiones.ver                    | Ver Sesiones Activas                  | Ver usuarios conectados                           |
+|        160 |        13 | sesiones.cerrar                 | Cerrar Sesiones Activas               | Forzar cierre de sesión                           |
++------------+-----------+---------------------------------+---------------------------------------+---------------------------------------------------+
+160 rows in set (0.012 sec)
+MariaDB [bd_sistema_electrodomesticos]> select *from modulos;
++-----------+---------------+------------------+---------------+-------+
+| id_modulo | codigo        | nombre           | icono         | orden |
++-----------+---------------+------------------+---------------+-------+
+|         1 | DASHBOARD     | Dashboard        | home          |     1 |
+|         2 | CONFIGURACION | Configuración    | settings      |     2 |
+|         3 | USUARIOS      | Usuarios y Roles | users         |     3 |
+|         4 | PRODUCTOS     | Productos        | package       |     4 |
+|         5 | PROVEEDORES   | Proveedores      | truck         |     5 |
+|         6 | CLIENTES      | Clientes         | user-check    |     6 |
+|         7 | COMPRAS       | Compras          | shopping-bag  |     7 |
+|         8 | INVENTARIO    | Inventario       | archive       |     8 |
+|         9 | VENTAS        | Ventas           | shopping-cart |     9 |
+|        10 | CAJA          | Caja             | dollar-sign   |    10 |
+|        11 | GASTOS        | Gastos           | credit-card   |    11 |
+|        12 | REPORTES      | Reportes         | bar-chart     |    12 |
+|        13 | AUDITORIA     | Auditoría        | shield        |    13 |
++-----------+---------------+------------------+---------------+-------+
+13 rows in set (0.001 sec)
+
+MariaDB [bd_sistema_electrodomesticos]>

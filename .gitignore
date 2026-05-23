@@ -1,0 +1,58 @@
+# ===============================
+#   Archivos de entorno
+# ===============================
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+
+# ===============================
+#   Dependencias
+# ===============================
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# ===============================
+#   Build y empaquetado
+# ===============================
+dist/
+build/
+out/
+.cache/
+.next/
+.nuxt/
+*.tsbuildinfo
+
+
+# ===============================
+#   Archivos generados (QR, logs)
+# ===============================
+backend/public/qrcodes/
+backend/uploads/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# ===============================
+#   Archivos de sistema y editor
+# ===============================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.bak
+*.swp
+
+# ===============================
+#   Otros
+# ===============================
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+.claude/

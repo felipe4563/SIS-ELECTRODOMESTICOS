@@ -1,0 +1,57 @@
+require('dotenv').config();
+const express = require('express');
+const cors    = require('cors');
+const path    = require('path');
+
+// ── Rutas ─────────────────────────────────────────────────────────────────
+const authRoutes          = require('./routes/auth.Routes');
+const empresaRoutes       = require('./routes/empresa.Routes');
+const sucursalesRoutes    = require('./routes/sucursales.Routes');
+const depositosRoutes     = require('./routes/depositos.Routes');
+const monedasRoutes       = require('./routes/monedas.Routes');
+const tiposCambioRoutes   = require('./routes/tiposCambio.Routes');
+const configuracionRoutes = require('./routes/configuracion.Routes');
+const rolesRoutes         = require('./routes/roles.Routes');
+const usuariosRoutes      = require('./routes/usuarios.Routes');
+const marcasRoutes        = require('./routes/marcas.Routes');
+const categoriasRoutes    = require('./routes/categorias.Routes');
+const unidadesRoutes      = require('./routes/unidades.Routes');
+const proveedoresRoutes   = require('./routes/proveedores.Routes');
+
+const app = express();
+
+// ── CORS ──────────────────────────────────────────────────────────────────
+const corsOptions = {
+  origin: [
+    'https://megaelectra.rusoft.dev',
+    'http://localhost:5173',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// ── Rutas API ─────────────────────────────────────────────────────────────
+app.use('/api/auth',          authRoutes);
+app.use('/api/empresa',       empresaRoutes);
+app.use('/api/sucursales',    sucursalesRoutes);
+app.use('/api/depositos',     depositosRoutes);
+app.use('/api/monedas',       monedasRoutes);
+app.use('/api/tipos-cambio',  tiposCambioRoutes);
+app.use('/api/configuracion', configuracionRoutes);
+app.use('/api/roles',         rolesRoutes);
+app.use('/api/usuarios',      usuariosRoutes);
+app.use('/api/marcas',        marcasRoutes);
+app.use('/api/categorias',    categoriasRoutes);
+app.use('/api/unidades',      unidadesRoutes);
+app.use('/api/proveedores',   proveedoresRoutes);
+
+
+// ── Servidor ──────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Conectado a la base de datos MySQL`);
+  console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
+});
