@@ -1,8 +1,7 @@
 const express         = require('express');
 const router          = express.Router();
 const ctrl            = require('../controllers/proveedores.Controller');
-const authMiddleware  = require('../middlewares/auth.Middleware');
-const checkPermission = require('../middlewares/permission.Middleware');
+const {authMiddleware, checkPermission}  = require('../middlewares/authMiddleware');
 
 // ── Proveedores ───────────────────────────────────────────────────────────
 router.get('/',    authMiddleware, checkPermission('ver',      'proveedores'), ctrl.getProveedores);

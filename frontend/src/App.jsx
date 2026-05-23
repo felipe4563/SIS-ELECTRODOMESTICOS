@@ -18,10 +18,44 @@ import Usuarios  from './pages/usuarios/Usuarios';
 import Roles     from './pages/usuarios/Roles';
 import MiPerfil  from './pages/MiPerfil';
 
+// ── Proveedores ──────────────────────────────────────────────────────────
+import Proveedores     from './pages/proveedores/Proveedores';
+import ProveedorDetalle from './pages/proveedores/ProveedorDetalle';
+
+// ── Clientes ─────────────────────────────────────────────────────────────
+import Clientes       from './pages/clientes/Clientes';
+import ClienteDetalle from './pages/clientes/ClienteDetalle';
+
+// ── Productos ─────────────────────────────────────────────────────────────
+import Productos       from './pages/productos/Productos';
+import ProductoDetalle from './pages/productos/ProductoDetalle';
+
 // ── Catálogo maestros ────────────────────────────────────────────────────
 import Marcas     from './pages/catalogo/Marcas';
 import Categorias from './pages/catalogo/Categorias';
 import Unidades   from './pages/catalogo/Unidades';
+
+// ── Inventario ───────────────────────────────────────────────────────────
+import StockConsolidado    from './pages/inventario/StockConsolidado';
+import Kardex              from './pages/inventario/Kardex';
+import Alertas             from './pages/inventario/Alertas';
+import Transferencias      from './pages/inventario/Transferencias';
+import TransferenciaForm   from './pages/inventario/TransferenciaForm';
+import TransferenciaDetalle from './pages/inventario/TransferenciaDetalle';
+import Ajustes             from './pages/inventario/Ajustes';
+import AjusteForm          from './pages/inventario/AjusteForm';
+import AjusteDetalle       from './pages/inventario/AjusteDetalle';
+
+// Compras
+import Compras       from './pages/compras/Compras';
+import CompraForm    from './pages/compras/CompraForm';
+import CompraDetalle from './pages/compras/CompraDetalle';
+
+// ── Ventas ────────────────────────────────────────────────────────────────────
+import Ventas        from './pages/ventas/Ventas';
+import VentaForm     from './pages/ventas/VentaForm';
+import VentaDetalle  from './pages/ventas/VentaDetalle';
+import VentaImprimir from './pages/ventas/VentaImprimir';
 
 // ── Configuración base ───────────────────────────────────────────────────
 import Empresa      from './pages/configuracion/Empresa';
@@ -122,6 +156,42 @@ export default function App() {
                 </PageRoute>
               } />
 
+              {/* ── Proveedores ───────────────────────────────────────── */}
+              <Route path="/proveedores" element={
+                <PageRoute action="ver" subject="proveedores">
+                  <Proveedores />
+                </PageRoute>
+              } />
+              <Route path="/proveedores/:id" element={
+                <PageRoute action="ver" subject="proveedores">
+                  <ProveedorDetalle />
+                </PageRoute>
+              } />
+
+              {/* ── Clientes ──────────────────────────────────────────── */}
+              <Route path="/clientes" element={
+                <PageRoute action="ver" subject="clientes">
+                  <Clientes />
+                </PageRoute>
+              } />
+              <Route path="/clientes/:id" element={
+                <PageRoute action="ver" subject="clientes">
+                  <ClienteDetalle />
+                </PageRoute>
+              } />
+
+              {/* ── Productos ─────────────────────────────────────────── */}
+              <Route path="/productos" element={
+                <PageRoute action="ver" subject="productos">
+                  <Productos />
+                </PageRoute>
+              } />
+              <Route path="/productos/:id" element={
+                <PageRoute action="ver" subject="productos">
+                  <ProductoDetalle />
+                </PageRoute>
+              } />
+
               {/* ── Catálogo maestros ──────────────────────────────────── */}
               <Route path="/catalogo/marcas" element={
                 <PageRoute action="ver" subject="marcas">
@@ -137,6 +207,79 @@ export default function App() {
                 <PageRoute action="ver" subject="unidades">
                   <Unidades />
                 </PageRoute>
+              } />
+
+              {/* ── Inventario ────────────────────────────────────────── */}
+              <Route path="/inventario/stock" element={
+                <PageRoute action="ver" subject="inventario">
+                  <StockConsolidado />
+                </PageRoute>
+              } />
+              <Route path="/inventario/kardex" element={
+                <PageRoute action="ver_kardex" subject="inventario">
+                  <Kardex />
+                </PageRoute>
+              } />
+              <Route path="/inventario/alertas" element={
+                <PageRoute action="alertas_ver" subject="inventario">
+                  <Alertas />
+                </PageRoute>
+              } />
+
+              {/* Compras */}
+              <Route path="/compras" element={
+                <PageRoute action="ver" subject="compras"><Compras /></PageRoute>
+              } />
+              <Route path="/compras/nueva" element={
+                <PageRoute action="crear_pre_pedido" subject="compras"><CompraForm /></PageRoute>
+              } />
+              <Route path="/compras/:id" element={
+                <PageRoute action="ver" subject="compras"><CompraDetalle /></PageRoute>
+              } />
+              <Route path="/compras/:id/editar" element={
+                <PageRoute action="editar_pre_pedido" subject="compras"><CompraForm /></PageRoute>
+              } />
+
+              {/* Transferencias */}
+              <Route path="/inventario/transferencias" element={
+                <PageRoute action="ver" subject="inventario"><Transferencias /></PageRoute>
+              } />
+              <Route path="/inventario/transferencias/nueva" element={
+                <PageRoute action="transferir_solicitar" subject="inventario"><TransferenciaForm /></PageRoute>
+              } />
+              <Route path="/inventario/transferencias/:id" element={
+                <PageRoute action="ver" subject="inventario"><TransferenciaDetalle /></PageRoute>
+              } />
+
+              {/* Ajustes de inventario */}
+              <Route path="/inventario/ajustes" element={
+                <PageRoute action="ver" subject="inventario"><Ajustes /></PageRoute>
+              } />
+              <Route path="/inventario/ajustes/nuevo" element={
+                <PageRoute action="ajuste_crear" subject="inventario"><AjusteForm /></PageRoute>
+              } />
+              <Route path="/inventario/ajustes/:id" element={
+                <PageRoute action="ver" subject="inventario"><AjusteDetalle /></PageRoute>
+              } />
+              <Route path="/inventario/ajustes/:id/editar" element={
+                <PageRoute action="ajuste_crear" subject="inventario"><AjusteForm /></PageRoute>
+              } />
+
+              {/* ── Ventas ────────────────────────────────────────────── */}
+              <Route path="/ventas" element={
+                <PageRoute action="ver_sucursal" subject="ventas"><Ventas /></PageRoute>
+              } />
+              <Route path="/ventas/nueva" element={
+                <PageRoute action="crear_menor" subject="ventas"><VentaForm /></PageRoute>
+              } />
+              <Route path="/ventas/:id" element={
+                <PageRoute action="ver_sucursal" subject="ventas"><VentaDetalle /></PageRoute>
+              } />
+              <Route path="/ventas/:id/editar" element={
+                <PageRoute action="editar_borrador" subject="ventas"><VentaForm /></PageRoute>
+              } />
+              <Route path="/ventas/:id/imprimir" element={
+                <PageRoute action="imprimir" subject="ventas"><VentaImprimir /></PageRoute>
               } />
 
               {/* Mi perfil (solo requiere sesión) */}

@@ -33,20 +33,49 @@ const MENU = [
     ],
   },
   {
+    label: 'Proveedores',
+    items: [
+      { label: 'Proveedores', path: '/proveedores', icono: '🚚', action: 'ver', subject: 'proveedores' },
+    ],
+  },
+  {
+    label: 'Clientes',
+    items: [
+      { label: 'Clientes', path: '/clientes', icono: '👥', action: 'ver', subject: 'clientes' },
+    ],
+  },
+  {
     label: 'Catálogo',
     items: [
+      { label: 'Productos',  path: '/productos',           icono: '📦', action: 'ver', subject: 'productos' },
       { label: 'Marcas',     path: '/catalogo/marcas',     icono: '🏷️', action: 'ver', subject: 'marcas' },
       { label: 'Categorías', path: '/catalogo/categorias', icono: '📂', action: 'ver', subject: 'categorias' },
       { label: 'Unidades',   path: '/catalogo/unidades',   icono: '📏', action: 'ver', subject: 'unidades' },
     ],
   },
+  {
+    label: 'Compras',
+    items: [
+      { label: 'Compras', path: '/compras', icono: '🛒', action: 'ver', subject: 'compras' },
+    ],
+  },
+  {
+    label: 'Inventario',
+    items: [
+      { label: 'Stock',          path: '/inventario/stock',          icono: '📋', action: 'ver',          subject: 'inventario' },
+      { label: 'Kardex',         path: '/inventario/kardex',         icono: '📜', action: 'ver_kardex',   subject: 'inventario' },
+      { label: 'Alertas',        path: '/inventario/alertas',        icono: '🔔', action: 'alertas_ver',  subject: 'inventario' },
+      { label: 'Transferencias', path: '/inventario/transferencias', icono: '🔄', action: 'ver',          subject: 'inventario' },
+      { label: 'Ajustes',        path: '/inventario/ajustes',        icono: '🔧', action: 'ver',          subject: 'inventario' },
+    ],
+  },
+  {
+    label: 'Ventas',
+    items: [
+      { label: 'Ventas', path: '/ventas', icono: '🛍️', action: 'ver_sucursal', subject: 'ventas' },
+    ],
+  },
   // Próximos módulos:
-  // { label: 'Catálogo',      items: [ Productos, Marcas, Categorías... ] },
-  // { label: 'Proveedores',   items: [ Proveedores... ] },
-  // { label: 'Clientes',      items: [ Clientes... ] },
-  // { label: 'Compras',       items: [ Compras... ] },
-  // { label: 'Inventario',    items: [ Inventario... ] },
-  // { label: 'Ventas',        items: [ Ventas... ] },
   // { label: 'Caja',          items: [ Caja... ] },
   // { label: 'Reportes',      items: [ Reportes... ] },
   // { label: 'Auditoría',     items: [ Auditoría... ] },

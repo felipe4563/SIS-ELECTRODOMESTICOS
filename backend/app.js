@@ -17,6 +17,11 @@ const marcasRoutes        = require('./routes/marcas.Routes');
 const categoriasRoutes    = require('./routes/categorias.Routes');
 const unidadesRoutes      = require('./routes/unidades.Routes');
 const proveedoresRoutes   = require('./routes/proveedores.Routes');
+const clientesRoutes      = require('./routes/clientes.Routes');
+const productosRoutes     = require('./routes/productos.Routes');
+const inventarioRoutes    = require('./routes/inventario.Routes');
+const comprasRoutes       = require('./routes/compras.Routes');
+const ventasRoutes        = require('./routes/ventas.Routes');
 
 const app = express();
 
@@ -47,6 +52,11 @@ app.use('/api/marcas',        marcasRoutes);
 app.use('/api/categorias',    categoriasRoutes);
 app.use('/api/unidades',      unidadesRoutes);
 app.use('/api/proveedores',   proveedoresRoutes);
+app.use('/api/clientes',      clientesRoutes);
+app.use('/api/productos',     productosRoutes);
+app.use('/api/inventario',    inventarioRoutes);
+app.use('/api/compras',       comprasRoutes);
+app.use('/api/ventas',        ventasRoutes);
 
 
 // ── Servidor ──────────────────────────────────────────────────────────────
