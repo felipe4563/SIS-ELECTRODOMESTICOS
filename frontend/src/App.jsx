@@ -51,6 +51,16 @@ import Compras       from './pages/compras/Compras';
 import CompraForm    from './pages/compras/CompraForm';
 import CompraDetalle from './pages/compras/CompraDetalle';
 
+// ── Caja ─────────────────────────────────────────────────────────────────────
+import Caja          from './pages/caja/Caja';
+import ArqueoDetalle from './pages/caja/ArqueoDetalle';
+
+// ── Reportes ──────────────────────────────────────────────────────────────────
+import Reportes from './pages/reportes/Reportes';
+
+// ── Auditoría ─────────────────────────────────────────────────────────────────
+import Auditoria from './pages/auditoria/Auditoria';
+
 // ── Ventas ────────────────────────────────────────────────────────────────────
 import Ventas        from './pages/ventas/Ventas';
 import VentaForm     from './pages/ventas/VentaForm';
@@ -280,6 +290,24 @@ export default function App() {
               } />
               <Route path="/ventas/:id/imprimir" element={
                 <PageRoute action="imprimir" subject="ventas"><VentaImprimir /></PageRoute>
+              } />
+
+              {/* ── Caja ─────────────────────────────────────────────── */}
+              <Route path="/caja" element={
+                <PageRoute action="ver" subject="caja"><Caja /></PageRoute>
+              } />
+              <Route path="/caja/arqueos/:id" element={
+                <PageRoute action="ver_arqueo_propio" subject="caja"><ArqueoDetalle /></PageRoute>
+              } />
+
+              {/* ── Reportes ─────────────────────────────────────────── */}
+              <Route path="/reportes" element={
+                <PageRoute action="ver" subject="reportes"><Reportes /></PageRoute>
+              } />
+
+              {/* ── Auditoría ─────────────────────────────────────────── */}
+              <Route path="/auditoria" element={
+                <PageRoute action="ver" subject="auditoria"><Auditoria /></PageRoute>
               } />
 
               {/* Mi perfil (solo requiere sesión) */}

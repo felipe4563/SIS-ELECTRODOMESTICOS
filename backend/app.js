@@ -22,6 +22,9 @@ const productosRoutes     = require('./routes/productos.Routes');
 const inventarioRoutes    = require('./routes/inventario.Routes');
 const comprasRoutes       = require('./routes/compras.Routes');
 const ventasRoutes        = require('./routes/ventas.Routes');
+const cajaRoutes          = require('./routes/caja.Routes');
+const reportesRoutes      = require('./routes/reportes.Routes');
+const auditoriaRoutes     = require('./routes/auditoria.Routes');
 
 const app = express();
 
@@ -57,6 +60,9 @@ app.use('/api/productos',     productosRoutes);
 app.use('/api/inventario',    inventarioRoutes);
 app.use('/api/compras',       comprasRoutes);
 app.use('/api/ventas',        ventasRoutes);
+app.use('/api/caja',          cajaRoutes);
+app.use('/api/reportes',      reportesRoutes);
+app.use('/api/auditoria',     auditoriaRoutes);
 
 
 // ── Servidor ──────────────────────────────────────────────────────────────

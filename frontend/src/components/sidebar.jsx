@@ -75,10 +75,24 @@ const MENU = [
       { label: 'Ventas', path: '/ventas', icono: '🛍️', action: 'ver_sucursal', subject: 'ventas' },
     ],
   },
-  // Próximos módulos:
-  // { label: 'Caja',          items: [ Caja... ] },
-  // { label: 'Reportes',      items: [ Reportes... ] },
-  // { label: 'Auditoría',     items: [ Auditoría... ] },
+  {
+    label: 'Caja',
+    items: [
+      { label: 'Caja', path: '/caja', icono: '💰', action: 'ver', subject: 'caja' },
+    ],
+  },
+  {
+    label: 'Reportes',
+    items: [
+      { label: 'Reportes', path: '/reportes', icono: '📊', action: 'ver', subject: 'reportes' },
+    ],
+  },
+  {
+    label: 'Auditoría',
+    items: [
+      { label: 'Auditoría', path: '/auditoria', icono: '🔍', action: 'ver', subject: 'auditoria' },
+    ],
+  },
 ];
 
 // ── Toggle tema ───────────────────────────────────────────────────────────
