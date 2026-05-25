@@ -6,9 +6,10 @@ import ProtectedRoute      from './components/ProtectedRoute';
 import Sidebar             from './components/sidebar';
 
 // ── Páginas públicas ─────────────────────────────────────────────────────
-import Login             from './pages/Login';
-import SinPermiso        from './pages/SinPermiso';
-import CambiarContrasena from './pages/CambiarContrasena';
+import Login              from './pages/Login';
+import SinPermiso         from './pages/SinPermiso';
+import CambiarContrasena  from './pages/CambiarContrasena';
+import SelectorSucursal   from './pages/SelectorSucursal';
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 import Dashboard from './pages/Dashboard';
@@ -74,6 +75,8 @@ import Depositos    from './pages/configuracion/Depositos';
 import Monedas      from './pages/configuracion/Monedas';
 import TiposCambio  from './pages/configuracion/TiposCambio';
 import Parametros   from './pages/configuracion/Parametros';
+import Bancos      from './pages/configuracion/Bancos';
+import Impuestos   from './pages/configuracion/Impuestos';
 
 // ── Layout ───────────────────────────────────────────────────────────────
 function AppLayout({ children }) {
@@ -115,6 +118,11 @@ export default function App() {
                 <ProtectedRoute><CambiarContrasena /></ProtectedRoute>
               } />
 
+              {/* Selector de sucursal (requiere sesión) */}
+              <Route path="/seleccionar-sucursal" element={
+                <ProtectedRoute><SelectorSucursal /></ProtectedRoute>
+              } />
+
               {/* Dashboard */}
               <Route path="/dashboard" element={
                 <PageRoute action="ver" subject="dashboard">
@@ -151,6 +159,16 @@ export default function App() {
               <Route path="/configuracion/parametros" element={
                 <PageRoute action="ver" subject="parametros">
                   <Parametros />
+                </PageRoute>
+              } />
+              <Route path="/configuracion/bancos" element={
+                <PageRoute action="ver" subject="bancos">
+                  <Bancos />
+                </PageRoute>
+              } />
+              <Route path="/configuracion/impuestos" element={
+                <PageRoute action="ver" subject="impuestos">
+                  <Impuestos />
                 </PageRoute>
               } />
 

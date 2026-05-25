@@ -123,6 +123,31 @@ const updateDeposito = async (req, res) => {
 const deleteDeposito = async (req, res) => {
   const { id } = req.params;
   try {
+    const [[rowsK], [rowsV], [rowsC], [rowsT], [rowsA], [rowsD], [rowsS]] = await Promise.all([
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM kardex WHERE id_deposito = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM ventas WHERE id_deposito = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM compras WHERE id_deposito_destino = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM transferencias WHERE id_deposito_origen = ? OR id_deposito_destino = ?`, [id, id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM ajustes_inventario WHERE id_deposito = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM devoluciones_venta WHERE id_deposito = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM stock WHERE id_deposito = ? AND cantidad > 0`, [id]),
+    ]);
+
+    if (rowsK[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene movimientos en el kardex' });
+    if (rowsV[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene ventas asociadas' });
+    if (rowsC[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene compras asociadas' });
+    if (rowsT[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene transferencias asociadas' });
+    if (rowsA[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene ajustes de inventario asociados' });
+    if (rowsD[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene devoluciones asociadas' });
+    if (rowsS[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: el depósito tiene existencias físicas de productos' });
+
     const [result] = await db.promise().query(
       `UPDATE depositos SET activo = 0 WHERE id_deposito = ?`, [id]
     );

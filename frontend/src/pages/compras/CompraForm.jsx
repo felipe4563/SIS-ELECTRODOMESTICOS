@@ -7,6 +7,7 @@ import {
   sucursalesService,
   depositosService,
   monedasService,
+  tiposCambioService,
 } from '../../services/configuracion.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -175,6 +176,33 @@ export default function CompraForm() {
 
   const setD = (k, v) => setDatos(p => ({ ...p, [k]: v }));
 
+  // Auto-fill exchange rate when currency changes
+  useEffect(() => {
+    if (!datos.id_moneda || monedas.length === 0) return;
+    const selected = monedas.find(m => String(m.id_moneda) === String(datos.id_moneda));
+    if (!selected) return;
+
+    if (selected.es_moneda_base) {
+      setD('tipo_cambio', '1');
+    } else {
+      tiposCambioService.getHoy()
+        .then(r => {
+          const rates = r.data.tipos_cambio ?? r.data ?? [];
+          const rate = rates.find(tc =>
+            String(tc.id_moneda_origen) === String(selected.id_moneda)
+          );
+          if (rate) {
+            setD('tipo_cambio', String(rate.tasa_compra));
+          } else {
+            setD('tipo_cambio', '6.86');
+          }
+        })
+        .catch(() => {
+          setD('tipo_cambio', '6.86');
+        });
+    }
+  }, [datos.id_moneda, monedas]);
+
   const addItem = () => setItems(prev => [
     ...prev, { id_producto: '', cantidad: '1', precio_unitario: '0', descuento_porc: '0' },
   ]);
@@ -309,12 +337,20 @@ export default function CompraForm() {
           </div>
 
           {/* Tipo de cambio */}
-          <div>
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Tipo de cambio</label>
-            <input type="number" min="0.000001" step="0.000001" value={datos.tipo_cambio}
-              onChange={e => setD('tipo_cambio', e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"/>
-          </div>
+          {(() => {
+            const selectedMoneda = monedas.find(m => String(m.id_moneda) === String(datos.id_moneda));
+            if (selectedMoneda && !selectedMoneda.es_moneda_base) {
+              return (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Tipo de cambio *</label>
+                  <input type="number" min="0.000001" step="0.000001" value={datos.tipo_cambio}
+                    onChange={e => setD('tipo_cambio', e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"/>
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           {/* Fecha pedido */}
           <div>

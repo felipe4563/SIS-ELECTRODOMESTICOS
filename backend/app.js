@@ -11,6 +11,8 @@ const depositosRoutes     = require('./routes/depositos.Routes');
 const monedasRoutes       = require('./routes/monedas.Routes');
 const tiposCambioRoutes   = require('./routes/tiposCambio.Routes');
 const configuracionRoutes = require('./routes/configuracion.Routes');
+const bancosRoutes        = require('./routes/bancos.Routes');
+const impuestosRoutes     = require('./routes/impuestos.Routes');
 const rolesRoutes         = require('./routes/roles.Routes');
 const usuariosRoutes      = require('./routes/usuarios.Routes');
 const marcasRoutes        = require('./routes/marcas.Routes');
@@ -25,6 +27,7 @@ const ventasRoutes        = require('./routes/ventas.Routes');
 const cajaRoutes          = require('./routes/caja.Routes');
 const reportesRoutes      = require('./routes/reportes.Routes');
 const auditoriaRoutes     = require('./routes/auditoria.Routes');
+const permisosRoutes      = require('./routes/permisos.Routes');
 
 const app = express();
 
@@ -49,6 +52,8 @@ app.use('/api/depositos',     depositosRoutes);
 app.use('/api/monedas',       monedasRoutes);
 app.use('/api/tipos-cambio',  tiposCambioRoutes);
 app.use('/api/configuracion', configuracionRoutes);
+app.use('/api/bancos',        bancosRoutes);
+app.use('/api/impuestos',     impuestosRoutes);
 app.use('/api/roles',         rolesRoutes);
 app.use('/api/usuarios',      usuariosRoutes);
 app.use('/api/marcas',        marcasRoutes);
@@ -63,6 +68,7 @@ app.use('/api/ventas',        ventasRoutes);
 app.use('/api/caja',          cajaRoutes);
 app.use('/api/reportes',      reportesRoutes);
 app.use('/api/auditoria',     auditoriaRoutes);
+app.use('/api/permisos',      permisosRoutes);
 
 
 // ── Servidor ──────────────────────────────────────────────────────────────

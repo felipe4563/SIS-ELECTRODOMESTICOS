@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { invalidarCacheRol } = require('../middlewares/authMiddleware');
 
 // GET /api/roles
 const getRoles = async (req, res) => {
@@ -59,10 +60,16 @@ const createRol = async (req, res) => {
       `INSERT INTO roles (nombre, descripcion) VALUES (?, ?)`,
       [nombre.trim(), descripcion?.trim() || null]
     );
+
+    const [newRows] = await db.promise().query(
+      `SELECT id_rol, nombre, descripcion, es_sistema, activo FROM roles WHERE id_rol = ?`,
+      [result.insertId]
+    );
+
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'roles', ?, 'INSERT', ?)`,
-      [req.user.id_usuario, result.insertId, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_despues, ip_origen) VALUES (?, 'roles', ?, 'INSERT', ?, ?)`,
+      [req.user.id_usuario, result.insertId, JSON.stringify(newRows[0]), ip]
     );
     res.status(201).json({ id_rol: result.insertId, mensaje: 'Rol creado' });
   } catch (err) {
@@ -78,17 +85,25 @@ const updateRol = async (req, res) => {
   const { id } = req.params;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
-    const [check] = await db.promise().query(`SELECT id_rol FROM roles WHERE id_rol = ?`, [id]);
-    if (check.length === 0) return res.status(404).json({ error: 'Rol no encontrado' });
+    const [oldRows] = await db.promise().query(`SELECT id_rol, nombre, descripcion, es_sistema, activo FROM roles WHERE id_rol = ?`, [id]);
+    if (oldRows.length === 0) return res.status(404).json({ error: 'Rol no encontrado' });
+    const rolAntes = oldRows[0];
 
     await db.promise().query(
       `UPDATE roles SET nombre = ?, descripcion = ? WHERE id_rol = ?`,
       [nombre.trim(), descripcion?.trim() || null, id]
     );
+
+    const [newRows] = await db.promise().query(`SELECT id_rol, nombre, descripcion, es_sistema, activo FROM roles WHERE id_rol = ?`, [id]);
+    const rolDespues = newRows[0];
+
+    // Invalidar el caché si el rol es editado
+    invalidarCacheRol(Number(id));
+
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'roles', ?, 'UPDATE', ?)`,
-      [req.user.id_usuario, id, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, datos_despues, ip_origen) VALUES (?, 'roles', ?, 'UPDATE', ?, ?, ?)`,
+      [req.user.id_usuario, id, JSON.stringify(rolAntes), JSON.stringify(rolDespues), ip]
     );
     res.json({ mensaje: 'Rol actualizado' });
   } catch (err) {
@@ -102,9 +117,10 @@ const updateRol = async (req, res) => {
 const deleteRol = async (req, res) => {
   const { id } = req.params;
   try {
-    const [check] = await db.promise().query(`SELECT es_sistema FROM roles WHERE id_rol = ?`, [id]);
+    const [check] = await db.promise().query(`SELECT id_rol, nombre, descripcion, es_sistema, activo FROM roles WHERE id_rol = ?`, [id]);
     if (check.length === 0) return res.status(404).json({ error: 'Rol no encontrado' });
-    if (check[0].es_sistema) return res.status(400).json({ error: 'No se puede eliminar un rol del sistema' });
+    const rolAntes = check[0];
+    if (rolAntes.es_sistema) return res.status(400).json({ error: 'No se puede eliminar un rol del sistema' });
 
     const [users] = await db.promise().query(
       `SELECT COUNT(*) AS n FROM usuarios WHERE id_rol = ? AND activo = 1`, [id]
@@ -114,10 +130,13 @@ const deleteRol = async (req, res) => {
     await db.promise().query(`DELETE FROM rol_permiso WHERE id_rol = ?`, [id]);
     await db.promise().query(`DELETE FROM roles WHERE id_rol = ?`, [id]);
 
+    // Limpiar caché
+    invalidarCacheRol(Number(id));
+
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'roles', ?, 'DELETE', ?)`,
-      [req.user.id_usuario, id, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, ip_origen) VALUES (?, 'roles', ?, 'DELETE', ?, ?)`,
+      [req.user.id_usuario, id, JSON.stringify(rolAntes), ip]
     );
     res.json({ mensaje: 'Rol eliminado' });
   } catch (err) {
@@ -137,6 +156,11 @@ const asignarPermisos = async (req, res) => {
     const [check] = await db.promise().query(`SELECT id_rol FROM roles WHERE id_rol = ?`, [id]);
     if (check.length === 0) return res.status(404).json({ error: 'Rol no encontrado' });
 
+    const [oldPerms] = await db.promise().query(
+      `SELECT id_permiso FROM rol_permiso WHERE id_rol = ?`, [id]
+    );
+    const permisosAntes = oldPerms.map(p => p.id_permiso);
+
     await db.promise().query(`DELETE FROM rol_permiso WHERE id_rol = ?`, [id]);
 
     if (permisos.length > 0) {
@@ -144,10 +168,13 @@ const asignarPermisos = async (req, res) => {
       await db.promise().query(`INSERT INTO rol_permiso (id_rol, id_permiso) VALUES ?`, [values]);
     }
 
+    // Invalidar el caché del rol para que los cambios tengan efecto inmediato
+    invalidarCacheRol(Number(id));
+
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'rol_permiso', ?, 'UPDATE', ?)`,
-      [req.user.id_usuario, id, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, datos_despues, ip_origen) VALUES (?, 'rol_permiso', ?, 'UPDATE', ?, ?, ?)`,
+      [req.user.id_usuario, id, JSON.stringify(permisosAntes), JSON.stringify(permisos), ip]
     );
     res.json({ mensaje: 'Permisos asignados correctamente' });
   } catch (err) {

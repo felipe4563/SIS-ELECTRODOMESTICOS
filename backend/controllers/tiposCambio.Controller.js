@@ -105,4 +105,53 @@ const deleteTipoCambio = async (req, res) => {
   }
 };
 
-module.exports = { getTiposCambio, getTipoCambioHoy, createTipoCambio, deleteTipoCambio };
+// PUT /api/tipos-cambio/:id
+const updateTipoCambio = async (req, res) => {
+  const { id } = req.params;
+  const { id_moneda_origen, id_moneda_destino, fecha, tasa_compra, tasa_venta } = req.body;
+
+  if (!id_moneda_origen || !id_moneda_destino || !fecha || !tasa_compra || !tasa_venta)
+    return res.status(400).json({ error: 'Todos los campos son requeridos' });
+  if (Number(id_moneda_origen) === Number(id_moneda_destino))
+    return res.status(400).json({ error: 'Las monedas origen y destino deben ser distintas' });
+  if (Number(tasa_compra) <= 0 || Number(tasa_venta) <= 0)
+    return res.status(400).json({ error: 'Las tasas deben ser mayores a 0' });
+
+  try {
+    const [result] = await db.promise().query(
+      `UPDATE tipos_cambio
+       SET id_moneda_origen = ?, id_moneda_destino = ?, fecha = ?, tasa_compra = ?, tasa_venta = ?
+       WHERE id_tipo_cambio = ?`,
+      [id_moneda_origen, id_moneda_destino, fecha, tasa_compra, tasa_venta, id]
+    );
+
+    if (result.affectedRows === 0)
+      return res.status(404).json({ error: 'Tipo de cambio no encontrado' });
+
+    const ip = req.ip || req.socket?.remoteAddress || null;
+    await db.promise().query(
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen)
+       VALUES (?, 'tipos_cambio', ?, 'UPDATE', ?)`,
+      [req.user.id_usuario, id, ip]
+    );
+
+    const [updated] = await db.promise().query(
+      `SELECT tc.*,
+              mo.codigo AS moneda_origen_codigo, mo.simbolo AS moneda_origen_simbolo,
+              md.codigo AS moneda_destino_codigo, md.simbolo AS moneda_destino_simbolo
+       FROM tipos_cambio tc
+       JOIN monedas mo ON tc.id_moneda_origen  = mo.id_moneda
+       JOIN monedas md ON tc.id_moneda_destino = md.id_moneda
+       WHERE tc.id_tipo_cambio = ?`, [id]
+    );
+
+    return res.json({ tipo_cambio: updated[0] });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Ya existe un tipo de cambio para esa fecha y par de monedas' });
+    console.error('[updateTipoCambio]', err);
+    return res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
+module.exports = { getTiposCambio, getTipoCambioHoy, createTipoCambio, updateTipoCambio, deleteTipoCambio };

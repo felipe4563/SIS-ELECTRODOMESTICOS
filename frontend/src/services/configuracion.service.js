@@ -29,13 +29,28 @@ export const monedasService = {
 };
 
 export const tiposCambioService = {
-  getAll:  ()     => api.get('/tipos-cambio'),
-  getHoy:  ()     => api.get('/tipos-cambio/hoy'),
-  create:  (data) => api.post('/tipos-cambio', data),
-  remove:  (id)   => api.delete(`/tipos-cambio/${id}`),
+  getAll:  ()        => api.get('/tipos-cambio'),
+  getHoy:  ()        => api.get('/tipos-cambio/hoy'),
+  create:  (data)    => api.post('/tipos-cambio', data),
+  update:  (id, data) => api.put(`/tipos-cambio/${id}`, data),
+  remove:  (id)      => api.delete(`/tipos-cambio/${id}`),
 };
 
 export const parametrosService = {
   getAll:  ()           => api.get('/configuracion'),
   update:  (clave, valor) => api.put(`/configuracion/${clave}`, { valor }),
+};
+
+export const bancosService = {
+  getAll:  ()        => api.get('/bancos'),
+  create:  (data)    => api.post('/bancos', data),
+  update:  (id, data) => api.put(`/bancos/${id}`, data),
+  remove:  (id)      => api.delete(`/bancos/${id}`),
+};
+
+export const impuestosService = {
+  getAll:  ()        => api.get('/impuestos'),
+  create:  (data)    => api.post('/impuestos', data),
+  update:  (id, data) => api.put(`/impuestos/${id}`, data),
+  remove:  (id)      => api.delete(`/impuestos/${id}`),
 };

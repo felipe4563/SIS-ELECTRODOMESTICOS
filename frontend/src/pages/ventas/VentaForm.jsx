@@ -206,6 +206,33 @@ export default function VentaForm() {
   }, [form.id_cliente, clientes]);
 
   const setF  = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // Auto-fill exchange rate when currency changes
+  useEffect(() => {
+    if (!form.id_moneda || monedas.length === 0) return;
+    const selected = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
+    if (!selected) return;
+
+    if (selected.es_moneda_base) {
+      setF('tipo_cambio', 1);
+    } else {
+      api.get('/tipos-cambio/hoy')
+        .then(r => {
+          const rates = r.data.tipos_cambio ?? r.data ?? [];
+          const rate = rates.find(tc =>
+            String(tc.id_moneda_origen) === String(selected.id_moneda)
+          );
+          if (rate) {
+            setF('tipo_cambio', Number(rate.tasa_venta));
+          } else {
+            setF('tipo_cambio', 6.96);
+          }
+        })
+        .catch(() => {
+          setF('tipo_cambio', 6.96);
+        });
+    }
+  }, [form.id_moneda, monedas]);
   const addItem = () => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
@@ -362,6 +389,25 @@ export default function VentaForm() {
               ))}
             </select>
           </div>
+
+          {/* Tipo de cambio */}
+          {(() => {
+            const selectedMoneda = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
+            if (selectedMoneda && !selectedMoneda.es_moneda_base) {
+              return (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Tipo de cambio *</label>
+                  <input
+                    type="number" min="0.000001" step="0.000001"
+                    value={form.tipo_cambio}
+                    onChange={e => setF('tipo_cambio', e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         {/* Entrega */}

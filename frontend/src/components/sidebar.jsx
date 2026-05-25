@@ -22,6 +22,8 @@ const MENU = [
       { label: 'Depósitos',      path: '/configuracion/depositos',    icono: '🏭', action: 'ver',      subject: 'depositos' },
       { label: 'Monedas',        path: '/configuracion/monedas',      icono: '💱', action: 'ver',      subject: 'monedas' },
       { label: 'Tipos de cambio',path: '/configuracion/tipos-cambio', icono: '📈', action: 'ver',      subject: 'tipos_cambio' },
+      { label: 'Bancos',         path: '/configuracion/bancos',       icono: '🏦', action: 'ver',      subject: 'bancos' },
+      { label: 'Impuestos',      path: '/configuracion/impuestos',    icono: '💲', action: 'ver',      subject: 'impuestos' },
       { label: 'Parámetros',     path: '/configuracion/parametros',   icono: '⚙️', action: 'ver',      subject: 'parametros' },
     ],
   },

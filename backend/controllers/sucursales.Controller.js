@@ -121,6 +121,28 @@ const updateSucursal = async (req, res) => {
 const deleteSucursal = async (req, res) => {
   const { id } = req.params;
   try {
+    const [[rowsV], [rowsC], [rowsG], [rowsD], [rowsCa], [rowsCo]] = await Promise.all([
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM ventas  WHERE id_sucursal = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM compras WHERE id_sucursal = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM gastos WHERE id_sucursal = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM depositos WHERE id_sucursal = ? AND activo = 1`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM cajas WHERE id_sucursal = ?`, [id]),
+      db.promise().query(`SELECT COUNT(*) AS cnt FROM cotizaciones WHERE id_sucursal = ?`, [id]),
+    ]);
+
+    if (rowsV[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: la sucursal tiene ventas asociadas' });
+    if (rowsC[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: la sucursal tiene compras asociadas' });
+    if (rowsG[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: la sucursal tiene gastos asociados' });
+    if (rowsD[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: la sucursal tiene depósitos activos asociados' });
+    if (rowsCa[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: la sucursal tiene cajas asociadas' });
+    if (rowsCo[0].cnt > 0)
+      return res.status(400).json({ error: 'No se puede desactivar: la sucursal tiene cotizaciones asociadas' });
+
     const [result] = await db.promise().query(
       `UPDATE sucursales SET activo = 0 WHERE id_sucursal = ?`, [id]
     );

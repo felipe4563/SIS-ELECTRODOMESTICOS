@@ -67,6 +67,28 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  // ── Seleccionar sucursal ───────────────────────────────────────────────
+  const seleccionarSucursal = useCallback(async (id_sucursal) => {
+    setCargando(true);
+    setError(null);
+    try {
+      const { data } = await authService.seleccionarSucursal(id_sucursal);
+      localStorage.setItem('token', data.token);
+      setUsuario(prev => {
+        const actualizado = { ...prev, id_sucursal: data.sucursal.id_sucursal };
+        localStorage.setItem('usuario', JSON.stringify(actualizado));
+        return actualizado;
+      });
+      return data.sucursal;
+    } catch (err) {
+      const mensaje = err.response?.data?.error || 'Error al seleccionar sucursal';
+      setError(mensaje);
+      throw new Error(mensaje);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       usuario,
@@ -74,6 +96,7 @@ export function AuthProvider({ children }) {
       logout,
       marcarContrasenaActualizada,
       actualizarPerfil,
+      seleccionarSucursal,
       cargando,
       error,
     }}>

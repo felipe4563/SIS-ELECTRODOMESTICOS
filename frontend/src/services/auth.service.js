@@ -12,6 +12,9 @@ const authService = {
 
   me: () =>
     api.get('/auth/me'),
+
+  seleccionarSucursal: (id_sucursal) =>
+    api.post('/auth/seleccionar-sucursal', { id_sucursal }),
 };
 
 export default authService;

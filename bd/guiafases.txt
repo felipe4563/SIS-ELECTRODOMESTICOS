@@ -1,0 +1,737 @@
+# GUÍA DE IMPLEMENTACIÓN POR FASES
+## Sistema de Gestión - Tienda de Electrodomésticos
+
+Cada fase incluye: objetivo, tablas involucradas, endpoints del backend, pantallas del frontend, reglas de negocio, validaciones, pruebas y el hito que marca la fase como completada.
+
+---
+
+## FASE 0 — Setup Técnico
+
+**Objetivo:** Tener la base donde escribir todo el código y la conexión a la BD funcionando.
+
+**Tareas:**
+1. Elegir y instalar el stack tecnológico (backend + frontend + ORM).
+2. Crear repositorio en Git y .gitignore (ignorar `.env`, `node_modules`, `vendor`, `storage/logs`).
+3. Crear estructura de carpetas: `backend/`, `frontend/`, `docs/`, `database/`.
+4. Configurar `.env` con: `DB_HOST`, `DB_PORT`, `DB_NAME=bd_sistema_electrodomesticos`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `APP_URL`.
+5. Instalar drivers de MySQL/MariaDB y probar conexión.
+6. Definir estructura estándar de respuesta API:
+   ```json
+   { "success": true, "code": 200, "message": "OK", "data": {...} }
+   ```
+7. Configurar CORS, body parser, manejo global de errores.
+8. Configurar logger (winston / monolog).
+9. Importar los 3 scripts SQL: `sistema_electrodomesticos.sql`, `permisos_sistema.sql`, `datos_semilla.sql`.
+
+**Hito de completado:** Servidor backend levantando, frontend mostrando una página de prueba, conexión a BD verificada con un SELECT al usuario admin.
+
+---
+
+## FASE 1 — Autenticación y Seguridad
+
+**Objetivo:** Que solo usuarios autenticados puedan usar el sistema y solo accedan a lo que su rol permite.
+
+**Tablas:** `usuarios`, `sesiones`, `roles`, `permisos`, `rol_permiso`, `usuario_sucursal`, `auditoria`.
+
+**Backend — Endpoints:**
+- `POST /api/auth/login` — recibe username + password, valida con bcrypt, genera JWT, registra en `sesiones` y `auditoria` (acción LOGIN).
+- `POST /api/auth/logout` — invalida sesión, registra LOGOUT en auditoría.
+- `POST /api/auth/cambiar-password` — usuario logueado cambia su propia contraseña.
+- `GET /api/auth/me` — devuelve datos del usuario actual, su rol, sucursales asignadas y lista de permisos.
+- `POST /api/auth/seleccionar-sucursal` — si tiene acceso a varias.
+
+**Backend — Middlewares:**
+- `authMiddleware`: valida JWT, carga `req.user` con id, rol, sucursales.
+- `permisoMiddleware('codigo.permiso')`: verifica que el rol del usuario tiene ese permiso.
+
+**Frontend — Pantallas:**
+- Login (username + password + botón "Ingresar").
+- Cambiar contraseña (forzar en primer ingreso).
+- Selector de sucursal (si aplica).
+- Manejo global de token expirado (redirigir a login).
+
+**Reglas:**
+- Bloquear usuario tras 5 intentos fallidos en 15 minutos.
+- Token JWT con expiración de 8 horas.
+- Contraseñas con mínimo 6 caracteres, bcrypt cost 10.
+- `debe_cambiar_pass=1` redirige obligatoriamente a cambio.
+
+**Pruebas:**
+- Login válido → recibe token.
+- Login inválido → error.
+- Endpoint protegido sin token → 401.
+- Endpoint sin permiso → 403.
+
+**Hito de completado:** Pantalla de login funcional, usuario admin puede entrar y al recargar mantiene sesión.
+
+---
+
+## FASE 2 — Configuración
+
+**Objetivo:** Que el dueño pueda definir la estructura base del negocio.
+
+**Tablas:** `empresas`, `sucursales`, `depositos`, `monedas`, `tipos_cambio`, `bancos`, `impuestos`, `configuracion_sistema`.
+
+**Backend — Endpoints (CRUDs estándar):**
+- `GET/PUT /api/empresa`
+- `GET/POST/PUT/DELETE /api/sucursales`
+- `GET/POST/PUT/DELETE /api/depositos` (filtrar por sucursal)
+- `GET/POST/PUT/DELETE /api/monedas`
+- `GET/POST/PUT/DELETE /api/tipos-cambio`
+- `GET/POST/PUT/DELETE /api/bancos`
+- `GET/POST/PUT/DELETE /api/impuestos`
+- `GET/PUT /api/configuracion` (parámetros clave-valor)
+
+**Frontend — Pantallas:**
+- "Mi Empresa": editar datos generales y logo.
+- "Sucursales": lista + alta/edición (con tipo PRINCIPAL/SUCURSAL).
+- "Depósitos": lista (filtrada por sucursal) + alta/edición (con tipo ALMACEN/DEPOSITO_PEQUENO/PUNTO_VENTA).
+- "Monedas": lista + alta/edición (marcar moneda base).
+- "Tipos de Cambio": tabla por fecha + botón "Cargar tasa de hoy".
+- "Bancos": catálogo simple.
+- "Impuestos": catálogo con porcentaje y tipo (VENTA/COMPRA/AMBOS).
+- "Parámetros del Sistema": pantalla con todos los parámetros (IVA, prefijos, impresora, cliente default).
+
+**Reglas:**
+- Solo puede haber UNA moneda base.
+- No permitir eliminar sucursal/depósito si tiene movimientos asociados (validar con SELECT en kardex, ventas, etc).
+- Tipo de cambio del día se busca por fecha actual.
+
+**Pruebas:**
+- Crear sucursal nueva y verificar que aparece en selectores.
+- Crear depósito asignado a una sucursal.
+- Cambiar tipo de cambio del día y verificar que afecta nuevas operaciones.
+
+**Hito de completado:** Las 2 sucursales y 6 depósitos del Excel están cargados, monedas BOB/USD configuradas, tipo de cambio del día actualizable.
+
+---
+
+## FASE 3 — Usuarios y Roles
+
+**Objetivo:** El admin puede crear vendedores y almaceneros desde la app.
+
+**Tablas:** `usuarios`, `roles`, `permisos`, `rol_permiso`, `usuario_sucursal`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/usuarios`
+- `POST /api/usuarios/:id/reset-password` (genera contraseña temporal y marca `debe_cambiar_pass=1`)
+- `POST /api/usuarios/:id/sucursales` (asigna sucursales)
+- `GET/POST/PUT/DELETE /api/roles`
+- `GET /api/permisos` (listado completo agrupado por módulo)
+- `PUT /api/roles/:id/permisos` (asigna lista de permisos al rol)
+
+**Frontend — Pantallas:**
+- "Usuarios": tabla con filtro por rol y sucursal, alta/edición.
+- En el form de usuario: selector de rol, selector múltiple de sucursales.
+- "Roles": lista + edición de permisos (árbol de permisos agrupados por módulo con checkboxes).
+- Reset de contraseña con confirmación.
+
+**Reglas:**
+- Username único.
+- No permitir desactivar al último admin activo.
+- Al crear usuario, `debe_cambiar_pass=1` siempre.
+- Auditar cambios de rol y desactivaciones.
+
+**Pruebas:**
+- Crear vendedor, asignarlo a una sucursal, hacer login con sus credenciales.
+- Quitar un permiso al rol y verificar que el usuario ya no puede ejecutar esa acción.
+
+**Hito de completado:** Vendedor1 y Almacen1 pueden hacer login y ven solo las opciones que les corresponden.
+
+---
+
+## FASE 4 — Catálogos Maestros
+
+**Objetivo:** Tener listos los datos referenciales que necesitan los productos.
+
+**Tablas:** `marcas`, `categorias`, `unidades_medida`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/marcas`
+- `GET/POST/PUT/DELETE /api/categorias` (soporta jerarquía padre/hijo)
+- `GET/POST/PUT/DELETE /api/unidades-medida`
+
+**Frontend — Pantallas:**
+- "Marcas": tabla + alta/edición con logo.
+- "Categorías": árbol jerárquico (categoría padre → subcategorías).
+- "Unidades": tabla simple (UND, CAJA, KG...).
+
+**Reglas:**
+- No eliminar marca/categoría/unidad usada por productos (solo desactivar).
+- Categoría padre no puede tener productos directos (opcional).
+
+**Hito de completado:** Las marcas del Excel (ABBA, BRASLAR, etc.) y las categorías (Cocinas, Refrigeración, etc.) están cargadas desde la app.
+
+---
+
+## FASE 5 — Proveedores
+
+**Objetivo:** Gestión completa del catálogo de proveedores con sus métodos de pago.
+
+**Tablas:** `proveedores`, `proveedor_contactos`, `proveedor_cuentas_pago`, `bancos`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/proveedores` (con búsqueda por nombre, NIT, código)
+- `GET /api/proveedores/:id` (detalle completo con contactos y cuentas)
+- `GET/POST/PUT/DELETE /api/proveedores/:id/contactos`
+- `GET/POST/PUT/DELETE /api/proveedores/:id/cuentas-pago`
+- `GET /api/proveedores/:id/saldo` (cuenta por pagar actual)
+
+**Frontend — Pantallas:**
+- "Proveedores": tabla con búsqueda, filtro por estado, exportar a Excel.
+- Detalle de proveedor con pestañas: Datos generales / Contactos / Cuentas de pago / Saldo.
+- Cuenta de pago: selector de método (EFECTIVO/QR/TRANSFERENCIA), si es TRANSFERENCIA pide banco y número, si es QR pide URL de imagen.
+
+**Reglas:**
+- Solo puede haber UNA cuenta principal por proveedor.
+- Validar formato de NIT.
+- Saldo se actualiza solo desde compras y pagos (no editable manualmente).
+
+**Hito de completado:** ROSVANIA, DISMATEC, SOTO cargados con sus cuentas de pago (efectivo, QR, transferencia con banco).
+
+---
+
+## FASE 6 — Clientes
+
+**Objetivo:** Gestión de clientes mayoristas y minoristas con control de crédito.
+
+**Tablas:** `clientes`, `cliente_direcciones`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/clientes`
+- `GET /api/clientes/buscar?q=` (búsqueda rápida por nombre/documento/teléfono)
+- `GET/POST/PUT/DELETE /api/clientes/:id/direcciones`
+- `GET /api/clientes/:id/saldo` (cuenta por cobrar)
+- `GET /api/clientes/:id/historial` (ventas del cliente)
+- `PUT /api/clientes/:id/credito` (activar/modificar límite — requiere permiso)
+
+**Frontend — Pantallas:**
+- "Clientes": tabla con paginación, búsqueda, filtros (mayorista/minorista, con/sin crédito).
+- Detalle de cliente con pestañas: Datos / Direcciones / Crédito y Saldo / Historial de compras.
+- Formulario simplificado para alta rápida desde la pantalla de ventas.
+
+**Reglas:**
+- Validar que (saldo_actual + nueva_venta) <= limite_credito.
+- Permiso `clientes.dar_credito` para activar crédito y definir límite.
+- Botones: Ingresar / Eliminar / Modificar / Grabar / Exportar (según tu UI).
+
+**Hito de completado:** Se puede crear un cliente nuevo, otorgarle crédito y ver su saldo.
+
+---
+
+## FASE 7 — Productos
+
+**Objetivo:** Gestión completa del catálogo de productos, incluyendo el reemplazo del Excel.
+
+**Tablas:** `productos`, `producto_precio_historico`, `marcas`, `categorias`, `unidades_medida`, `impuestos`, `proveedores`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/productos`
+- `GET /api/productos/buscar?q=` (búsqueda por código, código barras, modelo, descripción)
+- `PUT /api/productos/:id/precio` (cambia precio, registra en histórico)
+- `GET /api/productos/:id/historico-precios`
+- `POST /api/productos/:id/imagen` (upload de imagen)
+- `POST /api/productos/:id/generar-codigo-barras`
+- `GET /api/productos/exportar/excel` (descarga catálogo)
+- `POST /api/productos/importar/excel` (carga masiva)
+- `GET /api/productos/plantilla-excel` (descarga plantilla vacía)
+- `PUT /api/productos/:id/baja` (cambiar estado a DESCONTINUADO)
+
+**Frontend — Pantallas:**
+- "Productos": grilla tipo Excel con filtros por marca, categoría, estado, proveedor.
+- Formulario de alta/edición con campos:
+  - Producto, Código, Proveedor, Precio Real, Precio Final/Público, Costo, Stock Mínimo, Categoría, Sucursal, Estado, Impuesto.
+  - Botones: Guardar / Cancelar / Guardar Imagen.
+- Botón "Agregar Producto que no está en mi BD" (modal rápido desde ventas).
+- Botón "Importar Excel" / "Descargar Plantilla" / "Exportar a Excel".
+- Vista de histórico de precios.
+
+**Reglas:**
+- `codigo_interno` único y obligatorio (autogenerado P0001, P0002...).
+- Si se cambia precio, guardar valor anterior en `producto_precio_historico`.
+- Al crear producto, generar automáticamente filas en `stock` con cantidad=0 para cada depósito existente.
+- Si `GENERAR_CB_AUTO=true`, generar `codigo_barras` automáticamente.
+- Estado afecta visibilidad: solo NUEVO/USADO/EXHIBICION/RECONDICIONADO se ven en ventas; DESCONTINUADO oculto.
+
+**Pruebas:**
+- Importar el Excel original y verificar 15 productos cargados.
+- Cambiar precio de uno y consultar el histórico.
+- Cambiar estado a DESCONTINUADO y verificar que no aparece en ventas.
+
+**Hito de completado:** Tu Excel original está cargado en la BD desde la app. Adiós Excel.
+
+---
+
+## FASE 8 — Inventario - Consulta
+
+**Objetivo:** Ver el stock en cada depósito en tiempo real.
+
+**Tablas:** `stock`, `kardex`, `productos`, `depositos`, `alertas_stock`.
+
+**Backend — Endpoints:**
+- `GET /api/inventario/stock` (lista productos × depósitos en formato Excel)
+- `GET /api/inventario/stock?id_deposito=X` (stock de un depósito)
+- `GET /api/inventario/kardex/:id_producto` (movimientos del producto)
+- `GET /api/inventario/kardex/:id_producto?id_deposito=X`
+- `GET /api/inventario/alertas` (alertas de stock mínimo pendientes)
+- `PUT /api/inventario/alertas/:id/atender`
+- `GET /api/inventario/exportar/excel`
+
+**Frontend — Pantallas:**
+- "Stock Consolidado": grilla tipo Excel mostrando Producto | Marca | Gallo18 | Gallo20 | Victoria | Urkupiña | E.Arce | Pemosur | Total.
+- "Kardex de un Producto": tabla con fecha, tipo movimiento, cantidad, costo, saldo, documento referencia.
+- "Alertas de Stock Mínimo": panel con productos bajo el mínimo, botón "Generar Pedido".
+
+**Reglas:**
+- Recalcular alertas en cada movimiento que afecte stock.
+- Performance: índices por `id_producto`, `id_deposito` en stock y kardex.
+
+**Hito de completado:** Se puede ver el stock idéntico al Excel original; las alertas funcionan al bajar manualmente el stock.
+
+---
+
+## FASE 9 — Compras
+
+**Objetivo:** Manejar todo el ciclo de compras desde el pre-pedido hasta el pago al proveedor.
+
+**Tablas:** `compras`, `compra_detalle`, `compra_cuotas`, `pagos_compra`, `productos`, `stock`, `kardex`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT /api/compras`
+- `POST /api/compras/:id/confirmar-pedido` (PRE_PEDIDO → POR_LLEGAR + genera cuotas si crédito)
+- `POST /api/compras/:id/recibir` (recibe mercadería, actualiza stock y kardex)
+- `POST /api/compras/:id/anular`
+- `GET /api/compras/:id` (detalle completo)
+- `POST /api/pagos-compra` (registra pago a proveedor)
+- `DELETE /api/pagos-compra/:id` (anula pago)
+
+**Frontend — Pantallas:**
+- "Compras": lista con filtro por estado, proveedor, fecha.
+- Nueva compra: 3 estados visibles (PRE_PEDIDO / POR_LLEGAR / RECIBIDA), header (proveedor, fecha, depósito destino, moneda, condición), detalle (productos + cantidades + precios), totales.
+- Recepción: marcar cantidades recibidas (puede ser parcial).
+- "Pagos a Proveedores": registrar pago seleccionando cuota o pago completo, método (EFECTIVO/QR/TRANSFERENCIA), banco, subir comprobante.
+
+**Reglas:**
+- Pre-pedido NO afecta stock.
+- Por_Llegar genera cuotas si es CREDITO (n cuotas según `dias_credito`).
+- Al RECIBIR: por cada producto recibido, INSERT en kardex (tipo COMPRA), UPDATE stock (cantidad += recibida), recalcular costo_promedio.
+- Si pago es CONTADO, marcar pagado al recibir; si CREDITO, saldo = total.
+- Auditar todos los cambios de estado.
+- Subir comprobante (foto/PDF) obligatorio para pagos por transferencia o QR.
+
+**Hito de completado:** Se hace una compra a ROSVANIA, llega, se recibe y el stock sube en el depósito destino. Se paga la compra y baja el saldo del proveedor.
+
+---
+
+## FASE 10 — Inventario - Operaciones
+
+**Objetivo:** Mover mercadería entre depósitos y hacer ajustes por conteo físico.
+
+**Tablas:** `transferencias`, `transferencia_detalle`, `ajustes_inventario`, `ajuste_inventario_detalle`, `stock`, `kardex`.
+
+**Backend — Endpoints:**
+- `GET/POST /api/transferencias`
+- `POST /api/transferencias/:id/enviar`
+- `POST /api/transferencias/:id/recibir`
+- `POST /api/transferencias/:id/anular`
+- `GET/POST /api/ajustes-inventario`
+- `POST /api/ajustes-inventario/:id/aprobar`
+- `POST /api/ajustes-inventario/:id/anular`
+
+**Frontend — Pantallas:**
+- "Transferencias": lista con estados (SOLICITADA, EN_TRANSITO, RECIBIDA, PARCIAL, ANULADA). Nueva: selector origen/destino, productos + cantidades.
+- Pantalla de recepción de transferencia (almacenero destino confirma).
+- "Ajuste de Inventario": elegir depósito, sistema muestra todos sus productos con cantidad sistema vs cantidad física (input), motivo, guardar como borrador → aprobar.
+
+**Reglas:**
+- Al solicitar transferencia: stock origen `cantidad_reservada += X`.
+- Al enviar: kardex SALIDA + stock origen `cantidad -= X, reservada -= X`.
+- Al recibir: kardex ENTRADA destino + stock destino `cantidad += recibida`.
+- Si recibe menos de lo enviado: estado PARCIAL.
+- Ajuste aprobado: kardex AJUSTE +/- por cada diferencia + UPDATE stock con `cantidad_fisica`.
+
+**Hito de completado:** Se transfieren productos del almacén Gallo18 a Victoria y el stock se mueve correctamente.
+
+---
+
+## FASE 11 — Combos y Promociones
+
+**Objetivo:** Definir packs de productos y descuentos por porcentaje para usar en ventas.
+
+**Tablas:** `combos`, `combo_detalle`, `promociones`, `promocion_producto`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/combos`
+- `POST /api/combos/:id/productos` (agregar/remover productos del combo)
+- `GET/POST/PUT/DELETE /api/promociones`
+- `POST /api/promociones/:id/aplicaciones` (productos/categorías/marcas en promo)
+- `GET /api/promociones/vigentes` (las activas hoy, para usar en ventas)
+
+**Frontend — Pantallas:**
+- "Combos": lista + alta/edición con: nombre, precio combo, fechas de vigencia, productos que lo componen + cantidades.
+- "Promociones": lista + alta/edición con: nombre, tipo (PORCENTAJE/MONTO_FIJO), valor, fechas, aplica a (PRODUCTO/CATEGORIA/MARCA/TODOS), cantidad mínima.
+
+**Reglas:**
+- Solo aplican combos/promos dentro de su rango de fechas y `activo=1`.
+- Una venta puede tener múltiples promos aplicadas a diferentes ítems.
+- Al aplicar promo en venta: guardar `id_promocion` y descuento calculado en `venta_detalle`.
+
+**Hito de completado:** Hay 2 combos y 2 promociones definidos y consultables desde la pantalla de ventas.
+
+---
+
+## FASE 12 — Cotizaciones
+
+**Objetivo:** Generar presupuestos al cliente que NO afectan stock, con opción de convertir en venta.
+
+**Tablas:** `cotizaciones`, `cotizacion_detalle`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT /api/cotizaciones`
+- `POST /api/cotizaciones/:id/emitir`
+- `POST /api/cotizaciones/:id/aprobar`
+- `POST /api/cotizaciones/:id/rechazar`
+- `POST /api/cotizaciones/:id/convertir-venta` (genera una venta a partir de la cotización)
+- `POST /api/cotizaciones/:id/anular`
+- `GET /api/cotizaciones/:id/pdf` (genera PDF para enviar al cliente)
+
+**Frontend — Pantallas:**
+- "Cotizaciones": lista con paginación (botones < Anterior / > Siguiente), búsqueda, filtros por contado/crédito, fecha, hora, cliente.
+- Nueva cotización: similar a venta pero NO descuenta stock.
+- Vista PDF para imprimir o enviar por WhatsApp/email.
+- Botones: Ingresar / Eliminar / Modificar / Grabar / Exportar.
+
+**Reglas:**
+- Cotización vencida (`fecha_vencimiento < hoy`) → estado VENCIDA.
+- Al convertir: crear venta + descargar stock + marcar cotización como CONVERTIDA con `id_venta_generada`.
+- Una cotización solo se puede convertir UNA vez.
+
+**Hito de completado:** Se genera cotización a un cliente, se imprime PDF, y se convierte en venta efectiva.
+
+---
+
+## FASE 13 — Ventas
+
+**Objetivo:** El motor del negocio — vender al por mayor y al por menor.
+
+**Tablas:** `ventas`, `venta_detalle`, `venta_cuotas`, `pagos_venta`, `devoluciones_venta`, `devolucion_venta_detalle`, `productos`, `stock`, `kardex`, `promociones`, `combos`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT /api/ventas`
+- `POST /api/ventas/:id/emitir` (cambia BORRADOR → EMITIDA o PAGADA, descarga stock)
+- `POST /api/ventas/:id/anular`
+- `POST /api/ventas/:id/pdf` (factura)
+- `GET /api/ventas/:id/preview` (vista previa antes de emitir)
+- `POST /api/ventas/agregar-producto-rapido` (alta rápida de producto y agrega a la venta en curso)
+- `POST /api/devoluciones-venta`
+- `POST /api/devoluciones-venta/:id/aprobar`
+
+**Frontend — Pantallas (replicando tu UI):**
+
+**Cabecera de venta:**
+- Usuario (logueado), Abrir/Cerrar Caja, Cliente, Factura, Hora, Fecha, Código, Cantidad, Producto, Stock.
+
+**Detalle:**
+- Factura, Cliente, Producto, Precio Unit, Impuesto, Total.
+
+**Opciones laterales (productos):**
+- Agregar → modal con: Producto, Código, Proveedor, Precio, Precio Final, Costo, Stock, Categoría, Sucursal, Estado, Impuesto. Botones: Guardar / Cancelar / Guardar Imagen.
+- Editar.
+- Eliminar.
+- Limpiar (vaciar carrito).
+- Precio (modificar precio del ítem en la venta).
+- Agregar Producto que no está en mi BD (alta rápida).
+
+**Opciones abajo:**
+- Efectivo (cobro inmediato).
+- Vista Previa.
+- Agregar Producto.
+- Guardar (como borrador o emitida según estado).
+- Agregar Cliente.
+
+**Precio a Pagar:** total + IVA + descuentos aplicados + total final.
+
+Selector visible: "Por Mayor 4 Puntos en Red" / "Por menor 4 Puntos en Red" (cambia precio_publico vs precio_mayor).
+
+**Reglas:**
+- Si `PERMITIR_VENTA_SIN_STOCK=false`, validar stock disponible en el depósito de la venta.
+- Si CREDITO, validar `(cliente.saldo_actual + total) <= cliente.limite_credito`.
+- Aplicar promociones vigentes automáticamente.
+- Al emitir: por cada ítem, INSERT en kardex (SALIDA), UPDATE stock (cantidad -= vendida), guardar costo_unitario snapshot.
+- Si CONTADO + EFECTIVO: marcar PAGADA, registrar `pagos_venta`, sumar a arqueo de caja.
+- Si CREDITO: generar `venta_cuotas`, sumar a `cliente.saldo_actual`.
+- Recalcular alertas de stock mínimo después de la venta.
+
+**Pruebas:**
+- Venta menor al contado en efectivo → stock baja, caja sube.
+- Venta mayor a crédito → cuotas se generan, saldo del cliente sube.
+- Aplicar combo y verificar precio especial.
+- Aplicar promoción de 10% en CONSUL y verificar descuento.
+- Intentar vender más de lo que hay → bloquear.
+
+**Hito de completado:** Se realiza una venta completa con cobro y la factura se imprime. **Aquí ya puedes salir a producción.**
+
+---
+
+## FASE 14 — Cobros
+
+**Objetivo:** Pantalla dedicada para gestionar pagos de ventas (especialmente créditos).
+
+**Tablas:** `pagos_venta`, `venta_cuotas`, `ventas`, `clientes`.
+
+**Backend — Endpoints:**
+- `GET /api/cobros` (lista con filtros)
+- `POST /api/cobros` (registrar cobro de cuota o venta completa)
+- `PUT /api/cobros/:id`
+- `DELETE /api/cobros/:id` (anular)
+- `GET /api/cobros/:id/recibo` (genera PDF de recibo)
+- `GET /api/cobros/cuentas-por-cobrar` (clientes con saldo)
+
+**Frontend — Pantallas:**
+- "Cobros": tabla paginada con < Anterior / > Siguiente, búsqueda, filtros por:
+  - Tipo: Contado / Crédito.
+  - Estado: Pendiente / Pagado / Vencido.
+  - Fecha, hora.
+  - Cliente: Nombre, NIT/CI, Dirección, Ciudad, Celular.
+- Botones: Ingresar / Eliminar / Modificar / Grabar / Exportar.
+- Método de pago: Efectivo / QR.
+- Vista de recibo de pago.
+
+**Reglas:**
+- Al registrar cobro: UPDATE cuota (monto_pagado), UPDATE venta (saldo_pendiente), UPDATE cliente (saldo_actual).
+- Si cuota se completa: estado PAGADA.
+- Si venta queda en cero: estado PAGADA.
+- Cobro en efectivo afecta arqueo de caja del turno actual.
+- Auditar cualquier anulación de cobro.
+
+**Hito de completado:** El cobrador puede entrar a la pantalla "Cobros", buscar clientes con deuda y registrar pagos.
+
+---
+
+## FASE 15 — Caja
+
+**Objetivo:** Controlar el dinero físico de cada sucursal por turno.
+
+**Tablas:** `cajas`, `arqueos_caja`, `pagos_venta`, `gastos`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/cajas`
+- `POST /api/arqueos/abrir` (apertura de turno)
+- `POST /api/arqueos/:id/cerrar` (cierre)
+- `GET /api/arqueos/actual` (caja abierta del usuario actual)
+- `GET /api/arqueos/:id` (detalle con todos los movimientos del turno)
+
+**Frontend — Pantallas:**
+- "Apertura de Caja": modal pidiendo monto inicial.
+- "Cierre de Caja": muestra monto sistema calculado + input monto físico + diferencia + observación.
+- "Historial de Arqueos": tabla con filtros por sucursal/usuario/fecha.
+
+**Reglas:**
+- Solo una caja abierta por usuario/caja a la vez.
+- Cálculo:
+  ```
+  monto_cierre_sistema = monto_apertura
+                       + SUM(pagos_venta EFECTIVO del turno)
+                       - SUM(gastos EFECTIVO del turno)
+                       - SUM(pagos_compra EFECTIVO del turno)
+  ```
+- Diferencia = monto_cierre_real - monto_cierre_sistema (puede ser negativa).
+- No permitir nuevas ventas/cobros en efectivo sin caja abierta (configurable).
+
+**Hito de completado:** Se abre caja, se hace una venta en efectivo, se registra un gasto y al cierre el cuadre es correcto.
+
+---
+
+## FASE 16 — Gastos
+
+**Objetivo:** Registrar todo gasto del negocio que no sea compra de mercadería.
+
+**Tablas:** `gastos`, `categorias_gasto`.
+
+**Backend — Endpoints:**
+- `GET/POST/PUT/DELETE /api/categorias-gasto`
+- `GET/POST/PUT/DELETE /api/gastos`
+- `POST /api/gastos/:id/aprobar`
+- `POST /api/gastos/:id/pagar`
+- `POST /api/gastos/:id/anular`
+- `POST /api/gastos/:id/comprobante` (upload de imagen/PDF)
+
+**Frontend — Pantallas:**
+- "Categorías de Gasto": catálogo simple.
+- "Gastos": tabla con filtros por categoría, sucursal, fecha, estado.
+- Nuevo gasto: descripción, monto, categoría, sucursal, método de pago, comprobante (foto/PDF).
+- Flujo: REGISTRADO → APROBADO → PAGADO.
+
+**Reglas:**
+- Comprobante obligatorio para gastos sobre cierto monto (configurable).
+- Gasto en efectivo afecta arqueo de caja.
+- Solo gastos APROBADOS se pueden pagar.
+
+**Hito de completado:** Se registra el alquiler de la sucursal con su comprobante y se paga.
+
+---
+
+## FASE 17 — Herramientas
+
+**Objetivo:** Funcionalidades transversales que facilitan la operación.
+
+**Backend — Endpoints:**
+- `POST /api/backup/crear` (genera dump SQL del estado actual)
+- `POST /api/backup/restaurar` (carga un dump)
+- `GET /api/backup` (lista de backups existentes)
+- `GET /api/backup/:id/descargar`
+- `POST /api/excel/importar-productos` (upload Excel con plantilla)
+- `GET /api/excel/exportar-productos` (descarga catálogo)
+- `GET /api/excel/plantilla` (descarga plantilla vacía)
+- `POST /api/codigo-barras/generar/:id_producto`
+- `GET /api/codigo-barras/imprimir/:id_producto` (PDF imprimible)
+- `GET /api/catalogo/pdf` (genera catálogo de productos PDF)
+- `GET/PUT /api/impresora` (configuración)
+- `GET/PUT /api/factura/plantilla` (editor de plantilla)
+- `POST /api/bd/eliminar-registros` (operación peligrosa, requiere doble confirmación)
+
+**Frontend — Pantallas:**
+- "Herramientas" (menú lateral):
+  - Backup: botón "Crear Backup", lista de backups, restaurar.
+  - Importar/Exportar Excel: subir archivo / descargar plantilla / descargar catálogo.
+  - Códigos de Barra: seleccionar producto(s), generar PDF para impresión.
+  - Catálogo PDF: filtros (marca, categoría), botón "Generar".
+  - Configurar Impresora: nombre, puerto, tipo (TICKET/A4).
+  - Editar Plantilla de Factura: encabezado, pie de página, logo.
+  - Eliminar Registros de BD: opción crítica con confirmación y permiso especial.
+
+**Reglas:**
+- Backup automático diario (cron job).
+- Eliminar registros: solo SUPER_ADMIN, con doble confirmación y registro en auditoría.
+- Importación masiva: validar formato, mostrar errores fila por fila antes de guardar.
+- Códigos de barra: usar librería estándar (EAN-13 o CODE-128).
+
+**Hito de completado:** El dueño puede sacar backup, importar 100 productos desde Excel, imprimir códigos de barra y configurar la impresora.
+
+---
+
+## FASE 18 — Reportes y Dashboard
+
+**Objetivo:** Visibilidad completa del negocio en tiempo real.
+
+**Tablas:** todas las anteriores (lectura).
+
+**Backend — Endpoints:**
+- `GET /api/dashboard/kpis` (ventas hoy, top productos, alertas activas, saldo CxC, saldo CxP)
+- `GET /api/reportes/stock-consolidado?id_deposito=`
+- `GET /api/reportes/ventas?desde=&hasta=&id_sucursal=&id_vendedor=&id_cliente=`
+- `GET /api/reportes/cuentas-cobrar?id_cliente=`
+- `GET /api/reportes/cuentas-pagar?id_proveedor=`
+- `GET /api/reportes/rentabilidad?desde=&hasta=`
+- `GET /api/reportes/estado-resultados?mes=&anio=`
+- `GET /api/reportes/kardex/:id_producto`
+- `GET /api/reportes/bonos-vendedores?desde=&hasta=`
+- `GET /api/reportes/arqueos-caja?desde=&hasta=`
+- `GET /api/reportes/gastos-categoria?desde=&hasta=`
+- `GET /api/reportes/top-productos?desde=&hasta=&limit=10`
+- `POST /api/reportes/exportar?tipo=&formato=excel|pdf`
+
+**Frontend — Pantallas:**
+- "Dashboard": tarjetas con KPIs (ventas del día, semana, mes; alertas activas; cobros pendientes), gráficos (ventas por día, top productos, ventas por sucursal).
+- "Reportes": menú con cada reporte; cada uno tiene filtros, tabla y botones Exportar Excel/PDF.
+
+**Reglas:**
+- Cálculos en queries directas (sin vistas, según pediste).
+- Performance: paginar resultados grandes, usar índices.
+- Rentabilidad: usar `costo_unitario` guardado en venta_detalle (snapshot).
+- Estado de resultados = ingresos − costo_ventas − gastos.
+
+**Hito de completado:** El dueño ve en el dashboard cuánto vendió hoy, top 10 productos, saldos por cobrar y pagar.
+
+---
+
+## FASE 19 — Auditoría
+
+**Objetivo:** Rastrear quién hizo qué en el sistema para responsabilidad.
+
+**Tablas:** `auditoria`, `sesiones`.
+
+**Backend:**
+- Implementar interceptor/middleware que registre en `auditoria` cada operación crítica con `datos_antes` y `datos_despues` en JSON.
+- Endpoints:
+  - `GET /api/auditoria?usuario=&tabla=&desde=&hasta=&accion=`
+  - `GET /api/sesiones-activas`
+  - `POST /api/sesiones/:id/cerrar`
+
+**Frontend — Pantallas:**
+- "Auditoría": tabla con filtros y vista de detalle (mostrar diff entre datos_antes y datos_despues).
+- "Sesiones Activas": tabla con usuarios conectados, IP, navegador, botón "Cerrar sesión".
+
+**Acciones a auditar (mínimo):**
+- LOGIN / LOGOUT / cambio de contraseña.
+- Cambio de precio de producto.
+- Anulación de venta, compra o cobro.
+- Modificación de stock (ajustes).
+- Cambios de rol/permisos.
+- Eliminación de cualquier registro maestro.
+
+**Hito de completado:** Cualquier cambio crítico aparece en el panel de auditoría con quién, cuándo y qué cambió.
+
+---
+
+## ESTIMACIONES GENERALES (referenciales)
+
+| Fase | Complejidad | Tiempo estimado (1 dev) |
+|------|-------------|-------------------------|
+| 0    | Baja        | 1-2 días                |
+| 1    | Media       | 3-5 días                |
+| 2    | Media       | 5-7 días                |
+| 3    | Media       | 3-4 días                |
+| 4    | Baja        | 1-2 días                |
+| 5    | Media       | 3-4 días                |
+| 6    | Media       | 3-4 días                |
+| 7    | Alta        | 7-10 días               |
+| 8    | Media       | 3-5 días                |
+| 9    | Alta        | 8-12 días               |
+| 10   | Media       | 4-6 días                |
+| 11   | Media       | 3-5 días                |
+| 12   | Media       | 4-6 días                |
+| 13   | Alta        | 10-15 días              |
+| 14   | Media       | 4-5 días                |
+| 15   | Media       | 3-4 días                |
+| 16   | Baja        | 2-3 días                |
+| 17   | Alta        | 7-10 días               |
+| 18   | Alta        | 7-10 días               |
+| 19   | Media       | 3-5 días                |
+| **TOTAL** | | **85-125 días aprox.** |
+
+Equivale a **4-6 meses** con un desarrollador full-time, o **2-3 meses** con dos developers trabajando en paralelo (uno en backend, otro en frontend).
+
+---
+
+## ORDEN DE EJECUCIÓN DE LOS SCRIPTS SQL
+
+```
+1. sistema_electrodomesticos.sql   (estructura - 54 tablas)
+2. permisos_sistema.sql            (20 módulos, 213 permisos, 3 roles)
+3. datos_semilla.sql               (carga inicial: empresa, sucursales,
+                                    depósitos, monedas, impuestos, bancos,
+                                    marcas, productos, stock, usuarios)
+```
+
+---
+
+## USUARIOS DE PRUEBA (cambiar en producción)
+
+| Usuario     | Contraseña     | Rol            |
+|-------------|----------------|----------------|
+| `admin`     | `admin123`     | ADMINISTRADOR  |
+| `vendedor1` | `vendedor123`  | VENDEDOR       |
+| `almacen1`  | `almacen123`   | ALMACENERO     |
+
+---
+
+## REGLA DE ORO DEL DESARROLLO
+
+**Nunca avanzar de fase hasta que la anterior esté 100% probada y funcional con datos reales.**
+
+El error más común es construir 10 módulos a medias en lugar de 5 completos y probados. Cada fase debe quedar en estado "listo para producción" antes de continuar.
+
+---
+
+**FIN DEL DOCUMENTO**

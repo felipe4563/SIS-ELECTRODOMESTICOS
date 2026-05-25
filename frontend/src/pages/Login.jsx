@@ -24,6 +24,8 @@ export default function Login() {
       actualizar(usuario.permisos ?? []);
       if (usuario.debe_cambiar_pass) {
         navigate('/cambiar-contrasena', { replace: true });
+      } else if ((usuario.sucursales?.length ?? 0) > 1) {
+        navigate('/seleccionar-sucursal', { replace: true, state: { from: location.state?.from } });
       } else {
         navigate(destino, { replace: true });
       }

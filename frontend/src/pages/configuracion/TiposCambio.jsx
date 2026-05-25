@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FaPlus, FaTrash, FaSpinner, FaExchangeAlt } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSpinner, FaExchangeAlt, FaEdit } from 'react-icons/fa';
 import { tiposCambioService, monedasService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
@@ -18,6 +18,7 @@ export default function TiposCambio() {
   const [modal,     setModal]     = useState(false);
   const [confirm,   setConfirm]   = useState(null);
   const [form,      setForm]      = useState(EMPTY);
+  const [editId,    setEditId]    = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState(null);
 
@@ -34,7 +35,7 @@ export default function TiposCambio() {
 
   useEffect(cargar, []);
 
-  const cerrarModal = () => { setModal(false); setError(null); };
+  const cerrarModal = () => { setModal(false); setEditId(null); setError(null); };
   const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
@@ -42,7 +43,11 @@ export default function TiposCambio() {
     setError(null);
     setGuardando(true);
     try {
-      await tiposCambioService.create(form);
+      if (editId) {
+        await tiposCambioService.update(editId, form);
+      } else {
+        await tiposCambioService.create(form);
+      }
       cerrarModal();
       cargar();
     } catch (err) {
@@ -50,6 +55,19 @@ export default function TiposCambio() {
     } finally {
       setGuardando(false);
     }
+  };
+
+  const handleEdit = (tc) => {
+    setEditId(tc.id_tipo_cambio);
+    setForm({
+      id_moneda_origen: tc.id_moneda_origen,
+      id_moneda_destino: tc.id_moneda_destino,
+      fecha: tc.fecha ? tc.fecha.slice(0, 10) : hoy(),
+      tasa_compra: tc.tasa_compra,
+      tasa_venta: tc.tasa_venta
+    });
+    setError(null);
+    setModal(true);
   };
 
   const handleEliminar = async (id) => {
@@ -62,6 +80,32 @@ export default function TiposCambio() {
     }
   };
 
+  const handleCargarTasaHoy = async () => {
+    setError(null);
+    const usd = monedas.find(m => m.codigo === 'USD');
+    const bob = monedas.find(m => m.codigo === 'BOB' || m.es_moneda_base);
+    if (!usd || !bob) {
+      setError('No se encontraron las monedas BOB y USD activas en el sistema.');
+      return;
+    }
+    setCargando(true);
+    try {
+      const payload = {
+        id_moneda_origen: usd.id_moneda,
+        id_moneda_destino: bob.id_moneda,
+        fecha: hoy(),
+        tasa_compra: 6.86,
+        tasa_venta: 6.96
+      };
+      await tiposCambioService.create(payload);
+      cargar();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al cargar la tasa de hoy (puede que ya esté registrada)');
+    } finally {
+      setCargando(false);
+    }
+  };
+
   const formatFecha = (f) => new Date(f + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
@@ -70,10 +114,16 @@ export default function TiposCambio() {
         title="Tipos de Cambio"
         description="Tasas de cambio entre monedas por fecha"
         action={puede('gestionar', 'tipos_cambio') && (
-          <button onClick={() => { setForm(EMPTY); setError(null); setModal(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
-            <FaPlus className="h-3.5 w-3.5" /> Nuevo tipo de cambio
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={handleCargarTasaHoy}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-all border border-zinc-200 dark:border-zinc-700 cursor-pointer">
+              <FaExchangeAlt className="h-3.5 w-3.5 text-zinc-500" /> Cargar tasa de hoy
+            </button>
+            <button onClick={() => { setForm(EMPTY); setEditId(null); setError(null); setModal(true); }}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all cursor-pointer">
+              <FaPlus className="h-3.5 w-3.5" /> Nuevo tipo de cambio
+            </button>
+          </div>
         )}
       />
 
@@ -115,10 +165,16 @@ export default function TiposCambio() {
                       <td className="px-4 py-3 font-mono text-gray-900 dark:text-white">{Number(tc.tasa_venta).toFixed(4)}</td>
                       <td className="px-4 py-3">
                         {puede('gestionar', 'tipos_cambio') && (
-                          <button onClick={() => setConfirm(tc)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                            <FaTrash className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => handleEdit(tc)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
+                              <FaEdit className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => setConfirm(tc)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                              <FaTrash className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -130,7 +186,7 @@ export default function TiposCambio() {
         </div>
       )}
 
-      <Modal open={modal} onClose={cerrarModal} title="Nuevo Tipo de Cambio" maxWidth="max-w-md">
+      <Modal open={modal} onClose={cerrarModal} title={editId ? "Editar Tipo de Cambio" : "Nuevo Tipo de Cambio"} maxWidth="max-w-md">
         {error && <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -165,7 +221,7 @@ export default function TiposCambio() {
             <button type="button" onClick={cerrarModal} className="px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
             <button type="submit" disabled={guardando} className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 disabled:opacity-50 transition-all">
               {guardando && <FaSpinner className="animate-spin h-4 w-4" />}
-              Registrar
+              {editId ? 'Guardar' : 'Registrar'}
             </button>
           </div>
         </form>

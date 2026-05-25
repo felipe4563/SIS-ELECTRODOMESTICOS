@@ -75,10 +75,16 @@ const createUsuario = async (req, res) => {
        telefono?.trim() || null, id_rol, id_sucursal_default || null]
     );
 
+    const [insertedUser] = await db.promise().query(
+      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo, fecha_creacion
+       FROM usuarios WHERE id_usuario = ?`,
+      [result.insertId]
+    );
+
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'usuarios', ?, 'INSERT', ?)`,
-      [req.user.id_usuario, result.insertId, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_despues, ip_origen) VALUES (?, 'usuarios', ?, 'INSERT', ?, ?)`,
+      [req.user.id_usuario, result.insertId, JSON.stringify(insertedUser[0]), ip]
     );
 
     res.status(201).json({ id_usuario: result.insertId, mensaje: 'Usuario creado' });
@@ -103,6 +109,26 @@ const updateUsuario = async (req, res) => {
   }
 
   try {
+    const [oldRows] = await db.promise().query(
+      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo
+       FROM usuarios WHERE id_usuario = ?`,
+      [id]
+    );
+    if (oldRows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const userAntes = oldRows[0];
+
+    // Regla: no permitir desactivar o cambiar de rol al último administrador activo
+    if (userAntes.id_rol === 1 && userAntes.activo === 1) {
+      const becomesInactive = !activo;
+      const changesRole = Number(id_rol) !== 1;
+      if (becomesInactive || changesRole) {
+        const [adminCount] = await db.promise().query('SELECT COUNT(*) AS total FROM usuarios WHERE id_rol = 1 AND activo = 1');
+        if (adminCount[0].total <= 1) {
+          return res.status(400).json({ error: 'No se puede desactivar o cambiar el rol del último administrador activo' });
+        }
+      }
+    }
+
     await db.promise().query(
       `UPDATE usuarios SET nombres=?, apellidos=?, documento=?, email=?, telefono=?,
        id_rol=?, id_sucursal_default=?, activo=? WHERE id_usuario=?`,
@@ -111,10 +137,17 @@ const updateUsuario = async (req, res) => {
        id_rol, id_sucursal_default || null, activo ? 1 : 0, id]
     );
 
+    const [newRows] = await db.promise().query(
+      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo
+       FROM usuarios WHERE id_usuario = ?`,
+      [id]
+    );
+    const userDespues = newRows[0];
+
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'usuarios', ?, 'UPDATE', ?)`,
-      [req.user.id_usuario, id, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, datos_despues, ip_origen) VALUES (?, 'usuarios', ?, 'UPDATE', ?, ?, ?)`,
+      [req.user.id_usuario, id, JSON.stringify(userAntes), JSON.stringify(userDespues), ip]
     );
 
     res.json({ mensaje: 'Usuario actualizado' });
@@ -132,13 +165,29 @@ const deleteUsuario = async (req, res) => {
     return res.status(400).json({ error: 'No puedes desactivar tu propia cuenta' });
   }
   try {
+    const [oldRows] = await db.promise().query(
+      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo
+       FROM usuarios WHERE id_usuario = ?`,
+      [id]
+    );
+    if (oldRows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const userAntes = oldRows[0];
+
+    // Regla: no permitir desactivar al último administrador activo
+    if (userAntes.id_rol === 1 && userAntes.activo === 1) {
+      const [adminCount] = await db.promise().query('SELECT COUNT(*) AS total FROM usuarios WHERE id_rol = 1 AND activo = 1');
+      if (adminCount[0].total <= 1) {
+        return res.status(400).json({ error: 'No se puede desactivar al último administrador activo' });
+      }
+    }
+
     await db.promise().query(`UPDATE usuarios SET activo = 0 WHERE id_usuario = ?`, [id]);
     await db.promise().query(`UPDATE sesiones SET cerrada = 1 WHERE id_usuario = ? AND cerrada = 0`, [id]);
 
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'usuarios', ?, 'DELETE', ?)`,
-      [req.user.id_usuario, id, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, ip_origen) VALUES (?, 'usuarios', ?, 'DELETE', ?, ?)`,
+      [req.user.id_usuario, id, JSON.stringify(userAntes), ip]
     );
 
     res.json({ mensaje: 'Usuario desactivado' });
@@ -158,6 +207,14 @@ const resetPassword = async (req, res) => {
   }
 
   try {
+    const [oldRows] = await db.promise().query(
+      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo
+       FROM usuarios WHERE id_usuario = ?`,
+      [id]
+    );
+    if (oldRows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const userAntes = oldRows[0];
+
     const hash = await bcrypt.hash(nueva_password, 10);
     await db.promise().query(
       `UPDATE usuarios SET password_hash = ?, debe_cambiar_pass = 1 WHERE id_usuario = ?`,
@@ -167,8 +224,8 @@ const resetPassword = async (req, res) => {
 
     const ip = req.ip || null;
     await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?, 'usuarios', ?, 'RESET_PASSWORD', ?)`,
-      [req.user.id_usuario, id, ip]
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, ip_origen) VALUES (?, 'usuarios', ?, 'OTRO', ?, ?)`,
+      [req.user.id_usuario, id, JSON.stringify({ ...userAntes, accion_especifica: 'RESET_PASSWORD' }), ip]
     );
 
     res.json({ mensaje: 'Contraseña reseteada. El usuario deberá cambiarla al iniciar sesión.' });
