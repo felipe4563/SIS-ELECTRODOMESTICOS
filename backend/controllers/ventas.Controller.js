@@ -190,6 +190,10 @@ const createVenta = async (req, res) => {
     const { subtotal, descuento_monto, total } = calcTotalesVenta(items, { descuento_porc, impuesto });
     const numero = await generarNumero('VEN', 'ventas');
 
+    // 💡 Corrección de strings vacíos a NULL para evitar errores en el VPS
+    const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
+    const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
+
     const [ins] = await db.promise().query(
       `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
         id_moneda, tipo_cambio, condicion_pago, dias_credito, fecha_vencimiento,
@@ -203,7 +207,10 @@ const createVenta = async (req, res) => {
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
         subtotal, descuento_porc, descuento_monto, impuesto, total,
-        requiere_entrega, direccion_entrega ?? null, fecha_entrega ?? null, observaciones ?? null,
+        requiere_entrega, 
+        limpiaDireccionEntrega, 
+        limpiaFechaEntrega, 
+        observaciones ?? null,
       ]
     );
     const id_venta = ins.insertId;
@@ -261,6 +268,10 @@ const updateVenta = async (req, res) => {
 
     const { subtotal, descuento_monto, total } = calcTotalesVenta(items, { descuento_porc, impuesto });
 
+    // 💡 Corrección de strings vacíos a NULL para evitar errores en el VPS
+    const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
+    const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
+
     await db.promise().query(
       `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, dias_credito=?,
         fecha_vencimiento=?, subtotal=?, descuento_porc=?, descuento_monto=?, impuesto=?, total=?,
@@ -272,7 +283,10 @@ const updateVenta = async (req, res) => {
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
         subtotal, descuento_porc, descuento_monto, impuesto, total,
-        requiere_entrega ?? 0, direccion_entrega ?? null, fecha_entrega ?? null, observaciones ?? null,
+        requiere_entrega ?? 0, 
+        limpiaDireccionEntrega, 
+        limpiaFechaEntrega, 
+        observaciones ?? null,
         id,
       ]
     );
@@ -380,7 +394,7 @@ const emitirVenta = async (req, res) => {
 
       await db.promise().query(
         `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad, costo_unitario,
-          saldo_cantidad, saldo_costo, documento_tipo, documento_id, documento_numero, id_usuario)
+         saldo_cantidad, saldo_costo, documento_tipo, documento_id, documento_numero, id_usuario)
          VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         [
           item.id_producto, venta.id_deposito, tm.id_tipo_movimiento,
