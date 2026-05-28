@@ -44,7 +44,20 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-pdf':   ['@react-pdf/renderer'],
+          'vendor-icons': ['react-icons'],
+          'vendor-http':  ['axios'],
+        },
+      },
+    },
+  },
 })
