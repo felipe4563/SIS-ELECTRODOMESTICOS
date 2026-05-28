@@ -1,4 +1,6 @@
-const db = require('../config/db');
+const db   = require('../config/db');
+const xlsx = require('xlsx');
+const PDFDocument = require('pdfkit');
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const inicioMes = () => {
@@ -397,6 +399,366 @@ async function getBonosVendedores(req, res) {
   }
 }
 
+// ── Stock consolidado ─────────────────────────────────────────────────────
+async function getStockConsolidado(req, res) {
+  try {
+    const { id_deposito, id_sucursal, id_categoria, id_marca, con_stock } = req.query;
+    let sql = `
+      SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
+        d.nombre AS deposito, s.nombre AS sucursal,
+        COALESCE(st.cantidad,0) AS cantidad,
+        COALESCE(st.cantidad_reservada,0) AS cantidad_reservada,
+        COALESCE(st.cantidad_disponible,0) AS cantidad_disponible,
+        COALESCE(st.costo_promedio,0) AS costo_promedio,
+        p.precio_publico, p.stock_minimo, st.fecha_ult_movimiento
+      FROM stock st
+      JOIN productos p  ON p.id_producto=st.id_producto
+      JOIN depositos d  ON d.id_deposito=st.id_deposito
+      JOIN sucursales s ON s.id_sucursal=d.id_sucursal
+      JOIN marcas m     ON m.id_marca=p.id_marca
+      JOIN categorias cat ON cat.id_categoria=p.id_categoria
+      WHERE p.activo=1
+    `;
+    const params = [];
+    if (id_deposito)     { sql += ' AND st.id_deposito=?';  params.push(id_deposito); }
+    if (id_sucursal)     { sql += ' AND d.id_sucursal=?';   params.push(id_sucursal); }
+    if (id_categoria)    { sql += ' AND p.id_categoria=?';  params.push(id_categoria); }
+    if (id_marca)        { sql += ' AND p.id_marca=?';      params.push(id_marca); }
+    if (con_stock === '1') { sql += ' AND st.cantidad > 0'; }
+    sql += ' ORDER BY p.producto, d.nombre LIMIT 2000';
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Kardex por producto ────────────────────────────────────────────────────
+async function getKardexProducto(req, res) {
+  try {
+    const { id_producto } = req.params;
+    const { id_deposito } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT DATE_FORMAT(k.fecha,'%Y-%m-%d %H:%i') AS fecha,
+        tm.nombre AS tipo_movimiento, tm.efecto,
+        d.nombre AS deposito,
+        k.cantidad, k.costo_unitario,
+        k.saldo_cantidad, k.saldo_costo,
+        k.documento_tipo, k.documento_numero,
+        CONCAT(u.nombres,' ',u.apellidos) AS usuario
+      FROM kardex k
+      JOIN tipos_movimiento tm ON tm.id_tipo_movimiento=k.id_tipo_movimiento
+      JOIN depositos d         ON d.id_deposito=k.id_deposito
+      LEFT JOIN usuarios u     ON u.id_usuario=k.id_usuario
+      WHERE k.id_producto=? AND DATE(k.fecha) BETWEEN ? AND ?
+    `;
+    const params = [id_producto, desde, hasta];
+    if (id_deposito) { sql += ' AND k.id_deposito=?'; params.push(id_deposito); }
+    sql += ' ORDER BY k.fecha DESC LIMIT 500';
+
+    const [[prod]] = await db.promise().query(
+      'SELECT codigo_interno, producto FROM productos WHERE id_producto=?', [id_producto]
+    );
+    const [rows] = await db.promise().query(sql, params);
+    res.json({ producto: prod || null, movimientos: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Arqueos de caja ───────────────────────────────────────────────────────
+async function getArqueosCaja(req, res) {
+  try {
+    const { id_sucursal, id_caja, estado } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT ac.id_arqueo, cj.nombre AS caja, s.nombre AS sucursal,
+        CONCAT(u.nombres,' ',u.apellidos) AS usuario,
+        DATE_FORMAT(ac.fecha_apertura,'%Y-%m-%d %H:%i') AS fecha_apertura,
+        DATE_FORMAT(ac.fecha_cierre,'%Y-%m-%d %H:%i') AS fecha_cierre,
+        ac.monto_apertura, ac.monto_cierre_sistema, ac.monto_cierre_real,
+        ac.diferencia, ac.estado
+      FROM arqueos_caja ac
+      JOIN cajas cj     ON cj.id_caja=ac.id_caja
+      JOIN sucursales s ON s.id_sucursal=cj.id_sucursal
+      JOIN usuarios u   ON u.id_usuario=ac.id_usuario
+      WHERE DATE(ac.fecha_apertura) BETWEEN ? AND ?
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND cj.id_sucursal=?'; params.push(id_sucursal); }
+    if (id_caja)     { sql += ' AND ac.id_caja=?';     params.push(id_caja); }
+    if (estado)      { sql += ' AND ac.estado=?';      params.push(estado); }
+    sql += ' ORDER BY ac.fecha_apertura DESC';
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Gastos por categoría ──────────────────────────────────────────────────
+async function getGastosCategoria(req, res) {
+  try {
+    const { id_sucursal } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT cg.nombre AS categoria,
+        COUNT(*) AS num_gastos,
+        SUM(g.monto) AS total_monto,
+        SUM(CASE WHEN g.metodo_pago='EFECTIVO' THEN g.monto ELSE 0 END) AS efectivo,
+        SUM(CASE WHEN g.metodo_pago!='EFECTIVO' THEN g.monto ELSE 0 END) AS otros_metodos
+      FROM gastos g
+      JOIN categorias_gasto cg ON cg.id_categoria_gasto=g.id_categoria_gasto
+      WHERE g.fecha BETWEEN ? AND ? AND g.estado != 'ANULADO'
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND g.id_sucursal=?'; params.push(id_sucursal); }
+    sql += ' GROUP BY cg.id_categoria_gasto, cg.nombre ORDER BY total_monto DESC';
+
+    const [rows] = await db.promise().query(sql, params);
+    const [[tot]] = await db.promise().query(
+      `SELECT COALESCE(SUM(monto),0) AS total, COUNT(*) AS cantidad
+       FROM gastos WHERE fecha BETWEEN ? AND ? AND estado!='ANULADO'
+       ${id_sucursal ? ' AND id_sucursal=?' : ''}`,
+      id_sucursal ? [desde, hasta, id_sucursal] : [desde, hasta]
+    );
+    res.json({ categorias: rows, totales: tot });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Top productos ─────────────────────────────────────────────────────────
+async function getTopProductos(req, res) {
+  try {
+    const { id_sucursal, id_categoria, id_marca } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+    const limit = Math.min(parseInt(req.query.limit || 10, 10), 100);
+
+    let sql = `
+      SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
+        SUM(vd.cantidad) AS cantidad_vendida,
+        SUM(vd.subtotal) AS monto_total,
+        COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos,
+        AVG(vd.precio_unitario) AS precio_promedio
+      FROM venta_detalle vd
+      JOIN ventas v     ON v.id_venta=vd.id_venta
+      JOIN productos p  ON p.id_producto=vd.id_producto
+      JOIN marcas m     ON m.id_marca=p.id_marca
+      JOIN categorias cat ON cat.id_categoria=p.id_categoria
+      WHERE DATE(v.fecha) BETWEEN ? AND ? AND v.estado NOT IN ('ANULADA','BORRADOR')
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal)  { sql += ' AND v.id_sucursal=?';  params.push(id_sucursal); }
+    if (id_categoria) { sql += ' AND p.id_categoria=?'; params.push(id_categoria); }
+    if (id_marca)     { sql += ' AND p.id_marca=?';     params.push(id_marca); }
+    sql += ` GROUP BY vd.id_producto ORDER BY cantidad_vendida DESC LIMIT ${limit}`;
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Exportar reporte (Excel o PDF) ────────────────────────────────────────
+async function exportarReporte(req, res) {
+  try {
+    const { tipo, formato } = req.query;
+    const desde = req.query.fecha_desde || inicioMes();
+    const hasta = req.query.fecha_hasta || hoy();
+
+    let rows = [], titulo = 'Reporte', columnas = [];
+
+    if (tipo === 'ventas') {
+      titulo = 'Reporte de Ventas';
+      [rows] = await db.promise().query(
+        `SELECT v.numero, DATE_FORMAT(v.fecha,'%Y-%m-%d %H:%i') AS fecha,
+          COALESCE(c.razon_social,CONCAT(c.nombres,' ',c.apellidos)) AS cliente,
+          CONCAT(u.nombres,' ',u.apellidos) AS vendedor, s.nombre AS sucursal,
+          v.condicion_pago, v.total, v.saldo_pendiente, v.estado
+         FROM ventas v
+         JOIN clientes c ON c.id_cliente=v.id_cliente
+         JOIN usuarios u ON u.id_usuario=v.id_vendedor
+         JOIN sucursales s ON s.id_sucursal=v.id_sucursal
+         WHERE DATE(v.fecha) BETWEEN ? AND ? AND v.estado!='BORRADOR'
+         ORDER BY v.fecha DESC LIMIT 5000`,
+        [desde, hasta]
+      );
+      columnas = ['numero','fecha','cliente','vendedor','sucursal','condicion_pago','total','saldo_pendiente','estado'];
+
+    } else if (tipo === 'compras') {
+      titulo = 'Reporte de Compras';
+      [rows] = await db.promise().query(
+        `SELECT c.numero, DATE_FORMAT(c.fecha_pedido,'%Y-%m-%d') AS fecha_pedido,
+          pr.razon_social AS proveedor, s.nombre AS sucursal,
+          c.condicion_pago, c.total, c.saldo_pendiente, c.estado
+         FROM compras c
+         JOIN proveedores pr ON pr.id_proveedor=c.id_proveedor
+         JOIN sucursales s ON s.id_sucursal=c.id_sucursal
+         WHERE c.fecha_pedido BETWEEN ? AND ? AND c.estado!='ANULADO'
+         ORDER BY c.fecha_pedido DESC LIMIT 5000`,
+        [desde, hasta]
+      );
+      columnas = ['numero','fecha_pedido','proveedor','sucursal','condicion_pago','total','saldo_pendiente','estado'];
+
+    } else if (tipo === 'stock') {
+      titulo = 'Stock Consolidado';
+      [rows] = await db.promise().query(
+        `SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
+          d.nombre AS deposito, s.nombre AS sucursal,
+          COALESCE(st.cantidad,0) AS cantidad,
+          COALESCE(st.cantidad_disponible,0) AS disponible,
+          COALESCE(st.costo_promedio,0) AS costo_promedio,
+          p.precio_publico, p.stock_minimo
+         FROM stock st
+         JOIN productos p  ON p.id_producto=st.id_producto
+         JOIN depositos d  ON d.id_deposito=st.id_deposito
+         JOIN sucursales s ON s.id_sucursal=d.id_sucursal
+         JOIN marcas m     ON m.id_marca=p.id_marca
+         JOIN categorias cat ON cat.id_categoria=p.id_categoria
+         WHERE p.activo=1 ORDER BY p.producto LIMIT 5000`
+      );
+      columnas = ['codigo_interno','producto','marca','categoria','deposito','sucursal','cantidad','disponible','costo_promedio','precio_publico','stock_minimo'];
+
+    } else if (tipo === 'cuentas-cobrar') {
+      titulo = 'Cuentas por Cobrar';
+      [rows] = await db.promise().query(
+        `SELECT c.codigo, COALESCE(c.razon_social,CONCAT(c.nombres,' ',c.apellidos)) AS cliente,
+          c.tipo_cliente, c.telefono, c.limite_credito, c.saldo_actual AS total_pendiente, c.dias_credito
+         FROM clientes c WHERE c.saldo_actual > 0 ORDER BY c.saldo_actual DESC`
+      );
+      columnas = ['codigo','cliente','tipo_cliente','telefono','limite_credito','total_pendiente','dias_credito'];
+
+    } else if (tipo === 'cuentas-pagar') {
+      titulo = 'Cuentas por Pagar';
+      [rows] = await db.promise().query(
+        `SELECT pr.codigo, pr.razon_social AS proveedor, pr.contacto_principal,
+          pr.telefono, pr.plazo_credito_dias, pr.saldo_actual AS total_pendiente
+         FROM proveedores pr WHERE pr.saldo_actual > 0 ORDER BY pr.saldo_actual DESC`
+      );
+      columnas = ['codigo','proveedor','contacto_principal','telefono','plazo_credito_dias','total_pendiente'];
+
+    } else if (tipo === 'top-productos') {
+      titulo = 'Top Productos';
+      [rows] = await db.promise().query(
+        `SELECT p.codigo_interno, p.producto, m.nombre AS marca,
+          SUM(vd.cantidad) AS cantidad_vendida, SUM(vd.subtotal) AS monto_total
+         FROM venta_detalle vd
+         JOIN ventas v    ON v.id_venta=vd.id_venta
+         JOIN productos p ON p.id_producto=vd.id_producto
+         JOIN marcas m    ON m.id_marca=p.id_marca
+         WHERE DATE(v.fecha) BETWEEN ? AND ? AND v.estado NOT IN ('ANULADA','BORRADOR')
+         GROUP BY vd.id_producto ORDER BY cantidad_vendida DESC LIMIT 50`,
+        [desde, hasta]
+      );
+      columnas = ['codigo_interno','producto','marca','cantidad_vendida','monto_total'];
+
+    } else if (tipo === 'gastos-categoria') {
+      titulo = 'Gastos por Categoría';
+      [rows] = await db.promise().query(
+        `SELECT cg.nombre AS categoria, COUNT(*) AS num_gastos, SUM(g.monto) AS total_monto
+         FROM gastos g
+         JOIN categorias_gasto cg ON cg.id_categoria_gasto=g.id_categoria_gasto
+         WHERE g.fecha BETWEEN ? AND ? AND g.estado!='ANULADO'
+         GROUP BY cg.id_categoria_gasto ORDER BY total_monto DESC`,
+        [desde, hasta]
+      );
+      columnas = ['categoria','num_gastos','total_monto'];
+
+    } else if (tipo === 'rentabilidad') {
+      titulo = 'Rentabilidad';
+      [rows] = await db.promise().query(
+        `SELECT CONCAT(p.codigo_interno,' - ',p.producto) AS producto,
+          SUM(vd.cantidad) AS cantidad_vendida, SUM(vd.subtotal) AS ingresos,
+          SUM(vd.cantidad*vd.costo_unitario) AS costo_ventas,
+          SUM(vd.subtotal)-SUM(vd.cantidad*vd.costo_unitario) AS utilidad_bruta,
+          CASE WHEN SUM(vd.subtotal)>0
+            THEN ROUND((SUM(vd.subtotal)-SUM(vd.cantidad*vd.costo_unitario))/SUM(vd.subtotal)*100,2)
+            ELSE 0 END AS margen_pct
+         FROM venta_detalle vd
+         JOIN ventas v    ON v.id_venta=vd.id_venta
+         JOIN productos p ON p.id_producto=vd.id_producto
+         WHERE DATE(v.fecha) BETWEEN ? AND ? AND v.estado NOT IN ('ANULADA','BORRADOR')
+         GROUP BY vd.id_producto ORDER BY utilidad_bruta DESC LIMIT 500`,
+        [desde, hasta]
+      );
+      columnas = ['producto','cantidad_vendida','ingresos','costo_ventas','utilidad_bruta','margen_pct'];
+
+    } else {
+      return res.status(400).json({ error: 'tipo no válido' });
+    }
+
+    const nombre = `${titulo.replace(/\s+/g, '-')}_${desde}_${hasta}`;
+
+    if (formato === 'excel') {
+      const datos = rows.map(r => {
+        const o = {};
+        columnas.forEach(c => { o[c] = r[c] != null ? r[c] : ''; });
+        return o;
+      });
+      const ws = xlsx.utils.json_to_sheet(datos);
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, ws, titulo.slice(0, 31));
+      const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${nombre}.xlsx"`);
+      return res.send(buf);
+    }
+
+    if (formato === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${nombre}.pdf"`);
+      const doc = new PDFDocument({ margin: 25, size: 'A4', layout: 'landscape' });
+      doc.pipe(res);
+
+      const pageW = doc.page.width - 50;
+      const colW  = Math.floor(pageW / columnas.length);
+      const rowH  = 15;
+
+      doc.fontSize(13).font('Helvetica-Bold').text(titulo, { align: 'center' });
+      doc.fontSize(8).font('Helvetica').text(`Período: ${desde} al ${hasta}  |  ${rows.length} registros`, { align: 'center' });
+      doc.moveDown(0.5);
+
+      let y = doc.y;
+      const drawRow = (cols, bg, fontName, fontColor) => {
+        doc.rect(25, y, pageW, rowH).fill(bg);
+        doc.font(fontName).fontSize(7).fill(fontColor);
+        cols.forEach((val, i) => {
+          doc.text(String(val ?? ''), 27 + i * colW, y + 4, { width: colW - 3, lineBreak: false });
+        });
+        doc.fill('black');
+        y += rowH;
+        if (y > doc.page.height - 40) {
+          doc.addPage({ size: 'A4', layout: 'landscape', margin: 25 });
+          y = 30;
+        }
+      };
+
+      drawRow(columnas.map(c => c.replace(/_/g,' ').toUpperCase()), '#1e293b', 'Helvetica-Bold', 'white');
+      rows.forEach((row, i) => {
+        drawRow(columnas.map(c => row[c]), i % 2 === 0 ? '#f8fafc' : 'white', 'Helvetica', 'black');
+      });
+
+      doc.end();
+      return;
+    }
+
+    res.status(400).json({ error: 'formato debe ser excel o pdf' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 module.exports = {
   getDashboard,
   getVentas,
@@ -409,4 +771,10 @@ module.exports = {
   getRentabilidad,
   getEstadoResultados,
   getBonosVendedores,
+  getStockConsolidado,
+  getKardexProducto,
+  getArqueosCaja,
+  getGastosCategoria,
+  getTopProductos,
+  exportarReporte,
 };

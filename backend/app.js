@@ -28,6 +28,12 @@ const cajaRoutes          = require('./routes/caja.Routes');
 const reportesRoutes      = require('./routes/reportes.Routes');
 const auditoriaRoutes     = require('./routes/auditoria.Routes');
 const permisosRoutes      = require('./routes/permisos.Routes');
+const combosRoutes        = require('./routes/combos.Routes');
+const promocionesRoutes   = require('./routes/promociones.Routes');
+const cotizacionesRoutes  = require('./routes/cotizaciones.Routes');
+const cobrosRoutes        = require('./routes/cobros.Routes');
+const gastosRoutes        = require('./routes/gastos.Routes');
+const herramientasRoutes  = require('./routes/herramientas.Routes');
 
 const app = express();
 
@@ -43,6 +49,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── Rutas API ─────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
@@ -69,6 +76,12 @@ app.use('/api/caja',          cajaRoutes);
 app.use('/api/reportes',      reportesRoutes);
 app.use('/api/auditoria',     auditoriaRoutes);
 app.use('/api/permisos',      permisosRoutes);
+app.use('/api/combos',        combosRoutes);
+app.use('/api/promociones',   promocionesRoutes);
+app.use('/api/cotizaciones',  cotizacionesRoutes);
+app.use('/api/cobros',        cobrosRoutes);
+app.use('/api/gastos',        gastosRoutes);
+app.use('/api/herramientas',  herramientasRoutes);
 
 
 // ── Servidor ──────────────────────────────────────────────────────────────

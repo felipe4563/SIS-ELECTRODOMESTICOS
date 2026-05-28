@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { cajaService } from '../../services/caja.service';
+import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 
 const fmt = (n) =>
@@ -9,6 +10,7 @@ const fmt = (n) =>
 const fmtFecha = (f) =>
   f ? new Date(f).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
+// ── Modal: Abrir turno ────────────────────────────────────────────────────
 function ModalAbrirCaja({ caja, onClose, onSuccess }) {
   const [monto, setMonto]   = useState('0');
   const [cargando, setCargando] = useState(false);
@@ -46,31 +48,21 @@ function ModalAbrirCaja({ caja, onClose, onSuccess }) {
             Monto de apertura (Bs)
           </label>
           <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={monto}
+            type="number" min={0} step="0.01" value={monto}
             onChange={e => setMonto(e.target.value)}
             className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
             autoFocus
           />
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-            Monto en efectivo con que inicia el turno
-          </p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">Efectivo con que inicia el turno</p>
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button
-            onClick={handleAbrir}
-            disabled={cargando}
-            className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
-          >
+          <button onClick={handleAbrir} disabled={cargando}
+            className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
             {cargando ? 'Abriendo…' : 'Abrir caja'}
           </button>
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm transition-colors"
-          >
+          <button onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm transition-colors">
             Cancelar
           </button>
         </div>
@@ -79,7 +71,109 @@ function ModalAbrirCaja({ caja, onClose, onSuccess }) {
   );
 }
 
-function TarjetaCaja({ caja, puedoAbrir, onAbrir }) {
+// ── Modal: Crear/Editar caja ──────────────────────────────────────────────
+function ModalCaja({ caja, onClose, onSuccess }) {
+  const editando = Boolean(caja?.id_caja);
+  const [sucursales, setSucursales] = useState([]);
+  const [form, setForm] = useState({
+    id_sucursal: caja?.id_sucursal ?? '',
+    nombre:      caja?.nombre      ?? '',
+    activo:      caja?.activo      ?? 1,
+  });
+  const [cargando, setCargando] = useState(false);
+  const [error, setError]       = useState('');
+
+  useEffect(() => {
+    sucursalesService.getAll().then(r => setSucursales(r.data.sucursales ?? [])).catch(() => {});
+  }, []);
+
+  const handleGuardar = async () => {
+    setError('');
+    if (!form.id_sucursal || !form.nombre.trim()) {
+      return setError('Sucursal y nombre son requeridos');
+    }
+    setCargando(true);
+    try {
+      if (editando) {
+        await cajaService.updateCaja(caja.id_caja, form);
+      } else {
+        await cajaService.crearCaja(form);
+      }
+      onSuccess();
+    } catch (e) {
+      setError(e.response?.data?.mensaje ?? 'Error al guardar');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl w-full max-w-sm p-6 space-y-4">
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
+          {editando ? 'Editar caja' : 'Nueva caja'}
+        </h2>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Sucursal *</label>
+            <select
+              value={form.id_sucursal}
+              onChange={e => setForm(f => ({ ...f, id_sucursal: e.target.value }))}
+              disabled={editando}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:opacity-60"
+            >
+              <option value="">Seleccionar…</option>
+              {sucursales.map(s => (
+                <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Nombre *</label>
+            <input
+              type="text" value={form.nombre}
+              onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+              placeholder="Ej: Caja Principal"
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              autoFocus
+            />
+          </div>
+          {editando && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox" id="activo" checked={Boolean(form.activo)}
+                onChange={e => setForm(f => ({ ...f, activo: e.target.checked ? 1 : 0 }))}
+                className="w-4 h-4 rounded accent-yellow-400"
+              />
+              <label htmlFor="activo" className="text-sm text-zinc-700 dark:text-zinc-300">Activa</label>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={handleGuardar} disabled={cargando}
+            className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
+            {cargando ? 'Guardando…' : 'Guardar'}
+          </button>
+          <button onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tarjeta de caja ───────────────────────────────────────────────────────
+function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, onAbrir, onEditar }) {
   const abierta = Boolean(caja.id_arqueo);
   const minutosAbierta = abierta
     ? Math.floor((Date.now() - new Date(caja.fecha_apertura)) / 60000)
@@ -92,13 +186,21 @@ function TarjetaCaja({ caja, puedoAbrir, onAbrir }) {
           <p className="font-bold text-zinc-900 dark:text-white">{caja.nombre}</p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{caja.sucursal}</p>
         </div>
-        <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${
-          abierta
-            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
-        }`}>
-          {abierta ? 'ABIERTA' : 'CERRADA'}
-        </span>
+        <div className="flex items-center gap-2">
+          {puedoGestionar && (
+            <button onClick={() => onEditar(caja)}
+              className="text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+              ✏️
+            </button>
+          )}
+          <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            abierta
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+          }`}>
+            {abierta ? 'ABIERTA' : 'CERRADA'}
+          </span>
+        </div>
       </div>
 
       {abierta ? (
@@ -137,10 +239,8 @@ function TarjetaCaja({ caja, puedoAbrir, onAbrir }) {
       )}
 
       {!abierta && puedoAbrir && (
-        <button
-          onClick={() => onAbrir(caja)}
-          className="w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors"
-        >
+        <button onClick={() => onAbrir(caja)}
+          className="w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors">
           Abrir turno
         </button>
       )}
@@ -148,16 +248,19 @@ function TarjetaCaja({ caja, puedoAbrir, onAbrir }) {
   );
 }
 
+// ── Página principal ──────────────────────────────────────────────────────
 export default function Caja() {
   const { puede } = usePermission();
-  const puedoAbrir          = puede('abrir', 'caja');
+  const puedoAbrir           = puede('abrir', 'caja');
+  const puedoGestionar       = puede('gestionar', 'caja');
   const puedoVerTodosArqueos = puede('ver_arqueo_todos', 'caja');
 
   const [cajas,   setCajas]   = useState([]);
   const [arqueos, setArqueos] = useState([]);
   const [cargandoCajas,   setCargandoCajas]   = useState(true);
   const [cargandoArqueos, setCargandoArqueos] = useState(true);
-  const [modalCaja, setModalCaja] = useState(null);
+  const [modalAbrir, setModalAbrir] = useState(null);
+  const [modalCaja,  setModalCaja]  = useState(null); // null | {} (nueva) | caja (editar)
 
   const [filtros, setFiltros] = useState({
     id_caja:     '',
@@ -186,6 +289,7 @@ export default function Caja() {
   useEffect(() => { cargarArqueos(); }, [filtros]);
 
   const handleSuccess = () => {
+    setModalAbrir(null);
     setModalCaja(null);
     cargarCajas();
     cargarArqueos();
@@ -200,18 +304,27 @@ export default function Caja() {
 
   const difColor = (dif) => {
     const v = Number(dif ?? 0);
-    if (v > 0)  return 'text-green-600 dark:text-green-400';
-    if (v < 0)  return 'text-red-500 dark:text-red-400';
+    if (v > 0) return 'text-green-600 dark:text-green-400';
+    if (v < 0) return 'text-red-500 dark:text-red-400';
     return 'text-zinc-400';
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Caja</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Apertura y cierre de turnos</p>
         </div>
+        {puedoGestionar && (
+          <button
+            onClick={() => setModalCaja({})}
+            className="px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors"
+          >
+            + Nueva caja
+          </button>
+        )}
       </div>
 
       {/* Estado de cajas */}
@@ -222,7 +335,14 @@ export default function Caja() {
         {cargandoCajas ? (
           <div className="text-center py-10 text-zinc-400">Cargando…</div>
         ) : cajas.length === 0 ? (
-          <div className="text-center py-10 text-zinc-400">No hay cajas configuradas</div>
+          <div className="text-center py-10 text-zinc-400">
+            No hay cajas configuradas.{' '}
+            {puedoGestionar && (
+              <button onClick={() => setModalCaja({})} className="text-yellow-500 hover:underline">
+                Crear una nueva
+              </button>
+            )}
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {cajas.map(c => (
@@ -230,7 +350,9 @@ export default function Caja() {
                 key={c.id_caja}
                 caja={c}
                 puedoAbrir={puedoAbrir}
-                onAbrir={setModalCaja}
+                puedoGestionar={puedoGestionar}
+                onAbrir={setModalAbrir}
+                onEditar={setModalCaja}
               />
             ))}
           </div>
@@ -269,8 +391,7 @@ export default function Caja() {
             <div>
               <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Desde</label>
               <input
-                type="date"
-                value={filtros.fecha_desde}
+                type="date" value={filtros.fecha_desde}
                 onChange={e => setFiltros(f => ({ ...f, fecha_desde: e.target.value }))}
                 className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
               />
@@ -278,8 +399,7 @@ export default function Caja() {
             <div>
               <label className="block text-xs text-zinc-500 dark:text-zinc-400 mb-1">Hasta</label>
               <input
-                type="date"
-                value={filtros.fecha_hasta}
+                type="date" value={filtros.fecha_hasta}
                 onChange={e => setFiltros(f => ({ ...f, fecha_hasta: e.target.value }))}
                 className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
               />
@@ -297,12 +417,12 @@ export default function Caja() {
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-800/60">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Caja / Sucursal</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Cajero</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Apertura</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Cierre</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Apertura Bs</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Sistema Bs</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Real Bs</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:table-cell">Cajero</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden md:table-cell">Apertura</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Cierre</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden md:table-cell">Apertura Bs</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Sistema Bs</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Real Bs</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Diferencia</th>
                   <th className="px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
                   <th className="px-4 py-3" />
@@ -315,14 +435,14 @@ export default function Caja() {
                       <p className="font-medium text-zinc-900 dark:text-white">{aq.caja}</p>
                       <p className="text-xs text-zinc-400">{aq.sucursal}</p>
                     </td>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">{aq.usuario}</td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs">{fmtFecha(aq.fecha_apertura)}</td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs">{fmtFecha(aq.fecha_cierre)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300">{fmt(aq.monto_apertura)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 hidden sm:table-cell">{aq.usuario}</td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs hidden md:table-cell">{fmtFecha(aq.fecha_apertura)}</td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs hidden lg:table-cell">{fmtFecha(aq.fecha_cierre)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden md:table-cell">{fmt(aq.monto_apertura)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden lg:table-cell">
                       {aq.monto_cierre_sistema != null ? fmt(aq.monto_cierre_sistema) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden lg:table-cell">
                       {aq.monto_cierre_real != null ? fmt(aq.monto_cierre_real) : '—'}
                     </td>
                     <td className={`px-4 py-3 text-right font-mono font-semibold ${difColor(aq.diferencia)}`}>
@@ -347,9 +467,16 @@ export default function Caja() {
         )}
       </div>
 
-      {modalCaja && (
+      {modalAbrir && (
         <ModalAbrirCaja
-          caja={modalCaja}
+          caja={modalAbrir}
+          onClose={() => setModalAbrir(null)}
+          onSuccess={handleSuccess}
+        />
+      )}
+      {modalCaja !== null && (
+        <ModalCaja
+          caja={modalCaja?.id_caja ? modalCaja : null}
           onClose={() => setModalCaja(null)}
           onSuccess={handleSuccess}
         />

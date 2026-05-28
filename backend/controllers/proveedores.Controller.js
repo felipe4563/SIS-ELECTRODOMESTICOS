@@ -221,9 +221,11 @@ const deleteContacto = async (req, res) => {
 const getCuentas = async (req, res) => {
   try {
     const [rows] = await db.promise().query(
-      `SELECT cp.*, m.nombre AS moneda_nombre, m.simbolo AS moneda_simbolo
+      `SELECT cp.*, m.nombre AS moneda_nombre, m.simbolo AS moneda_simbolo,
+              b.nombre AS banco_nombre, b.sigla AS banco_sigla
        FROM proveedor_cuentas_pago cp
        LEFT JOIN monedas m ON cp.id_moneda = m.id_moneda
+       LEFT JOIN bancos  b ON cp.id_banco  = b.id_banco
        WHERE cp.id_proveedor = ?
        ORDER BY cp.es_principal DESC, cp.metodo ASC`,
       [req.params.id]
@@ -236,7 +238,7 @@ const getCuentas = async (req, res) => {
 };
 
 const createCuenta = async (req, res) => {
-  const { metodo, banco, tipo_cuenta, numero_cuenta, titular, qr_url, id_moneda, es_principal } = req.body;
+  const { metodo, id_banco, tipo_cuenta, numero_cuenta, titular, qr_url, id_moneda, es_principal } = req.body;
   if (!metodo) return res.status(400).json({ error: 'El método de pago es requerido' });
   try {
     if (es_principal) {
@@ -246,20 +248,22 @@ const createCuenta = async (req, res) => {
     }
     const [result] = await db.promise().query(
       `INSERT INTO proveedor_cuentas_pago
-         (id_proveedor, metodo, banco, tipo_cuenta, numero_cuenta, titular, qr_url, id_moneda, es_principal)
+         (id_proveedor, metodo, id_banco, tipo_cuenta, numero_cuenta, titular, qr_url, id_moneda, es_principal)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.params.id, metodo,
-        banco?.trim() || null, tipo_cuenta?.trim() || null,
+        id_banco || null, tipo_cuenta?.trim() || null,
         numero_cuenta?.trim() || null, titular?.trim() || null,
         qr_url?.trim() || null, id_moneda || null, es_principal ? 1 : 0,
       ]
     );
     await auditLog(req.user.id_usuario, 'proveedor_cuentas_pago', result.insertId, 'INSERT', getIp(req));
     const [nueva] = await db.promise().query(
-      `SELECT cp.*, m.nombre AS moneda_nombre, m.simbolo AS moneda_simbolo
+      `SELECT cp.*, m.nombre AS moneda_nombre, m.simbolo AS moneda_simbolo,
+              b.nombre AS banco_nombre, b.sigla AS banco_sigla
        FROM proveedor_cuentas_pago cp
        LEFT JOIN monedas m ON cp.id_moneda = m.id_moneda
+       LEFT JOIN bancos  b ON cp.id_banco  = b.id_banco
        WHERE cp.id_cuenta = ?`, [result.insertId]
     );
     return res.status(201).json({ cuenta: nueva[0] });
@@ -271,7 +275,7 @@ const createCuenta = async (req, res) => {
 
 const updateCuenta = async (req, res) => {
   const { id, idC } = req.params;
-  const { metodo, banco, tipo_cuenta, numero_cuenta, titular, qr_url, id_moneda, es_principal, activo } = req.body;
+  const { metodo, id_banco, tipo_cuenta, numero_cuenta, titular, qr_url, id_moneda, es_principal, activo } = req.body;
   if (!metodo) return res.status(400).json({ error: 'El método de pago es requerido' });
   try {
     if (es_principal) {
@@ -282,11 +286,11 @@ const updateCuenta = async (req, res) => {
     }
     const [result] = await db.promise().query(
       `UPDATE proveedor_cuentas_pago
-       SET metodo = ?, banco = ?, tipo_cuenta = ?, numero_cuenta = ?, titular = ?,
+       SET metodo = ?, id_banco = ?, tipo_cuenta = ?, numero_cuenta = ?, titular = ?,
            qr_url = ?, id_moneda = ?, es_principal = ?, activo = ?
        WHERE id_cuenta = ? AND id_proveedor = ?`,
       [
-        metodo, banco?.trim() || null, tipo_cuenta?.trim() || null,
+        metodo, id_banco || null, tipo_cuenta?.trim() || null,
         numero_cuenta?.trim() || null, titular?.trim() || null,
         qr_url?.trim() || null, id_moneda || null,
         es_principal ? 1 : 0, activo !== undefined ? (activo ? 1 : 0) : 1,
@@ -297,9 +301,11 @@ const updateCuenta = async (req, res) => {
       return res.status(404).json({ error: 'Cuenta no encontrada' });
     await auditLog(req.user.id_usuario, 'proveedor_cuentas_pago', idC, 'UPDATE', getIp(req));
     const [updated] = await db.promise().query(
-      `SELECT cp.*, m.nombre AS moneda_nombre, m.simbolo AS moneda_simbolo
+      `SELECT cp.*, m.nombre AS moneda_nombre, m.simbolo AS moneda_simbolo,
+              b.nombre AS banco_nombre, b.sigla AS banco_sigla
        FROM proveedor_cuentas_pago cp
        LEFT JOIN monedas m ON cp.id_moneda = m.id_moneda
+       LEFT JOIN bancos  b ON cp.id_banco  = b.id_banco
        WHERE cp.id_cuenta = ?`, [idC]
     );
     return res.json({ cuenta: updated[0] });

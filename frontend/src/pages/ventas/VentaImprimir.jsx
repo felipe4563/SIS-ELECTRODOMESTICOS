@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
+import { useEmpresa } from '../../contexts/EmpresaContext';
 
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO') : '—';
@@ -11,6 +12,7 @@ export default function VentaImprimir() {
   const [data,     setData]     = useState(null);
   const [cargando, setCargando] = useState(true);
   const printRef   = useRef(null);
+  const { logoUrl } = useEmpresa() ?? {};
 
   useEffect(() => {
     ventasService.ticket(id)
@@ -50,6 +52,9 @@ export default function VentaImprimir() {
         >
           {/* Empresa */}
           <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+            {logoUrl && logoUrl !== '/logo.png' && (
+              <img src={logoUrl} alt="Logo" style={{ maxHeight: '80px', maxWidth: '100%', margin: '0 auto 6px', display: 'block', objectFit: 'contain' }} />
+            )}
             <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{empresa}</div>
             {data.empresa_nit && <div>NIT: {data.empresa_nit}</div>}
             {data.sucursal_nombre && <div>{data.sucursal_nombre}</div>}
@@ -175,15 +180,20 @@ export default function VentaImprimir() {
       {/* CSS de impresión */}
       <style>{`
         @media print {
-          .no-print { display: none !important; }
-          body { margin: 0; padding: 0; background: white; }
+          body * { visibility: hidden !important; }
+          #ticket, #ticket * { visibility: visible !important; }
           #ticket {
-            width: 80mm !important;
-            margin: 0 auto;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 72mm !important;
+            margin: 0 !important;
             padding: 2mm !important;
             font-size: 11px !important;
+            background: white !important;
+            color: #000 !important;
           }
-          @page { size: 80mm auto; margin: 0; }
+          @page { size: 72mm auto; margin: 0; }
         }
       `}</style>
     </>

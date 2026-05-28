@@ -1,20 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FaLock, FaSpinner, FaEye, FaEyeSlash, FaBolt, FaUser } from 'react-icons/fa';
-import logo from '/logo.png';
 import { useAuth }           from '../contexts/AuthContext';
 import { useAbilityUpdater } from '../contexts/AbilityContext';
+
+const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
 export default function Login() {
   const [identificador,     setIdentificador]     = useState('');
   const [contrasena,        setContrasena]        = useState('');
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
+  const [logoSrc,           setLogoSrc]           = useState('/logo.png');
 
   const { login, cargando, error } = useAuth();
   const { actualizar }             = useAbilityUpdater();
   const navigate                   = useNavigate();
   const location                   = useLocation();
   const destino = location.state?.from?.pathname ?? '/dashboard';
+
+  useEffect(() => {
+    fetch(`${BACKEND}/api/empresa/publico`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.logo_url) {
+          setLogoSrc(d.logo_url.startsWith('http') ? d.logo_url : BACKEND + d.logo_url);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,7 +60,7 @@ export default function Login() {
 
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <img src={logo} alt="Megaelectra" className="h-16 sm:h-20 w-auto object-contain" />
+            <img src={logoSrc} alt="Megaelectra" className="h-16 sm:h-20 w-auto object-contain" onError={(e) => { e.target.src = '/logo.png'; }} />
           </div>
 
           {/* Encabezado */}

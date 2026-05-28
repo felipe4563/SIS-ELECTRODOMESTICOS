@@ -4,6 +4,7 @@ import { useAuth }           from '../contexts/AuthContext';
 import { useAbilityUpdater } from '../contexts/AbilityContext';
 import { usePermission }     from '../hooks/usePermission';
 import { useTheme }          from '../contexts/ThemeContext';
+import { useEmpresa }        from '../contexts/EmpresaContext';
 
 // ── Estructura del menú ───────────────────────────────────────────────────
 const MENU = [
@@ -62,6 +63,13 @@ const MENU = [
     ],
   },
   {
+    label: 'Combos y Promociones',
+    items: [
+      { label: 'Combos',      path: '/combos',      icono: '🎁', action: 'ver', subject: 'combos' },
+      { label: 'Promociones', path: '/promociones', icono: '🏷️', action: 'ver', subject: 'promociones' },
+    ],
+  },
+  {
     label: 'Inventario',
     items: [
       { label: 'Stock',          path: '/inventario/stock',          icono: '📋', action: 'ver',          subject: 'inventario' },
@@ -74,7 +82,15 @@ const MENU = [
   {
     label: 'Ventas',
     items: [
-      { label: 'Ventas', path: '/ventas', icono: '🛍️', action: 'ver_sucursal', subject: 'ventas' },
+      { label: 'Ventas',        path: '/ventas',        icono: '🛍️', action: 'ver_sucursal', subject: 'ventas' },
+      { label: 'Cotizaciones',  path: '/cotizaciones',  icono: '📋', action: 'ver',          subject: 'cotizaciones' },
+      { label: 'Cobros',        path: '/cobros',        icono: '💳', action: 'ver',          subject: 'cobros' },
+    ],
+  },
+  {
+    label: 'Gastos',
+    items: [
+      { label: 'Gastos', path: '/gastos', icono: '💸', action: 'ver', subject: 'gastos' },
     ],
   },
   {
@@ -93,6 +109,14 @@ const MENU = [
     label: 'Auditoría',
     items: [
       { label: 'Auditoría', path: '/auditoria', icono: '🔍', action: 'ver', subject: 'auditoria' },
+    ],
+  },
+  {
+    label: 'Herramientas',
+    items: [
+      { label: 'Herramientas', path: '/herramientas',            icono: '🛠️', action: 'ver', subject: 'herramientas' },
+      { label: 'Backup',       path: '/herramientas/backup',     icono: '🗄️', action: 'ver', subject: 'herramientas' },
+      { label: 'Catálogo PDF', path: '/herramientas/catalogo-pdf', icono: '📄', action: 'ver', subject: 'herramientas' },
     ],
   },
 ];
@@ -183,6 +207,7 @@ function SidebarContent({ onClose }) {
   const { usuario, logout } = useAuth();
   const { limpiar }         = useAbilityUpdater();
   const navigate            = useNavigate();
+  const { logoUrl }         = useEmpresa() ?? {};
 
   const handleLogout = async () => {
     limpiar();
@@ -200,10 +225,10 @@ function SidebarContent({ onClose }) {
       {/* Logo + tema */}
       <div className="flex flex-col items-center pt-6 pb-5 border-b border-zinc-200 dark:border-zinc-800 px-4">
         <img
-          src="/logo.png"
+          src={logoUrl ?? '/logo.png'}
           alt="Logo"
           className="w-40 h-16 object-contain mb-3 drop-shadow-md hover:scale-105 transition-transform duration-300"
-          onError={(e) => { e.target.style.display = 'none'; }}
+          onError={(e) => { e.target.src = '/logo.png'; }}
         />
         <div className="flex items-center gap-2 mt-3">
           <span className="text-xs text-zinc-400 dark:text-zinc-500">☀️</span>

@@ -41,6 +41,42 @@ function calcTotalesVenta(items, body) {
   return { subtotal: +subtotal.toFixed(2), descuento_porc: descPorc, descuento_monto: descMonto, impuesto, total };
 }
 
+async function recalcularAlertas(detalle, id_deposito) {
+  for (const item of detalle) {
+    const [[prod]] = await db.promise().query(
+      `SELECT COALESCE(stock_minimo, 0) AS stock_minimo FROM productos WHERE id_producto = ?`,
+      [item.id_producto]
+    );
+    const stockMin = Number(prod?.stock_minimo ?? 0);
+    if (stockMin === 0) continue;
+
+    const [[st]] = await db.promise().query(
+      `SELECT COALESCE(cantidad, 0) AS cant FROM stock WHERE id_producto = ? AND id_deposito = ?`,
+      [item.id_producto, id_deposito]
+    );
+    const cantActual = Number(st?.cant ?? 0);
+    if (cantActual >= stockMin) continue;
+
+    const [[alerta]] = await db.promise().query(
+      `SELECT id_alerta FROM alertas_stock WHERE id_producto = ? AND id_deposito = ? AND atendida = 0 LIMIT 1`,
+      [item.id_producto, id_deposito]
+    );
+    if (alerta) {
+      await db.promise().query(
+        `UPDATE alertas_stock SET cantidad_actual = ?, stock_minimo = ?, fecha_generada = NOW()
+         WHERE id_alerta = ?`,
+        [cantActual, stockMin, alerta.id_alerta]
+      );
+    } else {
+      await db.promise().query(
+        `INSERT INTO alertas_stock (id_producto, id_deposito, cantidad_actual, stock_minimo)
+         VALUES (?,?,?,?)`,
+        [item.id_producto, id_deposito, cantActual, stockMin]
+      );
+    }
+  }
+}
+
 // ── Listar ventas ─────────────────────────────────────────────────────────────
 
 const getVentas = async (req, res) => {
@@ -146,6 +182,10 @@ const getVenta = async (req, res) => {
   }
 };
 
+// ── Vista previa (mismo que getVenta) ─────────────────────────────────────────
+
+const getPreview = getVenta;
+
 // ── Crear venta (BORRADOR) ────────────────────────────────────────────────────
 
 const createVenta = async (req, res) => {
@@ -174,23 +214,30 @@ const createVenta = async (req, res) => {
       }
     }
 
+    // Check PERMITIR_VENTA_SIN_STOCK config
+    const [[cfgStock]] = await db.promise().query(
+      `SELECT valor FROM configuracion_sistema WHERE clave = 'PERMITIR_VENTA_SIN_STOCK'`
+    );
+    const permitirSinStock = cfgStock?.valor === 'true' || cfgStock?.valor === '1';
+
     // Validate stock per item
-    for (const it of items) {
-      const [[st]] = await db.promise().query(
-        `SELECT COALESCE(cantidad_disponible, 0) AS disponible FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [it.id_producto, id_deposito]
-      );
-      const disponible = Number(st?.disponible ?? 0);
-      if (disponible < Number(it.cantidad)) {
-        const [[prod]] = await db.promise().query(`SELECT producto FROM productos WHERE id_producto = ?`, [it.id_producto]);
-        return res.status(400).json({ mensaje: `Stock insuficiente para "${prod?.producto ?? it.id_producto}". Disponible: ${disponible}` });
+    if (!permitirSinStock) {
+      for (const it of items) {
+        const [[st]] = await db.promise().query(
+          `SELECT COALESCE(cantidad_disponible, 0) AS disponible FROM stock WHERE id_producto = ? AND id_deposito = ?`,
+          [it.id_producto, id_deposito]
+        );
+        const disponible = Number(st?.disponible ?? 0);
+        if (disponible < Number(it.cantidad)) {
+          const [[prod]] = await db.promise().query(`SELECT producto FROM productos WHERE id_producto = ?`, [it.id_producto]);
+          return res.status(400).json({ mensaje: `Stock insuficiente para "${prod?.producto ?? it.id_producto}". Disponible: ${disponible}` });
+        }
       }
     }
 
     const { subtotal, descuento_monto, total } = calcTotalesVenta(items, { descuento_porc, impuesto });
     const numero = await generarNumero('VEN', 'ventas');
 
-    // 💡 Corrección de strings vacíos a NULL para evitar errores en el VPS
     const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
     const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
 
@@ -207,22 +254,20 @@ const createVenta = async (req, res) => {
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
         subtotal, descuento_porc, descuento_monto, impuesto, total,
-        requiere_entrega, 
-        limpiaDireccionEntrega, 
-        limpiaFechaEntrega, 
+        requiere_entrega,
+        limpiaDireccionEntrega,
+        limpiaFechaEntrega,
         observaciones ?? null,
       ]
     );
     const id_venta = ins.insertId;
 
     for (const it of items) {
-      // Get costo_promedio from stock
       const [[st]] = await db.promise().query(
         `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [it.id_producto, id_deposito]
       );
       const costo_unitario = Number(st?.costo ?? 0);
-      // Get bono_vendedor from productos
       const [[prod]] = await db.promise().query(`SELECT bono FROM productos WHERE id_producto = ?`, [it.id_producto]);
       const bono_vendedor = Number(prod?.bono ?? 0);
 
@@ -268,7 +313,6 @@ const updateVenta = async (req, res) => {
 
     const { subtotal, descuento_monto, total } = calcTotalesVenta(items, { descuento_porc, impuesto });
 
-    // 💡 Corrección de strings vacíos a NULL para evitar errores en el VPS
     const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
     const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
 
@@ -283,15 +327,14 @@ const updateVenta = async (req, res) => {
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
         subtotal, descuento_porc, descuento_monto, impuesto, total,
-        requiere_entrega ?? 0, 
-        limpiaDireccionEntrega, 
-        limpiaFechaEntrega, 
+        requiere_entrega ?? 0,
+        limpiaDireccionEntrega,
+        limpiaFechaEntrega,
         observaciones ?? null,
         id,
       ]
     );
 
-    // Replace detalle
     await db.promise().query(`DELETE FROM venta_detalle WHERE id_venta = ?`, [id]);
     const [[ventaFull]] = await db.promise().query(`SELECT id_deposito FROM ventas WHERE id_venta = ?`, [id]);
 
@@ -361,14 +404,20 @@ const emitirVenta = async (req, res) => {
        WHERE vd.id_venta = ?`, [id]
     );
 
-    // Validate stock for all items first
+    // Check PERMITIR_VENTA_SIN_STOCK
+    const [[cfgStock]] = await db.promise().query(
+      `SELECT valor FROM configuracion_sistema WHERE clave = 'PERMITIR_VENTA_SIN_STOCK'`
+    );
+    const permitirSinStock = cfgStock?.valor === 'true' || cfgStock?.valor === '1';
+
+    // Validate stock for all items
     for (const item of detalle) {
       const [[st]] = await db.promise().query(
         `SELECT COALESCE(cantidad_disponible, 0) AS disponible FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [item.id_producto, venta.id_deposito]
       );
       const disponible = Number(st?.disponible ?? 0);
-      if (disponible < Number(item.cantidad)) {
+      if (!permitirSinStock && disponible < Number(item.cantidad)) {
         return res.status(400).json({
           mensaje: `Stock insuficiente para "${item.producto}". Disponible: ${disponible}, requerido: ${item.cantidad}`
         });
@@ -416,7 +465,7 @@ const emitirVenta = async (req, res) => {
       );
     }
 
-    // Update venta: emitida, saldo_pendiente = total, numero_factura
+    // Update venta estado
     await db.promise().query(
       `UPDATE ventas SET estado = 'EMITIDA', saldo_pendiente = total, numero_factura = ?, fecha = NOW()
        WHERE id_venta = ?`,
@@ -428,6 +477,9 @@ const emitirVenta = async (req, res) => {
       `UPDATE clientes SET saldo_actual = saldo_actual + ? WHERE id_cliente = ?`,
       [venta.total, venta.id_cliente]
     );
+
+    // Recalculate stock alerts
+    await recalcularAlertas(detalle, venta.id_deposito);
 
     await auditLog(req.user.id_usuario, 'ventas', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Venta emitida correctamente' });
@@ -472,7 +524,6 @@ const registrarCobro = async (req, res) => {
         numero_referencia ?? null, req.user.id_usuario, observaciones ?? null]
     );
 
-    // Update cuota if specified
     if (id_cuota) {
       await db.promise().query(
         `UPDATE venta_cuotas
@@ -487,7 +538,6 @@ const registrarCobro = async (req, res) => {
       );
     }
 
-    // Update venta saldo_pendiente
     const nuevoSaldo = +(Number(venta.saldo_pendiente) - montoNum).toFixed(2);
     const nuevoEstado = nuevoSaldo <= 0 ? 'PAGADA' : 'PARCIAL';
     await db.promise().query(
@@ -495,7 +545,6 @@ const registrarCobro = async (req, res) => {
       [nuevoSaldo, nuevoEstado, id]
     );
 
-    // Update cliente saldo_actual
     await db.promise().query(
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
       [montoNum, venta.id_cliente]
@@ -521,7 +570,6 @@ const anularCobro = async (req, res) => {
     const [[venta]] = await db.promise().query(`SELECT estado FROM ventas WHERE id_venta = ?`, [pago.id_venta]);
     if (venta?.estado === 'ANULADA') return res.status(400).json({ mensaje: 'La venta está anulada' });
 
-    // Reverse: increase saldo_pendiente, update venta estado
     await db.promise().query(
       `UPDATE ventas SET saldo_pendiente = saldo_pendiente + ?,
         estado = CASE WHEN estado = 'PAGADA' THEN 'PARCIAL' ELSE estado END
@@ -529,7 +577,6 @@ const anularCobro = async (req, res) => {
       [pago.monto, pago.id_venta]
     );
 
-    // Reverse cuota if linked
     if (pago.id_cuota) {
       await db.promise().query(
         `UPDATE venta_cuotas
@@ -543,7 +590,6 @@ const anularCobro = async (req, res) => {
       );
     }
 
-    // Reverse cliente saldo
     await db.promise().query(
       `UPDATE clientes SET saldo_actual = saldo_actual + ? WHERE id_cliente = ?`,
       [pago.monto, pago.id_cliente]
@@ -575,12 +621,10 @@ const anularVenta = async (req, res) => {
     }
 
     if (venta.estado === 'BORRADOR') {
-      // Just mark as anulada, no stock reversal needed
       await db.promise().query(`UPDATE ventas SET estado = 'ANULADA' WHERE id_venta = ?`, [id]);
       return res.json({ mensaje: 'Venta borrador anulada' });
     }
 
-    // Reverse stock for emitted sales
     const [detalle] = await db.promise().query(
       `SELECT id_producto, cantidad, precio_unitario FROM venta_detalle WHERE id_venta = ?`, [id]
     );
@@ -614,7 +658,6 @@ const anularVenta = async (req, res) => {
       );
     }
 
-    // Reverse saldo pendiente from client
     await db.promise().query(
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
       [venta.saldo_pendiente, venta.id_cliente]
@@ -647,7 +690,6 @@ const crearDevolucion = async (req, res) => {
       return res.status(400).json({ mensaje: 'Solo se puede devolver una venta emitida, parcial o pagada' });
     }
 
-    // Validate items are in the original venta
     const [detalleOriginal] = await db.promise().query(
       `SELECT id_producto, cantidad, precio_unitario FROM venta_detalle WHERE id_venta = ?`, [id]
     );
@@ -712,7 +754,6 @@ const aprobarDevolucion = async (req, res) => {
     const tm = await tipoMov('DEVOLUCION_VTA');
     if (!tm) return res.status(500).json({ mensaje: 'Falta tipo_movimiento DEVOLUCION_VTA en la BD' });
 
-    // Restock each item
     for (const item of detalle) {
       await db.promise().query(
         `INSERT INTO stock (id_producto, id_deposito, cantidad, costo_promedio, fecha_ult_movimiento)
@@ -740,12 +781,10 @@ const aprobarDevolucion = async (req, res) => {
       );
     }
 
-    // Update devolucion estado
     await db.promise().query(
       `UPDATE devoluciones_venta SET estado = 'APROBADA' WHERE id_devolucion = ?`, [id_devolucion]
     );
 
-    // Update venta saldo_pendiente (credit the return amount)
     const nuevoSaldo = Math.max(0, Number(dev.saldo_pendiente) - Number(dev.total));
     await db.promise().query(
       `UPDATE ventas SET saldo_pendiente = ?,
@@ -754,7 +793,6 @@ const aprobarDevolucion = async (req, res) => {
       [nuevoSaldo, nuevoSaldo, dev.id_venta]
     );
 
-    // Update cliente saldo
     await db.promise().query(
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
       [dev.total, dev.id_cliente]
@@ -781,6 +819,56 @@ const rechazarDevolucion = async (req, res) => {
   } catch (err) {
     console.error('[rechazarDevolucion]', err);
     res.status(500).json({ error: 'Error al rechazar devolución' });
+  }
+};
+
+// ── Agregar producto rápido ───────────────────────────────────────────────────
+
+const agregarProductoRapido = async (req, res) => {
+  try {
+    const { nombre, precio_publico, precio_real, precio_mayor, id_categoria, id_unidad, id_impuesto_default } = req.body;
+
+    if (!nombre || precio_publico == null || precio_real == null || !id_categoria || !id_unidad) {
+      return res.status(400).json({ mensaje: 'Nombre, precios, categoría y unidad son requeridos' });
+    }
+
+    const [[marca]] = await db.promise().query(`SELECT id_marca FROM marcas WHERE activo = 1 ORDER BY id_marca LIMIT 1`);
+    if (!marca) return res.status(400).json({ mensaje: 'No hay marcas activas. Cree al menos una marca primero.' });
+
+    const [[moneda]] = await db.promise().query(`SELECT id_moneda FROM monedas WHERE es_moneda_base = 1 LIMIT 1`);
+    if (!moneda) return res.status(400).json({ mensaje: 'No hay moneda base configurada.' });
+
+    const codigo_interno = `PROD-${Date.now()}`;
+
+    const [ins] = await db.promise().query(
+      `INSERT INTO productos
+         (codigo_interno, id_marca, id_categoria, id_unidad, producto,
+          precio_real, costo_logistica, costo_mcm, precio_publico, precio_mayor,
+          id_moneda_costo, id_impuesto_default)
+       VALUES (?,?,?,?,?,?,0,0,?,?,?,?)`,
+      [
+        codigo_interno, marca.id_marca, id_categoria, id_unidad, nombre,
+        precio_real, precio_publico, precio_mayor ?? precio_publico,
+        moneda.id_moneda, id_impuesto_default ?? null,
+      ]
+    );
+
+    const [[prod]] = await db.promise().query(
+      `SELECT p.*, m.nombre AS marca_nombre, c.nombre AS categoria_nombre,
+              um.nombre AS unidad_nombre
+       FROM productos p
+       LEFT JOIN marcas m ON m.id_marca = p.id_marca
+       LEFT JOIN categorias c ON c.id_categoria = p.id_categoria
+       LEFT JOIN unidades_medida um ON um.id_unidad = p.id_unidad
+       WHERE p.id_producto = ?`,
+      [ins.insertId]
+    );
+
+    await auditLog(req.user.id_usuario, 'productos', ins.insertId, 'INSERT', getIp(req));
+    res.status(201).json({ producto: prod, mensaje: 'Producto creado y listo para agregar' });
+  } catch (err) {
+    console.error('[agregarProductoRapido]', err);
+    res.status(500).json({ error: 'Error al crear producto rápido' });
   }
 };
 
@@ -824,10 +912,11 @@ const getTicket = async (req, res) => {
 };
 
 module.exports = {
-  getVentas, getVenta,
+  getVentas, getVenta, getPreview,
   createVenta, updateVenta, emitirVenta,
   registrarCobro, anularCobro,
   anularVenta,
   crearDevolucion, aprobarDevolucion, rechazarDevolucion,
+  agregarProductoRapido,
   getTicket,
 };

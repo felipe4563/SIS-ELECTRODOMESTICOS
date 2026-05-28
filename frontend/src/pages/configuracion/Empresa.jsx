@@ -1,24 +1,30 @@
-import { useState, useEffect } from 'react';
-import { FaBuilding, FaSave, FaSpinner } from 'react-icons/fa';
+import { useState, useEffect, useRef } from 'react';
+import { FaBuilding, FaSave, FaSpinner, FaCamera } from 'react-icons/fa';
 import { empresaService } from '../../services/configuracion.service';
+import { useEmpresa, buildLogoUrl } from '../../contexts/EmpresaContext';
 import PageHeader from '../../components/ui/PageHeader';
 
 const campo = 'block w-full px-3 py-2.5 rounded-xl text-sm transition-colors bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 dark:focus:border-amber-500/50';
 const label = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
 
 export default function Empresa() {
-  const [empresa, setEmpresa] = useState(null);
-  const [form, setForm]       = useState({});
-  const [cargando, setCargando] = useState(true);
+  const { setEmpresa: setEmpresaCtx, recargar } = useEmpresa() ?? {};
+  const [empresa,   setEmpresa]   = useState(null);
+  const [form,      setForm]      = useState({});
+  const [cargando,  setCargando]  = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [error,   setError]   = useState(null);
-  const [exito,   setExito]   = useState(false);
+  const [subiendo,  setSubiendo]  = useState(false);
+  const [error,     setError]     = useState(null);
+  const [exito,     setExito]     = useState(false);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     empresaService.get()
       .then(({ data }) => {
         setEmpresa(data.empresa);
         setForm(data.empresa);
+        setLogoPreview(buildLogoUrl(data.empresa.logo_url));
       })
       .catch(() => setError('No se pudo cargar la información de la empresa'))
       .finally(() => setCargando(false));
@@ -36,12 +42,42 @@ export default function Empresa() {
       const { data } = await empresaService.update(empresa.id_empresa, form);
       setEmpresa(data.empresa);
       setForm(data.empresa);
+      setEmpresaCtx?.(data.empresa);
       setExito(true);
       setTimeout(() => setExito(false), 3000);
     } catch (err) {
       setError(err.response?.data?.error || 'Error al guardar');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Preview local inmediato
+    const localUrl = URL.createObjectURL(file);
+    setLogoPreview(localUrl);
+
+    setSubiendo(true);
+    setError(null);
+    try {
+      const { data } = await empresaService.uploadLogo(empresa.id_empresa, file);
+      setEmpresa(data.empresa);
+      setForm(data.empresa);
+      setEmpresaCtx?.(data.empresa);
+      recargar?.();
+      const remoteUrl = buildLogoUrl(data.empresa.logo_url);
+      setLogoPreview(remoteUrl);
+      URL.revokeObjectURL(localUrl);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al subir el logo');
+      setLogoPreview(buildLogoUrl(empresa?.logo_url));
+      URL.revokeObjectURL(localUrl);
+    } finally {
+      setSubiendo(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -69,17 +105,52 @@ export default function Empresa() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6">
-        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100 dark:border-zinc-800">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 flex items-center justify-center">
-            <FaBuilding className="text-amber-600 dark:text-amber-400 h-5 w-5" />
+      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 space-y-6">
+
+        {/* ── Sección logo ── */}
+        <div className="flex items-center gap-5 pb-5 border-b border-gray-100 dark:border-zinc-800">
+          <div className="relative group shrink-0">
+            <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
+              {logoPreview && logoPreview !== '/logo.png' ? (
+                <img
+                  src={logoPreview}
+                  alt="Logo empresa"
+                  className="w-full h-full object-contain p-1"
+                  onError={() => setLogoPreview('/logo.png')}
+                />
+              ) : (
+                <FaBuilding className="text-gray-300 dark:text-zinc-600 h-10 w-10" />
+              )}
+            </div>
+            {subiendo && (
+              <div className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center">
+                <FaSpinner className="animate-spin text-white h-6 w-6" />
+              </div>
+            )}
           </div>
           <div>
-            <p className="font-semibold text-gray-900 dark:text-white text-sm">{empresa?.razon_social}</p>
-            <p className="text-xs text-gray-500 dark:text-zinc-400">ID: {empresa?.id_empresa}</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Logo de la empresa</p>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">Se usa en comprobantes, facturas y el menú lateral. PNG o JPG, máx. 5 MB.</p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleLogoChange}
+            />
+            <button
+              type="button"
+              disabled={subiendo}
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:border-amber-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors disabled:opacity-50"
+            >
+              <FaCamera className="h-3 w-3" />
+              {subiendo ? 'Subiendo…' : 'Cambiar logo'}
+            </button>
           </div>
         </div>
 
+        {/* ── Formulario datos ── */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
@@ -105,10 +176,6 @@ export default function Empresa() {
             <div>
               <label className={label}>Correo Electrónico</label>
               <input name="email" type="email" value={form.email ?? ''} onChange={handleChange} className={campo} placeholder="contacto@empresa.com" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={label}>URL del Logo</label>
-              <input name="logo_url" value={form.logo_url ?? ''} onChange={handleChange} className={campo} placeholder="https://..." />
             </div>
           </div>
 

@@ -55,12 +55,125 @@ function JsonCell({ value }) {
   );
 }
 
+// ── Modal detalle con diff ────────────────────────────────────────────────
+function DiffTable({ antes, despues }) {
+  let a = null, d = null;
+  try { a = antes   ? JSON.parse(antes)   : null; } catch { a = antes; }
+  try { d = despues ? JSON.parse(despues) : null; } catch { d = despues; }
+
+  if (!a && !d) return <p className="text-sm text-zinc-400 py-2">Sin datos registrados.</p>;
+
+  if (typeof a === 'object' && typeof d === 'object' && (a || d)) {
+    const keys = [...new Set([...Object.keys(a || {}), ...Object.keys(d || {})])];
+    const changed = keys.filter(k => JSON.stringify(a?.[k]) !== JSON.stringify(d?.[k]));
+    const same    = keys.filter(k => !changed.includes(k));
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr>
+              <th className="text-left px-3 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-semibold w-1/4 rounded-tl-lg">Campo</th>
+              <th className="text-left px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold">Antes</th>
+              <th className="text-left px-3 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-semibold rounded-tr-lg">Después</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...changed, ...same].map(k => {
+              const isChanged = changed.includes(k);
+              const vA = a?.[k] ?? null;
+              const vD = d?.[k] ?? null;
+              return (
+                <tr key={k} className={isChanged ? 'bg-yellow-50/50 dark:bg-yellow-900/10' : ''}>
+                  <td className={`px-3 py-1.5 font-mono border-b border-zinc-100 dark:border-zinc-800 ${isChanged ? 'font-bold text-zinc-800 dark:text-zinc-200' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    {isChanged && <span className="mr-1 text-yellow-500">●</span>}{k}
+                  </td>
+                  <td className={`px-3 py-1.5 font-mono border-b border-zinc-100 dark:border-zinc-800 break-all ${isChanged ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    {vA === null ? <em className="text-zinc-300">null</em> : String(vA)}
+                  </td>
+                  <td className={`px-3 py-1.5 font-mono border-b border-zinc-100 dark:border-zinc-800 break-all ${isChanged ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    {vD === null ? <em className="text-zinc-300">null</em> : String(vD)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Antes</p>
+        <pre className="text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-xl p-3 overflow-auto max-h-52 whitespace-pre-wrap break-all">
+          {a ? JSON.stringify(a, null, 2) : <em className="text-zinc-400">vacío</em>}
+        </pre>
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Después</p>
+        <pre className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-xl p-3 overflow-auto max-h-52 whitespace-pre-wrap break-all">
+          {d ? JSON.stringify(d, null, 2) : <em className="text-zinc-400">vacío</em>}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function ModalDetalle({ row, onClose }) {
+  const ACCION_COLOR_MODAL = {
+    INSERT: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    UPDATE: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+    DELETE: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+    LOGIN:  'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
+    LOGOUT: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300',
+    OTRO:   'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl my-8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Detalle de auditoría</h2>
+            <p className="text-xs text-zinc-400 mt-0.5">#{row.id_auditoria}</p>
+          </div>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xl leading-none">✕</button>
+        </div>
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Fecha',     value: row.fecha },
+              { label: 'Usuario',   value: row.usuario || row.username || '—' },
+              { label: 'Acción',    value: row.accion, badge: ACCION_COLOR_MODAL[row.accion] },
+              { label: 'Tabla',     value: row.tabla },
+              { label: 'ID Reg.',   value: row.id_registro || '—' },
+              { label: 'IP Origen', value: row.ip_origen || '—' },
+            ].map(({ label, value, badge }) => (
+              <div key={label} className="bg-zinc-50 dark:bg-zinc-800 rounded-xl px-3 py-2.5">
+                <p className="text-xs text-zinc-400 mb-0.5">{label}</p>
+                {badge
+                  ? <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>{value}</span>
+                  : <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 break-all">{value}</p>}
+              </div>
+            ))}
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">Cambios registrados</h3>
+            <DiffTable antes={row.datos_antes} despues={row.datos_despues} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── TAB: Auditoría ────────────────────────────────────────────────────────
 function TabAuditoria() {
   const [filas, setFilas]         = useState([]);
   const [tablas, setTablas]       = useState([]);
   const [usuarios, setUsuarios]   = useState([]);
   const [cargando, setCargando]   = useState(false);
+  const [detalleRow, setDetalleRow] = useState(null);
   const [filtros, setFiltros]     = useState({
     fecha_desde: inicioMes(),
     fecha_hasta: hoy(),
@@ -100,6 +213,7 @@ function TabAuditoria() {
 
   return (
     <div className="space-y-4">
+      {detalleRow && <ModalDetalle row={detalleRow} onClose={() => setDetalleRow(null)} />}
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-end">
         <div>
@@ -165,8 +279,8 @@ function TabAuditoria() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                {['Fecha', 'Usuario', 'Acción', 'Tabla', 'ID', 'Antes', 'Después', 'IP'].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-left whitespace-nowrap">{h}</th>
+                {['Fecha', 'Usuario', 'Acción', 'Tabla', 'ID', 'IP', ''].map((h, i) => (
+                  <th key={i} className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -181,9 +295,15 @@ function TabAuditoria() {
                   <td className="px-3 py-2.5"><AccionBadge accion={row.accion} /></td>
                   <td className="px-3 py-2.5 text-xs font-mono text-zinc-600 dark:text-zinc-400">{row.tabla}</td>
                   <td className="px-3 py-2.5 text-xs font-mono text-zinc-400">{row.id_registro || '—'}</td>
-                  <td className="px-3 py-2.5 max-w-xs"><JsonCell value={row.datos_antes} /></td>
-                  <td className="px-3 py-2.5 max-w-xs"><JsonCell value={row.datos_despues} /></td>
-                  <td className="px-3 py-2.5 text-xs font-mono text-zinc-400 whitespace-nowrap">{row.ip_origen || '—'}</td>
+                  <td className="px-3 py-2.5 text-xs font-mono text-zinc-400 whitespace-nowrap hidden lg:table-cell">{row.ip_origen || '—'}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <button
+                      onClick={() => setDetalleRow(row)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600 transition-colors"
+                    >
+                      Ver detalle
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -262,8 +382,8 @@ function TabSesiones() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                {['Usuario', 'Rol', 'Inicio', 'Expira', 'IP', 'Acción'].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-left whitespace-nowrap">{h}</th>
+                {['Usuario', 'Rol', 'IP', 'Navegador', 'Inicio', 'Expira', 'Acción'].map(h => (
+                  <th key={h} className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-left whitespace-nowrap ${h === 'Navegador' ? 'hidden md:table-cell' : ''} ${h === 'Expira' ? 'hidden sm:table-cell' : ''}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -280,9 +400,18 @@ function TabSesiones() {
                       <div className="text-xs text-zinc-400">{s.username}</div>
                     </td>
                     <td className="px-3 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">{s.rol}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{s.fecha_inicio}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-zinc-400 whitespace-nowrap">{s.fecha_expiracion}</td>
                     <td className="px-3 py-2.5 text-xs font-mono text-zinc-400">{s.ip_origen || '—'}</td>
+                    <td className="px-3 py-2.5 text-xs text-zinc-400 hidden md:table-cell max-w-[160px] truncate" title={s.user_agent || ''}>
+                      {s.user_agent
+                        ? (/Chrome/i.test(s.user_agent) && !/Edg/i.test(s.user_agent) ? 'Chrome'
+                          : /Firefox/i.test(s.user_agent) ? 'Firefox'
+                          : /Edg/i.test(s.user_agent) ? 'Edge'
+                          : /Safari/i.test(s.user_agent) && !/Chrome/i.test(s.user_agent) ? 'Safari'
+                          : s.user_agent.slice(0, 20))
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{s.fecha_inicio}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-zinc-400 whitespace-nowrap hidden sm:table-cell">{s.fecha_expiracion}</td>
                     <td className="px-3 py-2.5">
                       {esPropia ? (
                         <span className="text-xs text-zinc-300 dark:text-zinc-600">Sesión actual</span>

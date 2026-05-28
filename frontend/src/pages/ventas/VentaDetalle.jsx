@@ -175,6 +175,7 @@ export default function VentaDetalle() {
   const puedeAnular    = puede('anular', 'ventas') && !['ANULADA', 'DEVUELTA'].includes(venta.estado);
   const puedeDevolver  = puede('devolucion_crear', 'ventas') && ['EMITIDA', 'PARCIAL', 'PAGADA'].includes(venta.estado);
   const puedeImprimir  = puede('imprimir', 'ventas') && venta.estado !== 'BORRADOR';
+  const puedePreview   = venta.estado === 'BORRADOR';
 
   return (
     <div className="space-y-5">
@@ -195,10 +196,16 @@ export default function VentaDetalle() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {puedePreview && (
+            <button onClick={() => navigate(`/ventas/${id}/imprimir`)}
+              className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-sm transition-colors">
+              Vista previa
+            </button>
+          )}
           {puedeImprimir && (
             <button onClick={() => navigate(`/ventas/${id}/imprimir`)}
               className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-sm transition-colors">
-              🖨️ Imprimir
+              Imprimir
             </button>
           )}
           {puedeEditar && (

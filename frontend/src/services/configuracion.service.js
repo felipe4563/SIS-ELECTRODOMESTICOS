@@ -1,8 +1,14 @@
 import api from '../api/axios';
 
 export const empresaService = {
-  get:    ()        => api.get('/empresa'),
-  update: (id, data) => api.put(`/empresa/${id}`, data),
+  get:        ()           => api.get('/empresa'),
+  getPublico: ()           => api.get('/empresa/publico'),
+  update:     (id, data)   => api.put(`/empresa/${id}`, data),
+  uploadLogo: (id, file)   => {
+    const fd = new FormData();
+    fd.append('logo', file);
+    return api.post(`/empresa/${id}/logo`, fd);
+  },
 };
 
 export const sucursalesService = {

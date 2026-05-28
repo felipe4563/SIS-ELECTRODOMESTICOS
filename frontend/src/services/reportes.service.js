@@ -14,4 +14,17 @@ export const reportesService = {
   getRentabilidad:     (p) => api.get(`${R}/rentabilidad`,      { params: p }),
   getEstadoResultados: (p) => api.get(`${R}/estado-resultados`, { params: p }),
   getBonosVendedores:  (p) => api.get(`${R}/bonos-vendedores`,  { params: p }),
+
+  getStockConsolidado: (p) => api.get(`${R}/stock-consolidado`, { params: p }),
+  getKardexProducto:   (id, p) => api.get(`${R}/kardex/${id}`,  { params: p }),
+  getArqueosCaja:      (p) => api.get(`${R}/arqueos-caja`,      { params: p }),
+  getGastosCategoria:  (p) => api.get(`${R}/gastos-categoria`,  { params: p }),
+  getTopProductos:     (p) => api.get(`${R}/top-productos`,     { params: p }),
+
+  exportarReporte: (tipo, formato, params = {}) =>
+    api.get(`${R}/exportar`, {
+      params: { tipo, formato, ...params },
+      responseType: 'blob',
+      timeout: 30000,
+    }),
 };

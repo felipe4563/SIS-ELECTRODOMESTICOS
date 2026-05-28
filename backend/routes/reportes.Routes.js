@@ -14,5 +14,11 @@ router.get('/cuentas-pagar',     authMiddleware, checkPermission('ver', 'reporte
 router.get('/rentabilidad',      authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getRentabilidad);
 router.get('/estado-resultados', authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getEstadoResultados);
 router.get('/bonos-vendedores',  authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getBonosVendedores);
+router.get('/stock-consolidado', authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getStockConsolidado);
+router.get('/kardex/:id_producto', authMiddleware, checkPermission('ver', 'reportes'), ctrl.getKardexProducto);
+router.get('/arqueos-caja',      authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getArqueosCaja);
+router.get('/gastos-categoria',  authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getGastosCategoria);
+router.get('/top-productos',     authMiddleware, checkPermission('ver', 'reportes'),  ctrl.getTopProductos);
+router.get('/exportar',          authMiddleware, checkPermission('ver', 'reportes'),  ctrl.exportarReporte);
 
 module.exports = router;

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider }    from './contexts/AuthContext';
 import { AbilityProvider } from './contexts/AbilityContext';
 import { ThemeProvider }   from './contexts/ThemeContext';
+import { EmpresaProvider } from './contexts/EmpresaContext';
 import ProtectedRoute      from './components/ProtectedRoute';
 import Sidebar             from './components/sidebar';
 
@@ -52,6 +53,9 @@ import Compras       from './pages/compras/Compras';
 import CompraForm    from './pages/compras/CompraForm';
 import CompraDetalle from './pages/compras/CompraDetalle';
 
+// ── Gastos ────────────────────────────────────────────────────────────────────
+import Gastos from './pages/gastos/Gastos';
+
 // ── Caja ─────────────────────────────────────────────────────────────────────
 import Caja          from './pages/caja/Caja';
 import ArqueoDetalle from './pages/caja/ArqueoDetalle';
@@ -61,6 +65,25 @@ import Reportes from './pages/reportes/Reportes';
 
 // ── Auditoría ─────────────────────────────────────────────────────────────────
 import Auditoria from './pages/auditoria/Auditoria';
+
+// ── Herramientas ───────────────────────────────────────────────────────────────
+import Herramientas from './pages/herramientas/Herramientas';
+import Backup       from './pages/herramientas/Backup';
+import CatalogoPDF  from './pages/herramientas/CatalogoPDF';
+
+// ── Combos y Promociones ──────────────────────────────────────────────────────
+import Combos      from './pages/combos/Combos';
+import Promociones from './pages/promociones/Promociones';
+
+// ── Cotizaciones ──────────────────────────────────────────────────────────────
+import Cotizaciones       from './pages/cotizaciones/Cotizaciones';
+import CotizacionForm     from './pages/cotizaciones/CotizacionForm';
+import CotizacionDetalle  from './pages/cotizaciones/CotizacionDetalle';
+import CotizacionPDF      from './pages/cotizaciones/CotizacionPDF';
+
+// ── Cobros ────────────────────────────────────────────────────────────────────
+import Cobros      from './pages/cobros/Cobros';
+import CobroRecibo from './pages/cobros/CobroRecibo';
 
 // ── Ventas ────────────────────────────────────────────────────────────────────
 import Ventas        from './pages/ventas/Ventas';
@@ -107,6 +130,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AbilityProvider>
+            <EmpresaProvider>
             <Routes>
 
               {/* Rutas públicas */}
@@ -293,6 +317,39 @@ export default function App() {
                 <PageRoute action="ajuste_crear" subject="inventario"><AjusteForm /></PageRoute>
               } />
 
+              {/* ── Combos y Promociones ──────────────────────────────── */}
+              <Route path="/combos" element={
+                <PageRoute action="ver" subject="combos"><Combos /></PageRoute>
+              } />
+              <Route path="/promociones" element={
+                <PageRoute action="ver" subject="promociones"><Promociones /></PageRoute>
+              } />
+
+              {/* ── Cotizaciones ──────────────────────────────────────── */}
+              <Route path="/cotizaciones" element={
+                <PageRoute action="ver" subject="cotizaciones"><Cotizaciones /></PageRoute>
+              } />
+              <Route path="/cotizaciones/nueva" element={
+                <PageRoute action="crear" subject="cotizaciones"><CotizacionForm /></PageRoute>
+              } />
+              <Route path="/cotizaciones/:id" element={
+                <PageRoute action="ver" subject="cotizaciones"><CotizacionDetalle /></PageRoute>
+              } />
+              <Route path="/cotizaciones/:id/editar" element={
+                <PageRoute action="editar" subject="cotizaciones"><CotizacionForm /></PageRoute>
+              } />
+              <Route path="/cotizaciones/:id/pdf" element={
+                <PageRoute action="ver" subject="cotizaciones"><CotizacionPDF /></PageRoute>
+              } />
+
+              {/* ── Cobros ────────────────────────────────────────────── */}
+              <Route path="/cobros" element={
+                <PageRoute action="ver" subject="cobros"><Cobros /></PageRoute>
+              } />
+              <Route path="/cobros/:id/recibo" element={
+                <PageRoute action="imprimir" subject="cobros"><CobroRecibo /></PageRoute>
+              } />
+
               {/* ── Ventas ────────────────────────────────────────────── */}
               <Route path="/ventas" element={
                 <PageRoute action="ver_sucursal" subject="ventas"><Ventas /></PageRoute>
@@ -308,6 +365,11 @@ export default function App() {
               } />
               <Route path="/ventas/:id/imprimir" element={
                 <PageRoute action="imprimir" subject="ventas"><VentaImprimir /></PageRoute>
+              } />
+
+              {/* ── Gastos ───────────────────────────────────────────── */}
+              <Route path="/gastos" element={
+                <PageRoute action="ver" subject="gastos"><Gastos /></PageRoute>
               } />
 
               {/* ── Caja ─────────────────────────────────────────────── */}
@@ -328,6 +390,17 @@ export default function App() {
                 <PageRoute action="ver" subject="auditoria"><Auditoria /></PageRoute>
               } />
 
+              {/* ── Herramientas ──────────────────────────────────────── */}
+              <Route path="/herramientas" element={
+                <PageRoute action="ver" subject="herramientas"><Herramientas /></PageRoute>
+              } />
+              <Route path="/herramientas/backup" element={
+                <PageRoute action="ver" subject="herramientas"><Backup /></PageRoute>
+              } />
+              <Route path="/herramientas/catalogo-pdf" element={
+                <PageRoute action="ver" subject="herramientas"><CatalogoPDF /></PageRoute>
+              } />
+
               {/* Mi perfil (solo requiere sesión) */}
               <Route path="/mi-perfil" element={
                 <ProtectedRoute><AppLayout><MiPerfil /></AppLayout></ProtectedRoute>
@@ -338,6 +411,7 @@ export default function App() {
               <Route path="*"  element={<Navigate to="/dashboard" replace />} />
 
             </Routes>
+            </EmpresaProvider>
           </AbilityProvider>
         </AuthProvider>
       </ThemeProvider>

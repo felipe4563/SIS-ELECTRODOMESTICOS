@@ -22,7 +22,7 @@ const EMPTY_PROV = {
 };
 const EMPTY_CONT = { nombre: '', cargo: '', telefono: '', email: '' };
 const EMPTY_CUENTA = {
-  metodo: 'TRANSFERENCIA', banco: '', tipo_cuenta: '', numero_cuenta: '',
+  metodo: 'TRANSFERENCIA', id_banco: '', tipo_cuenta: '', numero_cuenta: '',
   titular: '', qr_url: '', id_moneda: '', es_principal: false, activo: true,
 };
 
@@ -345,6 +345,7 @@ function TabContactos({ idProveedor, puedeGestionar }) {
 function TabCuentas({ idProveedor, puedeGestionar }) {
   const [lista,     setLista]     = useState([]);
   const [monedas,   setMonedas]   = useState([]);
+  const [bancos,    setBancos]    = useState([]);
   const [cargando,  setCargando]  = useState(true);
   const [modal,     setModal]     = useState(false);
   const [confirm,   setConfirm]   = useState(null);
@@ -363,12 +364,13 @@ function TabCuentas({ idProveedor, puedeGestionar }) {
   useEffect(cargar, [cargar]);
   useEffect(() => {
     api.get('/monedas').then(({ data }) => setMonedas(data.monedas.filter(m => m.activo)));
+    api.get('/bancos').then(({ data }) => setBancos((data.bancos ?? data).filter(b => b.activo)));
   }, []);
 
   const abrirCrear  = () => { setEditando(null); setForm(EMPTY_CUENTA); setError(null); setModal(true); };
   const abrirEditar = (c) => {
     setEditando(c);
-    setForm({ ...c, es_principal: !!c.es_principal, activo: !!c.activo, id_moneda: c.id_moneda || '' });
+    setForm({ ...c, es_principal: !!c.es_principal, activo: !!c.activo, id_moneda: c.id_moneda || '', id_banco: c.id_banco || '' });
     setError(null);
     setModal(true);
   };
@@ -458,8 +460,10 @@ function TabCuentas({ idProveedor, puedeGestionar }) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">
-                    {c.banco || (c.metodo === 'QR' ? 'QR' : '—')}
-                    {c.tipo_cuenta && <span className="text-xs ml-1 text-gray-400">({c.tipo_cuenta})</span>}
+                    {c.banco_nombre
+                      ? <>{c.banco_nombre}{c.banco_sigla ? <span className="text-xs ml-1 text-gray-400">({c.banco_sigla})</span> : null}</>
+                      : (c.metodo === 'QR' ? 'QR' : '—')}
+                    {c.tipo_cuenta && <span className="text-xs ml-1 text-gray-400">· {c.tipo_cuenta}</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-zinc-300">
                     {c.numero_cuenta || (c.qr_url ? <span className="text-purple-500 text-xs">Ver QR</span> : '—')}
@@ -516,8 +520,14 @@ function TabCuentas({ idProveedor, puedeGestionar }) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Banco / Entidad</label>
-                  <input name="banco" value={form.banco} onChange={handleChange}
-                    className={inputCls} placeholder="Ej: Banco BCP" />
+                  <select name="id_banco" value={form.id_banco} onChange={handleChange} className={inputCls}>
+                    <option value="">— Sin especificar —</option>
+                    {bancos.map(b => (
+                      <option key={b.id_banco} value={b.id_banco}>
+                        {b.nombre}{b.sigla ? ` (${b.sigla})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className={labelCls}>Tipo de cuenta</label>
