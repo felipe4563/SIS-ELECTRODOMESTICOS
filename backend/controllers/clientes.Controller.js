@@ -43,20 +43,24 @@ const getCliente = async (req, res) => {
 const createCliente = async (req, res) => {
   try {
     const {
-      codigo, tipo_cliente = 'MINORISTA', tipo_documento = 'CI', documento,
+      tipo_cliente = 'MINORISTA', tipo_documento = 'CI', documento,
       razon_social, nombres, apellidos, telefono, celular, email,
       fecha_nacimiento, descuento_default = 0,
     } = req.body;
 
-    if (!codigo) return res.status(400).json({ error: 'El código es requerido' });
     if (!nombres && !razon_social) return res.status(400).json({ error: 'Debe ingresar nombres o razón social' });
+
+    const [[{ nextId }]] = await db.promise().query(
+      `SELECT COALESCE(MAX(id_cliente), 0) + 1 AS nextId FROM clientes`
+    );
+    const codigo = `CLI-${String(nextId).padStart(5, '0')}`;
 
     const [result] = await db.promise().query(
       `INSERT INTO clientes
          (codigo, tipo_cliente, tipo_documento, documento, razon_social,
           nombres, apellidos, telefono, celular, email, fecha_nacimiento, descuento_default)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [codigo.toUpperCase(), tipo_cliente, tipo_documento,
+      [codigo, tipo_cliente, tipo_documento,
        documento || null, razon_social || null, nombres || null, apellidos || null,
        telefono || null, celular || null, email || null,
        fecha_nacimiento || null, descuento_default]

@@ -28,8 +28,9 @@ export const herramientasService = {
     `${api.defaults.baseURL}${BASE}/codigo-barras/imprimir?ids=${ids.join(',')}&copias=${copias}`,
 
   // ── Catálogo PDF ─────────────────────────────────────────────────────────────
-  getCatalogoMarcas:     ()         => api.get(`${BASE}/catalogo/marcas`),
-  getCatalogoCategorias: ()         => api.get(`${BASE}/catalogo/categorias`),
+  getCatalogoMarcas:      ()        => api.get(`${BASE}/catalogo/marcas`),
+  getCatalogoCategorias:  ()        => api.get(`${BASE}/catalogo/categorias`),
+  getCatalogoSucursales:  ()        => api.get(`${BASE}/catalogo/sucursales`),
   getCatalogoPDF: (filtros = {}) => {
     const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v));
     return api.get(`${BASE}/catalogo/pdf`, { params, responseType: 'blob' });

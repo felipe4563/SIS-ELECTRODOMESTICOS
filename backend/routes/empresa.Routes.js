@@ -29,6 +29,7 @@ const uploadLogo = multer({
 // ── Rutas ─────────────────────────────────────────────────────────────────
 router.get('/publico',    ctrl.getEmpresaPublico);                                                                          // pública
 router.get('/',           authMiddleware, checkPermission('ver',    'configuracion'), ctrl.getEmpresa);
+router.post('/',          authMiddleware, checkPermission('editar', 'empresa'),       ctrl.createEmpresa);
 router.put('/:id',        authMiddleware, checkPermission('editar', 'empresa'),       ctrl.updateEmpresa);
 router.post('/:id/logo',  authMiddleware, checkPermission('editar', 'empresa'),       uploadLogo.single('logo'), ctrl.uploadLogo);
 

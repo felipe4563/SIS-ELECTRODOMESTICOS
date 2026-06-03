@@ -7,7 +7,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 
 const EMPTY = {
-  codigo: '', tipo_cliente: 'MINORISTA', tipo_documento: 'CI', documento: '',
+  tipo_cliente: 'MINORISTA', tipo_documento: 'CI', documento: '',
   razon_social: '', nombres: '', apellidos: '',
   telefono: '', celular: '', email: '', fecha_nacimiento: '',
   descuento_default: 0,
@@ -222,11 +222,6 @@ export default function Clientes() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Código *</label>
-              <input name="codigo" value={form.codigo} onChange={handleChange} required maxLength={20}
-                className={inputCls} placeholder="Ej: CLI001" style={{ textTransform: 'uppercase' }} />
-            </div>
             <div>
               <label className={labelCls}>Tipo de cliente</label>
               <select name="tipo_cliente" value={form.tipo_cliente} onChange={handleChange} className={selectCls}>

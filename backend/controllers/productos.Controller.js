@@ -107,7 +107,7 @@ const getProducto = async (req, res) => {
 const createProducto = async (req, res) => {
   try {
     const {
-      codigo_interno, codigo_barras,
+      codigo_barras,
       id_marca, id_categoria, id_unidad, id_moneda_costo,
       producto, detalle, capacidad, caracteristicas, modelo, color,
       precio_real, costo_logistica = 0, costo_mcm = 0, precio_publico,
@@ -116,10 +116,14 @@ const createProducto = async (req, res) => {
       imagen_url, notas,
     } = req.body;
 
-    if (!codigo_interno) return res.status(400).json({ error: 'El código interno es requerido' });
     if (!id_marca || !id_categoria || !id_unidad || !id_moneda_costo)
       return res.status(400).json({ error: 'Marca, categoría, unidad y moneda son requeridos' });
     if (!producto) return res.status(400).json({ error: 'El nombre del producto es requerido' });
+
+    const [[{ nextId }]] = await db.promise().query(
+      `SELECT COALESCE(MAX(id_producto), 0) + 1 AS nextId FROM productos`
+    );
+    const codigo_interno = `PROD-${String(nextId).padStart(5, '0')}`;
 
     const [result] = await db.promise().query(
       `INSERT INTO productos
@@ -130,7 +134,7 @@ const createProducto = async (req, res) => {
           stock_minimo, stock_maximo, imagen_url, notas)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        codigo_interno.toUpperCase(), codigo_barras || null,
+        codigo_interno, codigo_barras || null,
         id_marca, id_categoria, id_unidad, id_moneda_costo,
         producto, detalle || null, capacidad || null, caracteristicas || null, modelo || null, color || null,
         toNum(precio_real), toNum(costo_logistica), toNum(costo_mcm), toNum(precio_publico),

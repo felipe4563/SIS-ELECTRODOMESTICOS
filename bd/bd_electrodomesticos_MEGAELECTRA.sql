@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 23-05-2026 a las 13:46:18
+-- Tiempo de generación: 31-05-2026 a las 18:02:02
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Base de datos: `bd_sistema_electrodomesticos`
+-- Base de datos: `bd_electrodomesticos`
 --
 
 -- --------------------------------------------------------
@@ -35,7 +35,7 @@ CREATE TABLE `ajustes_inventario` (
   `motivo` varchar(255) DEFAULT NULL,
   `id_usuario` int(11) NOT NULL,
   `estado` enum('BORRADOR','APROBADO','ANULADO') NOT NULL DEFAULT 'BORRADOR'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -51,7 +51,7 @@ CREATE TABLE `ajuste_inventario_detalle` (
   `cantidad_fisica` decimal(14,2) NOT NULL,
   `diferencia` decimal(14,2) GENERATED ALWAYS AS (`cantidad_fisica` - `cantidad_sistema`) STORED,
   `observacion` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -69,7 +69,7 @@ CREATE TABLE `alertas_stock` (
   `atendida` tinyint(1) NOT NULL DEFAULT 0,
   `fecha_atendida` datetime DEFAULT NULL,
   `id_usuario_atendio` int(11) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -89,7 +89,7 @@ CREATE TABLE `arqueos_caja` (
   `diferencia` decimal(14,2) GENERATED ALWAYS AS (`monto_cierre_real` - `monto_cierre_sistema`) STORED,
   `estado` enum('ABIERTA','CERRADA') NOT NULL DEFAULT 'ABIERTA',
   `observaciones` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -107,7 +107,34 @@ CREATE TABLE `auditoria` (
   `datos_despues` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`datos_despues`)),
   `ip_origen` varchar(45) DEFAULT NULL,
   `fecha` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `auditoria`
+--
+
+INSERT INTO `auditoria` (`id_auditoria`, `id_usuario`, `tabla`, `id_registro`, `accion`, `datos_antes`, `datos_despues`, `ip_origen`, `fecha`) VALUES
+(1, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:00:48'),
+(2, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:01:02'),
+(3, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:01:24'),
+(4, 1, 'usuarios', 1, 'LOGOUT', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:27'),
+(5, 1, 'usuarios', 1, 'LOGIN', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:36'),
+(6, 1, 'usuarios', 1, 'UPDATE', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:50');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `bancos`
+--
+
+CREATE TABLE `bancos` (
+  `id_banco` int(11) NOT NULL,
+  `codigo` varchar(20) NOT NULL,
+  `nombre` varchar(100) NOT NULL,
+  `sigla` varchar(15) DEFAULT NULL,
+  `pais` varchar(60) DEFAULT 'Bolivia',
+  `activo` tinyint(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -120,15 +147,7 @@ CREATE TABLE `cajas` (
   `id_sucursal` int(11) NOT NULL,
   `nombre` varchar(60) NOT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `cajas`
---
-
-INSERT INTO `cajas` (`id_caja`, `id_sucursal`, `nombre`, `activo`) VALUES
-(1, 1, 'Caja Principal - Gallo', 1),
-(2, 2, 'Caja Sucursal - Centro', 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -142,27 +161,7 @@ CREATE TABLE `categorias` (
   `nombre` varchar(80) NOT NULL,
   `descripcion` varchar(255) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `categorias`
---
-
-INSERT INTO `categorias` (`id_categoria`, `id_categoria_padre`, `nombre`, `descripcion`, `activo`) VALUES
-(1, NULL, 'Cocinas', 'Todas las cocinas', 1),
-(2, 1, 'Cocinas de Piso', 'Cocinas grandes de pedestal', 1),
-(3, 1, 'Cocinas de Mesa', 'Cocinas pequeñas para mesa', 1),
-(4, NULL, 'Hornos', 'Hornos eléctricos y empotrables', 1),
-(5, NULL, 'Refrigeración', 'Refrigeradores y congeladores', 1),
-(6, 5, 'Congeladores', 'Congeladores horizontales y verticales', 1),
-(7, 5, 'Refrigeradores', 'Refrigeradores domésticos', 1),
-(8, NULL, 'Pequeños Electros', 'Electrodomésticos menores', 1),
-(9, 8, 'Freidoras', 'Freidoras de aire y eléctricas', 1),
-(10, 8, 'Licuadoras', 'Licuadoras y procesadores', 1),
-(11, NULL, 'Ventilación', 'Equipos de ventilación y extracción', 1),
-(12, 11, 'Extractoras', 'Extractoras de grasa / campanas', 1),
-(13, NULL, 'Lavado', 'Lavadoras y secadoras', 1),
-(14, NULL, 'Climatización', 'Aires acondicionados y calefactores', 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -175,25 +174,7 @@ CREATE TABLE `categorias_gasto` (
   `nombre` varchar(80) NOT NULL,
   `descripcion` varchar(255) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `categorias_gasto`
---
-
-INSERT INTO `categorias_gasto` (`id_categoria_gasto`, `nombre`, `descripcion`, `activo`) VALUES
-(1, 'Alquiler', 'Alquiler de local comercial o depósito', 1),
-(2, 'Servicios Básicos', 'Luz, agua, gas', 1),
-(3, 'Internet y Teléfono', 'Servicios de telecomunicaciones', 1),
-(4, 'Sueldos y Salarios', 'Pago a empleados', 1),
-(5, 'Transporte', 'Combustible, fletes, mantenimiento vehículos', 1),
-(6, 'Impuestos', 'IVA, IT, IUE y otros impuestos', 1),
-(7, 'Publicidad', 'Marketing, redes sociales, letreros', 1),
-(8, 'Mantenimiento', 'Reparaciones de local, equipos, mobiliario', 1),
-(9, 'Papelería', 'Útiles de oficina e insumos', 1),
-(10, 'Limpieza', 'Productos y servicio de limpieza', 1),
-(11, 'Comisiones Bancarias', 'Cargos bancarios, transferencias, mantenimiento cuenta', 1),
-(12, 'Otros', 'Gastos varios sin clasificación específica', 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -221,14 +202,7 @@ CREATE TABLE `clientes` (
   `descuento_default` decimal(5,2) DEFAULT 0.00,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `clientes`
---
-
-INSERT INTO `clientes` (`id_cliente`, `codigo`, `tipo_cliente`, `tipo_documento`, `documento`, `razon_social`, `nombres`, `apellidos`, `telefono`, `celular`, `email`, `fecha_nacimiento`, `permite_credito`, `limite_credito`, `saldo_actual`, `dias_credito`, `descuento_default`, `activo`, `fecha_creacion`) VALUES
-(1, 'CLI-0001', 'OCASIONAL', 'CI', '0000000', 'CLIENTE OCASIONAL', 'Cliente', 'Ocasional', NULL, NULL, NULL, NULL, 0, 0.00, 0.00, 0, 0.00, 1, '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -244,7 +218,39 @@ CREATE TABLE `cliente_direcciones` (
   `ciudad` varchar(80) DEFAULT NULL,
   `referencias` varchar(255) DEFAULT NULL,
   `es_principal` tinyint(1) NOT NULL DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `combos`
+--
+
+CREATE TABLE `combos` (
+  `id_combo` int(11) NOT NULL,
+  `codigo` varchar(40) NOT NULL,
+  `nombre` varchar(150) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `precio_combo` decimal(14,2) NOT NULL,
+  `fecha_inicio` date DEFAULT NULL,
+  `fecha_fin` date DEFAULT NULL,
+  `imagen_url` varchar(255) DEFAULT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `combo_detalle`
+--
+
+CREATE TABLE `combo_detalle` (
+  `id_combo_detalle` int(11) NOT NULL,
+  `id_combo` int(11) NOT NULL,
+  `id_producto` int(11) NOT NULL,
+  `cantidad` decimal(14,2) NOT NULL DEFAULT 1.00
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -280,7 +286,7 @@ CREATE TABLE `compras` (
   `id_usuario_recibe` int(11) DEFAULT NULL,
   `observaciones` text DEFAULT NULL,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -296,7 +302,7 @@ CREATE TABLE `compra_cuotas` (
   `monto` decimal(14,2) NOT NULL,
   `monto_pagado` decimal(14,2) NOT NULL DEFAULT 0.00,
   `estado` enum('PENDIENTE','PARCIAL','PAGADA','VENCIDA') NOT NULL DEFAULT 'PENDIENTE'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -313,10 +319,11 @@ CREATE TABLE `compra_detalle` (
   `precio_unitario` decimal(14,4) NOT NULL,
   `descuento_porc` decimal(5,2) DEFAULT 0.00,
   `descuento_monto` decimal(14,2) DEFAULT 0.00,
+  `id_impuesto` int(11) DEFAULT NULL,
   `impuesto_porc` decimal(5,2) DEFAULT 0.00,
   `subtotal` decimal(14,2) NOT NULL,
   `observacion` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -331,28 +338,55 @@ CREATE TABLE `configuracion_sistema` (
   `descripcion` varchar(255) DEFAULT NULL,
   `tipo_dato` enum('STRING','INT','DECIMAL','BOOLEAN','JSON') DEFAULT 'STRING',
   `fecha_modificacion` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
 
 --
--- Volcado de datos para la tabla `configuracion_sistema`
+-- Estructura de tabla para la tabla `cotizaciones`
 --
 
-INSERT INTO `configuracion_sistema` (`id_config`, `clave`, `valor`, `descripcion`, `tipo_dato`, `fecha_modificacion`) VALUES
-(1, 'IVA_PORCENTAJE', '13', 'Porcentaje de IVA aplicado', 'DECIMAL', '2026-05-23 07:45:30'),
-(2, 'MONEDA_BASE', 'BOB', 'Código de la moneda base', 'STRING', '2026-05-23 07:45:30'),
-(3, 'PREFIJO_VENTA', 'V-', 'Prefijo para numeración de ventas', 'STRING', '2026-05-23 07:45:30'),
-(4, 'PREFIJO_COMPRA', 'C-', 'Prefijo para numeración de compras', 'STRING', '2026-05-23 07:45:30'),
-(5, 'PREFIJO_TRANSFERENCIA', 'T-', 'Prefijo para transferencias', 'STRING', '2026-05-23 07:45:30'),
-(6, 'PREFIJO_AJUSTE', 'AJ-', 'Prefijo para ajustes de inventario', 'STRING', '2026-05-23 07:45:30'),
-(7, 'PREFIJO_GASTO', 'G-', 'Prefijo para gastos', 'STRING', '2026-05-23 07:45:30'),
-(8, 'PREFIJO_PAGO_COMPRA', 'PC-', 'Prefijo para pagos a proveedores', 'STRING', '2026-05-23 07:45:30'),
-(9, 'PREFIJO_PAGO_VENTA', 'PV-', 'Prefijo para pagos/cobros de ventas', 'STRING', '2026-05-23 07:45:30'),
-(10, 'PREFIJO_DEVOLUCION', 'DV-', 'Prefijo para devoluciones', 'STRING', '2026-05-23 07:45:30'),
-(11, 'DIAS_ALERTA_VENCIMIENTO', '7', 'Días antes de vencimiento para alertar', 'INT', '2026-05-23 07:45:30'),
-(12, 'PERMITIR_VENTA_SIN_STOCK', 'false', 'Permitir vender productos sin stock', 'BOOLEAN', '2026-05-23 07:45:30'),
-(13, 'VALIDAR_LIMITE_CREDITO', 'true', 'Validar límite de crédito en ventas', 'BOOLEAN', '2026-05-23 07:45:30'),
-(14, 'IMPRIMIR_AUTOMATICO', 'false', 'Imprimir factura automáticamente al emitir', 'BOOLEAN', '2026-05-23 07:45:30'),
-(15, 'FORMATO_FACTURA', 'A4', 'Tamaño de impresión: A4 o TICKET', 'STRING', '2026-05-23 07:45:30');
+CREATE TABLE `cotizaciones` (
+  `id_cotizacion` bigint(20) NOT NULL,
+  `numero` varchar(30) NOT NULL,
+  `id_cliente` int(11) NOT NULL,
+  `id_sucursal` int(11) NOT NULL,
+  `id_vendedor` int(11) NOT NULL,
+  `fecha` datetime NOT NULL DEFAULT current_timestamp(),
+  `fecha_vencimiento` date DEFAULT NULL COMMENT 'Hasta cuándo es válida la cotización',
+  `id_moneda` int(11) NOT NULL,
+  `tipo_cambio` decimal(18,6) DEFAULT 1.000000,
+  `tipo_cotizacion` enum('CONTADO','CREDITO') NOT NULL DEFAULT 'CONTADO',
+  `subtotal` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `descuento_porc` decimal(5,2) DEFAULT 0.00,
+  `descuento_monto` decimal(14,2) DEFAULT 0.00,
+  `impuesto` decimal(14,2) DEFAULT 0.00,
+  `total` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `estado` enum('BORRADOR','EMITIDA','APROBADA','RECHAZADA','VENCIDA','CONVERTIDA') NOT NULL DEFAULT 'BORRADOR',
+  `id_venta_generada` bigint(20) DEFAULT NULL COMMENT 'Si se convirtió en venta, referencia',
+  `observaciones` text DEFAULT NULL,
+  `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `cotizacion_detalle`
+--
+
+CREATE TABLE `cotizacion_detalle` (
+  `id_detalle` bigint(20) NOT NULL,
+  `id_cotizacion` bigint(20) NOT NULL,
+  `id_producto` int(11) NOT NULL,
+  `cantidad` decimal(14,2) NOT NULL,
+  `precio_unitario` decimal(14,2) NOT NULL,
+  `descuento_porc` decimal(5,2) DEFAULT 0.00,
+  `descuento_monto` decimal(14,2) DEFAULT 0.00,
+  `id_impuesto` int(11) DEFAULT NULL,
+  `impuesto_porc` decimal(5,2) DEFAULT 0.00,
+  `subtotal` decimal(14,2) NOT NULL,
+  `observacion` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -371,19 +405,7 @@ CREATE TABLE `depositos` (
   `permite_venta` tinyint(1) NOT NULL DEFAULT 1,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `depositos`
---
-
-INSERT INTO `depositos` (`id_deposito`, `id_sucursal`, `codigo`, `nombre`, `tipo`, `direccion`, `encargado`, `permite_venta`, `activo`, `fecha_creacion`) VALUES
-(1, 1, 'GALLO18', 'Gallo 18 (Almacén)', 'ALMACEN', 'Calle Gallo #18', 'Por definir', 1, 1, '2026-05-23 07:45:30'),
-(2, 1, 'GALLO20', 'Gallo 20 (Depósito)', 'DEPOSITO_PEQUENO', 'Calle Gallo #20', 'Por definir', 1, 1, '2026-05-23 07:45:30'),
-(3, 2, 'VICTORIA', 'Punto de Venta Victoria', 'PUNTO_VENTA', 'Av. Victoria', 'Por definir', 1, 1, '2026-05-23 07:45:30'),
-(4, 2, 'URKUPINA', 'Punto de Venta Urkupiña', 'PUNTO_VENTA', 'Av. Urkupiña', 'Por definir', 1, 1, '2026-05-23 07:45:30'),
-(5, 2, 'EARCE', 'Punto de Venta E. Arce', 'PUNTO_VENTA', 'Av. Eduardo Arce', 'Por definir', 1, 1, '2026-05-23 07:45:30'),
-(6, 2, 'PEMOSUR', 'Punto de Venta Pemosur', 'PUNTO_VENTA', 'Av. Pemosur', 'Por definir', 1, 1, '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -401,7 +423,7 @@ CREATE TABLE `devoluciones_venta` (
   `total` decimal(14,2) NOT NULL DEFAULT 0.00,
   `estado` enum('PENDIENTE','APROBADA','RECHAZADA') NOT NULL DEFAULT 'PENDIENTE',
   `id_usuario` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -417,7 +439,7 @@ CREATE TABLE `devolucion_venta_detalle` (
   `precio_unitario` decimal(14,2) NOT NULL,
   `subtotal` decimal(14,2) NOT NULL,
   `motivo` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -436,14 +458,7 @@ CREATE TABLE `empresas` (
   `logo_url` varchar(255) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `empresas`
---
-
-INSERT INTO `empresas` (`id_empresa`, `razon_social`, `nombre_comercial`, `nit`, `direccion`, `telefono`, `email`, `logo_url`, `activo`, `fecha_creacion`) VALUES
-(1, 'COMERCIAL ELECTRODOMÉSTICOS S.R.L.', 'ElectroHogar', '1234567890', 'Av. Principal #123, Santa Cruz', '3-3334444', 'contacto@electrohogar.bo', NULL, 1, '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -469,7 +484,23 @@ CREATE TABLE `gastos` (
   `estado` enum('REGISTRADO','APROBADO','PAGADO','ANULADO') NOT NULL DEFAULT 'REGISTRADO',
   `observaciones` text DEFAULT NULL,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `impuestos`
+--
+
+CREATE TABLE `impuestos` (
+  `id_impuesto` int(11) NOT NULL,
+  `codigo` varchar(20) NOT NULL,
+  `nombre` varchar(80) NOT NULL,
+  `porcentaje` decimal(5,2) NOT NULL,
+  `tipo` enum('VENTA','COMPRA','AMBOS','RETENCION') NOT NULL DEFAULT 'AMBOS',
+  `es_default` tinyint(1) NOT NULL DEFAULT 0,
+  `activo` tinyint(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -492,43 +523,7 @@ CREATE TABLE `kardex` (
   `documento_numero` varchar(40) DEFAULT NULL,
   `id_usuario` int(11) DEFAULT NULL,
   `observaciones` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `kardex`
---
-
-INSERT INTO `kardex` (`id_kardex`, `id_producto`, `id_deposito`, `id_tipo_movimiento`, `fecha`, `cantidad`, `costo_unitario`, `saldo_cantidad`, `saldo_costo`, `documento_tipo`, `documento_id`, `documento_numero`, `id_usuario`, `observaciones`) VALUES
-(1, 1, 3, 9, '2026-05-23 07:45:30', 1.00, 3526.0000, 1.00, 3526.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(2, 1, 4, 9, '2026-05-23 07:45:30', 3.00, 3526.0000, 3.00, 3526.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(3, 2, 1, 9, '2026-05-23 07:45:30', 1.00, 4232.0000, 1.00, 4232.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(4, 2, 4, 9, '2026-05-23 07:45:30', 10.00, 4232.0000, 10.00, 4232.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(5, 3, 3, 9, '2026-05-23 07:45:30', 1.00, 529.0000, 1.00, 529.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(6, 3, 4, 9, '2026-05-23 07:45:30', 2.00, 529.0000, 2.00, 529.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(7, 4, 3, 9, '2026-05-23 07:45:30', 1.00, 458.0000, 1.00, 458.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(8, 4, 4, 9, '2026-05-23 07:45:30', 2.00, 458.0000, 2.00, 458.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(9, 5, 1, 9, '2026-05-23 07:45:30', 1.00, 247.0000, 1.00, 247.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(10, 5, 3, 9, '2026-05-23 07:45:30', 1.00, 247.0000, 1.00, 247.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(11, 5, 4, 9, '2026-05-23 07:45:30', 7.00, 247.0000, 7.00, 247.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(12, 6, 1, 9, '2026-05-23 07:45:30', 1.00, 353.0000, 1.00, 353.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(13, 6, 4, 9, '2026-05-23 07:45:30', 2.00, 353.0000, 2.00, 353.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(14, 7, 1, 9, '2026-05-23 07:45:30', 1.00, 504.0000, 1.00, 504.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(15, 7, 4, 9, '2026-05-23 07:45:30', 25.00, 504.0000, 25.00, 504.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(16, 8, 3, 9, '2026-05-23 07:45:30', 1.00, 3325.0000, 1.00, 3325.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(17, 8, 4, 9, '2026-05-23 07:45:30', 1.00, 3325.0000, 1.00, 3325.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(18, 9, 1, 9, '2026-05-23 07:45:30', 1.00, 554.0000, 1.00, 554.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(19, 10, 1, 9, '2026-05-23 07:45:30', 1.00, 247.0000, 1.00, 247.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(20, 10, 3, 9, '2026-05-23 07:45:30', 1.00, 247.0000, 1.00, 247.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(21, 10, 4, 9, '2026-05-23 07:45:30', 3.00, 247.0000, 3.00, 247.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(22, 11, 1, 9, '2026-05-23 07:45:30', 1.00, 4565.0000, 1.00, 4565.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(23, 11, 4, 9, '2026-05-23 07:45:30', 1.00, 4565.0000, 1.00, 4565.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(24, 12, 1, 9, '2026-05-23 07:45:30', 1.00, 4993.0000, 1.00, 4993.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(25, 12, 4, 9, '2026-05-23 07:45:30', 2.00, 4993.0000, 2.00, 4993.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(26, 13, 1, 9, '2026-05-23 07:45:30', 1.00, 5706.0000, 1.00, 5706.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(27, 13, 3, 9, '2026-05-23 07:45:30', 1.00, 5706.0000, 1.00, 5706.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(28, 13, 4, 9, '2026-05-23 07:45:30', 6.00, 5706.0000, 6.00, 5706.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(29, 14, 1, 9, '2026-05-23 07:45:30', 1.00, 6491.0000, 1.00, 6491.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel'),
-(30, 14, 4, 9, '2026-05-23 07:45:30', 3.00, 6491.0000, 3.00, 6491.0000, 'APERTURA', NULL, 'INV-INICIAL', 1, 'Inventario inicial cargado desde Excel');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -542,23 +537,7 @@ CREATE TABLE `marcas` (
   `pais_origen` varchar(60) DEFAULT NULL,
   `logo_url` varchar(255) DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `marcas`
---
-
-INSERT INTO `marcas` (`id_marca`, `nombre`, `pais_origen`, `logo_url`, `activo`) VALUES
-(1, 'ABBA', 'Bolivia', NULL, 1),
-(2, 'BRASLAR', 'Brasil', NULL, 1),
-(3, 'BLACK&DECKER', 'Estados Unidos', NULL, 1),
-(4, 'CHALLENGER', 'Colombia', NULL, 1),
-(5, 'CADSA', 'Bolivia', NULL, 1),
-(6, 'CONSUL', 'Brasil', NULL, 1),
-(7, 'WHIRLPOOL', 'Estados Unidos', NULL, 1),
-(8, 'LG', 'Corea del Sur', NULL, 1),
-(9, 'SAMSUNG', 'Corea del Sur', NULL, 1),
-(10, 'MABE', 'México', NULL, 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -572,7 +551,7 @@ CREATE TABLE `modulos` (
   `nombre` varchar(80) NOT NULL,
   `icono` varchar(40) DEFAULT NULL,
   `orden` int(11) DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `modulos`
@@ -589,9 +568,16 @@ INSERT INTO `modulos` (`id_modulo`, `codigo`, `nombre`, `icono`, `orden`) VALUES
 (8, 'INVENTARIO', 'Inventario', 'archive', 8),
 (9, 'VENTAS', 'Ventas', 'shopping-cart', 9),
 (10, 'CAJA', 'Caja', 'dollar-sign', 10),
-(11, 'GASTOS', 'Gastos', 'credit-card', 11),
+(11, 'GASTOS', 'Gastos', 'minus-circle', 11),
 (12, 'REPORTES', 'Reportes', 'bar-chart', 12),
-(13, 'AUDITORIA', 'Auditoría', 'shield', 13);
+(13, 'AUDITORIA', 'Auditoría', 'shield', 13),
+(14, 'COTIZACIONES', 'Cotizaciones', 'file-text', 14),
+(15, 'COBROS', 'Cobros', 'credit-card', 15),
+(16, 'COMBOS', 'Combos', 'gift', 16),
+(17, 'PROMOCIONES', 'Promociones', 'tag', 17),
+(18, 'BANCOS', 'Bancos', 'briefcase', 18),
+(19, 'IMPUESTOS', 'Impuestos', 'percent', 19),
+(20, 'HERRAMIENTAS', 'Herramientas', 'tool', 20);
 
 -- --------------------------------------------------------
 
@@ -607,15 +593,7 @@ CREATE TABLE `monedas` (
   `decimales` tinyint(4) NOT NULL DEFAULT 2,
   `es_moneda_base` tinyint(1) NOT NULL DEFAULT 0,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `monedas`
---
-
-INSERT INTO `monedas` (`id_moneda`, `codigo`, `nombre`, `simbolo`, `decimales`, `es_moneda_base`, `activo`) VALUES
-(1, 'BOB', 'Boliviano', 'Bs', 2, 1, 1),
-(2, 'USD', 'Dólar EE.UU.', '$', 2, 0, 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -640,7 +618,7 @@ CREATE TABLE `pagos_compra` (
   `comprobante_url` varchar(255) DEFAULT NULL,
   `id_usuario` int(11) NOT NULL,
   `observaciones` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -664,7 +642,7 @@ CREATE TABLE `pagos_venta` (
   `comprobante_url` varchar(255) DEFAULT NULL,
   `id_usuario` int(11) NOT NULL,
   `observaciones` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -678,7 +656,7 @@ CREATE TABLE `permisos` (
   `codigo` varchar(80) NOT NULL COMMENT 'ej: ventas.crear, compras.aprobar',
   `nombre` varchar(120) NOT NULL,
   `descripcion` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `permisos`
@@ -844,7 +822,60 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (157, 13, 'auditoria.filtrar', 'Filtrar Auditoría', 'Filtrar por usuario, tabla, fecha'),
 (158, 13, 'auditoria.exportar', 'Exportar Auditoría', 'Exportar log a Excel/PDF'),
 (159, 13, 'sesiones.ver', 'Ver Sesiones Activas', 'Ver usuarios conectados'),
-(160, 13, 'sesiones.cerrar', 'Cerrar Sesiones Activas', 'Forzar cierre de sesión');
+(160, 13, 'sesiones.cerrar', 'Cerrar Sesiones Activas', 'Forzar cierre de sesión'),
+(161, 14, 'cotizaciones.ver', 'Ver Cotizaciones', 'Listar cotizaciones de su sucursal'),
+(162, 14, 'cotizaciones.ver_todas', 'Ver Cotizaciones de Todas las Sucursales', 'Acceso global'),
+(163, 14, 'cotizaciones.crear', 'Crear Cotización', 'Generar nueva cotización'),
+(164, 14, 'cotizaciones.editar', 'Editar Cotización', 'Modificar cotización en borrador'),
+(165, 14, 'cotizaciones.emitir', 'Emitir Cotización', 'Confirmar y enviar al cliente'),
+(166, 14, 'cotizaciones.aprobar', 'Aprobar Cotización', 'Marcar como aprobada por cliente'),
+(167, 14, 'cotizaciones.rechazar', 'Rechazar Cotización', 'Marcar como rechazada'),
+(168, 14, 'cotizaciones.convertir_venta', 'Convertir en Venta', 'Generar venta a partir de cotización'),
+(169, 14, 'cotizaciones.anular', 'Anular Cotización', 'Anular cotización emitida'),
+(170, 14, 'cotizaciones.imprimir', 'Imprimir Cotización', 'Generar PDF de la cotización'),
+(171, 14, 'cotizaciones.exportar', 'Exportar Cotizaciones', 'Exportar listado a Excel/PDF'),
+(172, 15, 'cobros.ver', 'Ver Cobros', 'Listar cobros realizados'),
+(173, 15, 'cobros.ver_todos', 'Ver Cobros de Todas las Sucursales', 'Acceso global'),
+(174, 15, 'cobros.crear', 'Registrar Cobro', 'Registrar pago de venta a crédito'),
+(175, 15, 'cobros.editar', 'Editar Cobro', 'Modificar cobro en el mismo día'),
+(176, 15, 'cobros.anular', 'Anular Cobro', 'Anular un cobro registrado'),
+(177, 15, 'cobros.contado', 'Cobros al Contado', 'Gestionar cobros al contado'),
+(178, 15, 'cobros.credito', 'Cobros a Crédito', 'Gestionar cobros a crédito'),
+(179, 15, 'cobros.efectivo', 'Cobrar en Efectivo', 'Aceptar pagos en efectivo'),
+(180, 15, 'cobros.qr', 'Cobrar por QR', 'Aceptar pagos por QR'),
+(181, 15, 'cobros.imprimir', 'Imprimir Recibo', 'Generar recibo de cobro'),
+(182, 15, 'cobros.exportar', 'Exportar Cobros', 'Exportar a Excel/PDF'),
+(183, 16, 'combos.ver', 'Ver Combos', 'Listar combos activos'),
+(184, 16, 'combos.crear', 'Crear Combo', 'Definir nuevo pack de productos'),
+(185, 16, 'combos.editar', 'Editar Combo', 'Modificar combo'),
+(186, 16, 'combos.eliminar', 'Eliminar/Desactivar Combo', 'Dar de baja un combo'),
+(187, 16, 'combos.exportar', 'Exportar Combos', 'Exportar a Excel/PDF'),
+(188, 17, 'promociones.ver', 'Ver Promociones', 'Listar promociones'),
+(189, 17, 'promociones.crear', 'Crear Promoción', 'Definir nueva promoción'),
+(190, 17, 'promociones.editar', 'Editar Promoción', 'Modificar promoción vigente'),
+(191, 17, 'promociones.eliminar', 'Eliminar/Desactivar Promoción', 'Dar de baja una promoción'),
+(192, 17, 'promociones.aplicar', 'Aplicar Promoción Manual', 'Aplicar promoción a una venta manualmente'),
+(193, 17, 'promociones.exportar', 'Exportar Promociones', 'Exportar a Excel/PDF'),
+(194, 18, 'bancos.ver', 'Ver Bancos', 'Listar catálogo de bancos'),
+(195, 18, 'bancos.crear', 'Crear Banco', 'Registrar nuevo banco'),
+(196, 18, 'bancos.editar', 'Editar Banco', 'Modificar datos del banco'),
+(197, 18, 'bancos.eliminar', 'Eliminar/Desactivar Banco', 'Dar de baja un banco'),
+(198, 19, 'impuestos.ver', 'Ver Impuestos', 'Listar catálogo de impuestos'),
+(199, 19, 'impuestos.crear', 'Crear Impuesto', 'Registrar nuevo impuesto'),
+(200, 19, 'impuestos.editar', 'Editar Impuesto', 'Modificar porcentaje o nombre'),
+(201, 19, 'impuestos.eliminar', 'Eliminar/Desactivar Impuesto', 'Dar de baja un impuesto'),
+(202, 20, 'herramientas.ver', 'Acceder a Herramientas', 'Acceso al panel de herramientas'),
+(203, 20, 'backup.crear', 'Crear Copia de Seguridad', 'Generar backup de la BD'),
+(204, 20, 'backup.restaurar', 'Restaurar Copia de Seguridad', 'Restaurar BD desde backup'),
+(205, 20, 'backup.descargar', 'Descargar Backups', 'Descargar archivos de backup'),
+(206, 20, 'bd.eliminar_registros', 'Eliminar Registros de BD', 'Operación crítica: borrar datos masivos'),
+(207, 20, 'excel.exportar_planilla', 'Descargar Planilla Excel', 'Descargar plantilla para carga masiva'),
+(208, 20, 'excel.importar_productos', 'Importar Productos desde Excel', 'Cargar productos masivamente'),
+(209, 20, 'excel.exportar_productos', 'Exportar Productos a Excel', 'Exportar catálogo completo'),
+(210, 20, 'codigo_barras.generar', 'Generar Código de Barras', 'Generar y/o imprimir códigos de barra'),
+(211, 20, 'catalogo.generar_pdf', 'Generar Catálogo PDF', 'Generar catálogo de productos en PDF'),
+(212, 20, 'impresora.configurar', 'Configurar Impresora', 'Definir impresora por defecto y tipo'),
+(213, 20, 'factura.editar_plantilla', 'Editar Plantilla de Factura', 'Personalizar diseño de factura');
 
 -- --------------------------------------------------------
 
@@ -875,35 +906,16 @@ CREATE TABLE `productos` (
   `bono` decimal(14,2) NOT NULL DEFAULT 0.00 COMMENT 'Bono para vendedor',
   `precio_mayor` decimal(14,2) DEFAULT 0.00,
   `id_proveedor_default` int(11) DEFAULT NULL,
+  `id_impuesto_default` int(11) DEFAULT NULL COMMENT 'Impuesto por defecto del producto',
   `stock_minimo` decimal(14,2) NOT NULL DEFAULT 0.00,
   `stock_maximo` decimal(14,2) DEFAULT 0.00,
   `imagen_url` varchar(255) DEFAULT NULL,
+  `estado` enum('NUEVO','USADO','EXHIBICION','RECONDICIONADO','DESCONTINUADO') NOT NULL DEFAULT 'NUEVO',
   `notas` text DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp(),
   `fecha_modificacion` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `productos`
---
-
-INSERT INTO `productos` (`id_producto`, `codigo_interno`, `codigo_barras`, `id_marca`, `id_categoria`, `id_unidad`, `producto`, `detalle`, `capacidad`, `caracteristicas`, `modelo`, `color`, `id_moneda_costo`, `precio_real`, `costo_logistica`, `costo_mcm`, `precio_publico`, `bono`, `precio_mayor`, `id_proveedor_default`, `stock_minimo`, `stock_maximo`, `imagen_url`, `notas`, `activo`, `fecha_creacion`, `fecha_modificacion`) VALUES
-(1, 'P0001', NULL, 1, 2, 1, 'COCINA DE PISO 4H', 'MESAVIDRIO E.E. GRILL ELEC.', NULL, NULL, 'AG202-3TC', 'NEGRO', 1, 3500.00, 26.00, 0.00, 3710.00, 30.00, 0.00, 1, 2.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(2, 'P0002', NULL, 1, 2, 1, 'COCINA DE PISO 6H', 'MESAVIDRIO E.E. GRILL ELEC.', NULL, NULL, 'RG803-5GT', 'NEGRO', 1, 4200.00, 32.00, 0.00, 4452.00, 30.00, 0.00, 1, 2.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(3, 'P0003', NULL, 1, 3, 1, 'COCINA DE MESA 4H', 'E.E. MESON DE LOZA', NULL, NULL, 'SG-400NEE', 'NEGRO', 1, 525.00, 4.00, 0.00, 600.00, 10.00, 0.00, 1, 2.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(4, 'P0004', NULL, 1, 3, 1, 'COCINA DE MESA 4H', 'S/E.E. MESON DE LOZA', NULL, NULL, 'SB-400QL', 'NEGRO', 1, 455.00, 3.00, 0.00, 500.00, 10.00, 0.00, 1, 2.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(5, 'P0005', NULL, 1, 3, 1, 'COCINA DE MESA 2H', 'MESON DE LOZA', NULL, NULL, 'ST-200', 'NEGRO', 1, 245.00, 2.00, 0.00, 300.00, 10.00, 0.00, 1, 3.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(6, 'P0006', NULL, 2, 3, 1, 'COCINA DE MESA 4H', 'MESON DE ACERO INOX.', NULL, NULL, 'JUNIOR', 'BLANCO', 1, 350.00, 3.00, 0.00, 400.00, 10.00, 0.00, 1, 2.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(7, 'P0007', NULL, 3, 9, 1, 'FREIDORA DE AIRE', 'CIRCULACION AIRE RAPIDO', '2 Lts', NULL, 'HF-100WDCL', 'BLANCO', 1, 500.00, 4.00, 0.00, 530.00, 10.00, 0.00, 1, 5.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(8, 'P0008', NULL, 4, 4, 1, 'HORNO DE EMPOTRAR', 'ELEC. C/VENTILADOR', '60 CM', NULL, 'HG-2562', 'NEGRO', 1, 3300.00, 25.00, 0.00, 3498.00, 50.00, 0.00, 1, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(9, 'P0009', NULL, 4, 12, 1, 'EXTRACTORA DE GRASA', '1 MOTOR, 3 VEL. ANALÓGICO', '76 CM', NULL, 'CX-4500', 'INOX', 1, 550.00, 4.00, 0.00, 600.00, 20.00, 0.00, 1, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(10, 'P0010', NULL, 5, 3, 1, 'COCINA DE MESA 2H', 'MESA DE ACERO INOX.', NULL, NULL, 'CM-02', 'BLANCO', 1, 245.00, 2.00, 0.00, 300.00, 10.00, 0.00, 3, 2.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(11, 'P0011', NULL, 6, 6, 1, 'CONGELADOR HORIZONTAL', '1 PUERTA DUAL INT. BLANCO', '250 Lts', NULL, 'CHA-22BDWX', 'BLANCO', 1, 4531.00, 34.00, 0.00, 4803.00, 50.00, 0.00, 2, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(12, 'P0012', NULL, 6, 6, 1, 'CONGELADOR HORIZONTAL', '1 PUERTA DUAL INT. BLANCO', '310 Lts', NULL, 'CHA-31BDWX', 'BLANCO', 1, 4956.00, 37.00, 0.00, 5253.00, 50.00, 0.00, 2, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(13, 'P0013', NULL, 6, 6, 1, 'CONGELADOR HORIZONTAL', '1 PUERTA DUAL INT. BLANCO', '420 Lts', NULL, 'CHB-42BDWX', 'BLANCO', 1, 5664.00, 42.00, 0.00, 6004.00, 50.00, 0.00, 2, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(14, 'P0014', NULL, 6, 6, 1, 'CONGELADOR HORIZONTAL', '1 PUERTA DUAL INT. BLANCO', '530 Lts', NULL, 'CHB-53BDWX', 'BLANCO', 1, 6443.00, 48.00, 0.00, 6830.00, 50.00, 0.00, 2, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30'),
-(15, 'P0015', NULL, 6, 6, 1, 'CONGELADOR VERTICAL', '1 PUERTA DUAL INT. BLANCO', '280 Lts', NULL, 'CVG28HBDWX', 'BLANCO', 1, 5522.00, 41.00, 0.00, 5853.00, 50.00, 0.00, 2, 1.00, 0.00, NULL, NULL, 1, '2026-05-23 07:45:30', '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -920,7 +932,42 @@ CREATE TABLE `producto_precio_historico` (
   `precio_pub_nuevo` decimal(14,2) DEFAULT NULL,
   `id_usuario` int(11) DEFAULT NULL,
   `fecha` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `promociones`
+--
+
+CREATE TABLE `promociones` (
+  `id_promocion` int(11) NOT NULL,
+  `codigo` varchar(40) NOT NULL,
+  `nombre` varchar(150) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `tipo_descuento` enum('PORCENTAJE','MONTO_FIJO') NOT NULL DEFAULT 'PORCENTAJE',
+  `valor_descuento` decimal(10,2) NOT NULL,
+  `fecha_inicio` date NOT NULL,
+  `fecha_fin` date NOT NULL,
+  `cantidad_minima` decimal(14,2) DEFAULT 1.00 COMMENT 'Cantidad mínima a comprar para aplicar',
+  `aplica_a` enum('PRODUCTO','CATEGORIA','MARCA','TODOS') NOT NULL DEFAULT 'PRODUCTO',
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `promocion_producto`
+--
+
+CREATE TABLE `promocion_producto` (
+  `id_promo_prod` bigint(20) NOT NULL,
+  `id_promocion` int(11) NOT NULL,
+  `id_producto` int(11) DEFAULT NULL,
+  `id_categoria` int(11) DEFAULT NULL,
+  `id_marca` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -945,16 +992,7 @@ CREATE TABLE `proveedores` (
   `saldo_actual` decimal(14,2) DEFAULT 0.00,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `proveedores`
---
-
-INSERT INTO `proveedores` (`id_proveedor`, `codigo`, `razon_social`, `nombre_comercial`, `nit`, `tipo_proveedor`, `direccion`, `ciudad`, `pais`, `telefono`, `email`, `contacto_principal`, `plazo_credito_dias`, `saldo_actual`, `activo`, `fecha_creacion`) VALUES
-(1, 'PROV-001', 'ROSVANIA S.R.L.', 'ROSVANIA', '1111111111', 'NACIONAL', 'Av. Comercial #100', 'Santa Cruz', 'Bolivia', '3-3001001', 'ventas@rosvania.bo', 'Por definir', 30, 0.00, 1, '2026-05-23 07:45:30'),
-(2, 'PROV-002', 'DISMATEC IMPORTACIONES', 'DISMATEC', '2222222222', 'NACIONAL', 'Av. Industrial #50', 'La Paz', 'Bolivia', '2-2002002', 'ventas@dismatec.bo', 'Por definir', 45, 0.00, 1, '2026-05-23 07:45:30'),
-(3, 'PROV-003', 'SOTO DISTRIBUCIONES', 'SOTO', '3333333333', 'NACIONAL', 'Calle Comercio #25', 'Santa Cruz', 'Bolivia', '3-3003003', 'ventas@soto.bo', 'Por definir', 30, 0.00, 1, '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -969,7 +1007,7 @@ CREATE TABLE `proveedor_contactos` (
   `cargo` varchar(80) DEFAULT NULL,
   `telefono` varchar(30) DEFAULT NULL,
   `email` varchar(120) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -981,7 +1019,7 @@ CREATE TABLE `proveedor_cuentas_pago` (
   `id_cuenta` int(11) NOT NULL,
   `id_proveedor` int(11) NOT NULL,
   `metodo` enum('EFECTIVO','TRANSFERENCIA','QR','CHEQUE','OTRO') NOT NULL,
-  `banco` varchar(80) DEFAULT NULL,
+  `id_banco` int(11) DEFAULT NULL,
   `tipo_cuenta` varchar(30) DEFAULT NULL,
   `numero_cuenta` varchar(60) DEFAULT NULL,
   `titular` varchar(150) DEFAULT NULL,
@@ -989,20 +1027,7 @@ CREATE TABLE `proveedor_cuentas_pago` (
   `id_moneda` int(11) DEFAULT NULL,
   `es_principal` tinyint(1) NOT NULL DEFAULT 0,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `proveedor_cuentas_pago`
---
-
-INSERT INTO `proveedor_cuentas_pago` (`id_cuenta`, `id_proveedor`, `metodo`, `banco`, `tipo_cuenta`, `numero_cuenta`, `titular`, `qr_url`, `id_moneda`, `es_principal`, `activo`) VALUES
-(1, 1, 'TRANSFERENCIA', 'Banco Mercantil Santa Cruz', 'CORRIENTE', '0000000001', 'ROSVANIA S.R.L.', NULL, 1, 1, 1),
-(2, 1, 'QR', NULL, NULL, NULL, 'ROSVANIA S.R.L.', NULL, 1, 0, 1),
-(3, 1, 'EFECTIVO', NULL, NULL, NULL, NULL, NULL, 1, 0, 1),
-(4, 2, 'TRANSFERENCIA', 'Banco Nacional de Bolivia', 'CORRIENTE', '0000000002', 'DISMATEC IMPORTACIONES', NULL, 1, 1, 1),
-(5, 2, 'QR', NULL, NULL, NULL, 'DISMATEC IMPORTACIONES', NULL, 1, 0, 1),
-(6, 3, 'TRANSFERENCIA', 'Banco Unión', 'CORRIENTE', '0000000003', 'SOTO DISTRIBUCIONES', NULL, 1, 1, 1),
-(7, 3, 'EFECTIVO', NULL, NULL, NULL, NULL, NULL, 1, 0, 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1016,7 +1041,7 @@ CREATE TABLE `roles` (
   `descripcion` varchar(255) DEFAULT NULL,
   `es_sistema` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = no se puede eliminar',
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `roles`
@@ -1036,7 +1061,7 @@ INSERT INTO `roles` (`id_rol`, `nombre`, `descripcion`, `es_sistema`, `activo`) 
 CREATE TABLE `rol_permiso` (
   `id_rol` int(11) NOT NULL,
   `id_permiso` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `rol_permiso`
@@ -1203,6 +1228,59 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 158),
 (1, 159),
 (1, 160),
+(1, 161),
+(1, 162),
+(1, 163),
+(1, 164),
+(1, 165),
+(1, 166),
+(1, 167),
+(1, 168),
+(1, 169),
+(1, 170),
+(1, 171),
+(1, 172),
+(1, 173),
+(1, 174),
+(1, 175),
+(1, 176),
+(1, 177),
+(1, 178),
+(1, 179),
+(1, 180),
+(1, 181),
+(1, 182),
+(1, 183),
+(1, 184),
+(1, 185),
+(1, 186),
+(1, 187),
+(1, 188),
+(1, 189),
+(1, 190),
+(1, 191),
+(1, 192),
+(1, 193),
+(1, 194),
+(1, 195),
+(1, 196),
+(1, 197),
+(1, 198),
+(1, 199),
+(1, 200),
+(1, 201),
+(1, 202),
+(1, 203),
+(1, 204),
+(1, 205),
+(1, 206),
+(1, 207),
+(1, 208),
+(1, 209),
+(1, 210),
+(1, 211),
+(1, 212),
+(1, 213),
 (2, 1),
 (2, 32),
 (2, 42),
@@ -1242,6 +1320,27 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (2, 140),
 (2, 150),
 (2, 154),
+(2, 161),
+(2, 163),
+(2, 164),
+(2, 165),
+(2, 166),
+(2, 167),
+(2, 168),
+(2, 170),
+(2, 171),
+(2, 172),
+(2, 174),
+(2, 177),
+(2, 178),
+(2, 179),
+(2, 180),
+(2, 181),
+(2, 182),
+(2, 183),
+(2, 188),
+(2, 192),
+(2, 210),
 (3, 1),
 (3, 32),
 (3, 42),
@@ -1268,7 +1367,10 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (3, 145),
 (3, 146),
 (3, 152),
-(3, 154);
+(3, 154),
+(3, 183),
+(3, 209),
+(3, 210);
 
 -- --------------------------------------------------------
 
@@ -1285,7 +1387,14 @@ CREATE TABLE `sesiones` (
   `fecha_inicio` datetime NOT NULL DEFAULT current_timestamp(),
   `fecha_expiracion` datetime DEFAULT NULL,
   `cerrada` tinyint(1) NOT NULL DEFAULT 0
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `sesiones`
+--
+
+INSERT INTO `sesiones` (`id_sesion`, `id_usuario`, `token`, `ip_origen`, `user_agent`, `fecha_inicio`, `fecha_expiracion`, `cerrada`) VALUES
+(1, 1, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjMDIyM2JiOS00ODkyLTQ2OGUtOGFjYy00MTY2NTY5YTdiNmUiLCJpZF91c3VhcmlvIjoxLCJyb2wiOjEsInJvbF9ub21icmUiOiJBRE1JTklTVFJBRE9SIiwiaWRfc3VjdXJzYWwiOjEsImRlYmVfY2FtYmlhcl9wYXNzIjp0cnVlLCJwZXJtaXNvcyI6WyJkYXNoYm9hcmQudm', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2026-05-31 12:01:36', '2026-05-31 20:01:36', 0);
 
 -- --------------------------------------------------------
 
@@ -1302,103 +1411,7 @@ CREATE TABLE `stock` (
   `cantidad_disponible` decimal(14,2) GENERATED ALWAYS AS (`cantidad` - `cantidad_reservada`) STORED,
   `costo_promedio` decimal(14,4) DEFAULT 0.0000,
   `fecha_ult_movimiento` datetime DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `stock`
---
-
-INSERT INTO `stock` (`id_stock`, `id_producto`, `id_deposito`, `cantidad`, `cantidad_reservada`, `costo_promedio`, `fecha_ult_movimiento`) VALUES
-(1, 1, 1, 0.00, 0.00, 3526.0000, '2026-05-23 07:45:30'),
-(2, 1, 2, 0.00, 0.00, 3526.0000, '2026-05-23 07:45:30'),
-(3, 1, 3, 1.00, 0.00, 3526.0000, '2026-05-23 07:45:30'),
-(4, 1, 4, 3.00, 0.00, 3526.0000, '2026-05-23 07:45:30'),
-(5, 1, 5, 0.00, 0.00, 3526.0000, '2026-05-23 07:45:30'),
-(6, 1, 6, 0.00, 0.00, 3526.0000, '2026-05-23 07:45:30'),
-(7, 2, 1, 1.00, 0.00, 4232.0000, '2026-05-23 07:45:30'),
-(8, 2, 2, 0.00, 0.00, 4232.0000, '2026-05-23 07:45:30'),
-(9, 2, 3, 0.00, 0.00, 4232.0000, '2026-05-23 07:45:30'),
-(10, 2, 4, 10.00, 0.00, 4232.0000, '2026-05-23 07:45:30'),
-(11, 2, 5, 0.00, 0.00, 4232.0000, '2026-05-23 07:45:30'),
-(12, 2, 6, 0.00, 0.00, 4232.0000, '2026-05-23 07:45:30'),
-(13, 3, 1, 0.00, 0.00, 529.0000, '2026-05-23 07:45:30'),
-(14, 3, 2, 0.00, 0.00, 529.0000, '2026-05-23 07:45:30'),
-(15, 3, 3, 1.00, 0.00, 529.0000, '2026-05-23 07:45:30'),
-(16, 3, 4, 2.00, 0.00, 529.0000, '2026-05-23 07:45:30'),
-(17, 3, 5, 0.00, 0.00, 529.0000, '2026-05-23 07:45:30'),
-(18, 3, 6, 0.00, 0.00, 529.0000, '2026-05-23 07:45:30'),
-(19, 4, 1, 0.00, 0.00, 458.0000, '2026-05-23 07:45:30'),
-(20, 4, 2, 0.00, 0.00, 458.0000, '2026-05-23 07:45:30'),
-(21, 4, 3, 1.00, 0.00, 458.0000, '2026-05-23 07:45:30'),
-(22, 4, 4, 2.00, 0.00, 458.0000, '2026-05-23 07:45:30'),
-(23, 4, 5, 0.00, 0.00, 458.0000, '2026-05-23 07:45:30'),
-(24, 4, 6, 0.00, 0.00, 458.0000, '2026-05-23 07:45:30'),
-(25, 5, 1, 1.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(26, 5, 2, 0.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(27, 5, 3, 1.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(28, 5, 4, 7.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(29, 5, 5, 0.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(30, 5, 6, 0.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(31, 6, 1, 1.00, 0.00, 353.0000, '2026-05-23 07:45:30'),
-(32, 6, 2, 0.00, 0.00, 353.0000, '2026-05-23 07:45:30'),
-(33, 6, 3, 0.00, 0.00, 353.0000, '2026-05-23 07:45:30'),
-(34, 6, 4, 2.00, 0.00, 353.0000, '2026-05-23 07:45:30'),
-(35, 6, 5, 0.00, 0.00, 353.0000, '2026-05-23 07:45:30'),
-(36, 6, 6, 0.00, 0.00, 353.0000, '2026-05-23 07:45:30'),
-(37, 7, 1, 1.00, 0.00, 504.0000, '2026-05-23 07:45:30'),
-(38, 7, 2, 0.00, 0.00, 504.0000, '2026-05-23 07:45:30'),
-(39, 7, 3, 0.00, 0.00, 504.0000, '2026-05-23 07:45:30'),
-(40, 7, 4, 25.00, 0.00, 504.0000, '2026-05-23 07:45:30'),
-(41, 7, 5, 0.00, 0.00, 504.0000, '2026-05-23 07:45:30'),
-(42, 7, 6, 0.00, 0.00, 504.0000, '2026-05-23 07:45:30'),
-(43, 8, 1, 0.00, 0.00, 3325.0000, '2026-05-23 07:45:30'),
-(44, 8, 2, 0.00, 0.00, 3325.0000, '2026-05-23 07:45:30'),
-(45, 8, 3, 1.00, 0.00, 3325.0000, '2026-05-23 07:45:30'),
-(46, 8, 4, 1.00, 0.00, 3325.0000, '2026-05-23 07:45:30'),
-(47, 8, 5, 0.00, 0.00, 3325.0000, '2026-05-23 07:45:30'),
-(48, 8, 6, 0.00, 0.00, 3325.0000, '2026-05-23 07:45:30'),
-(49, 9, 1, 1.00, 0.00, 554.0000, '2026-05-23 07:45:30'),
-(50, 9, 2, 0.00, 0.00, 554.0000, '2026-05-23 07:45:30'),
-(51, 9, 3, 0.00, 0.00, 554.0000, '2026-05-23 07:45:30'),
-(52, 9, 4, 0.00, 0.00, 554.0000, '2026-05-23 07:45:30'),
-(53, 9, 5, 0.00, 0.00, 554.0000, '2026-05-23 07:45:30'),
-(54, 9, 6, 0.00, 0.00, 554.0000, '2026-05-23 07:45:30'),
-(55, 10, 1, 1.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(56, 10, 2, 0.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(57, 10, 3, 1.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(58, 10, 4, 3.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(59, 10, 5, 0.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(60, 10, 6, 0.00, 0.00, 247.0000, '2026-05-23 07:45:30'),
-(61, 11, 1, 1.00, 0.00, 4565.0000, '2026-05-23 07:45:30'),
-(62, 11, 2, 0.00, 0.00, 4565.0000, '2026-05-23 07:45:30'),
-(63, 11, 3, 0.00, 0.00, 4565.0000, '2026-05-23 07:45:30'),
-(64, 11, 4, 1.00, 0.00, 4565.0000, '2026-05-23 07:45:30'),
-(65, 11, 5, 0.00, 0.00, 4565.0000, '2026-05-23 07:45:30'),
-(66, 11, 6, 0.00, 0.00, 4565.0000, '2026-05-23 07:45:30'),
-(67, 12, 1, 1.00, 0.00, 4993.0000, '2026-05-23 07:45:30'),
-(68, 12, 2, 0.00, 0.00, 4993.0000, '2026-05-23 07:45:30'),
-(69, 12, 3, 0.00, 0.00, 4993.0000, '2026-05-23 07:45:30'),
-(70, 12, 4, 2.00, 0.00, 4993.0000, '2026-05-23 07:45:30'),
-(71, 12, 5, 0.00, 0.00, 4993.0000, '2026-05-23 07:45:30'),
-(72, 12, 6, 0.00, 0.00, 4993.0000, '2026-05-23 07:45:30'),
-(73, 13, 1, 1.00, 0.00, 5706.0000, '2026-05-23 07:45:30'),
-(74, 13, 2, 0.00, 0.00, 5706.0000, '2026-05-23 07:45:30'),
-(75, 13, 3, 1.00, 0.00, 5706.0000, '2026-05-23 07:45:30'),
-(76, 13, 4, 6.00, 0.00, 5706.0000, '2026-05-23 07:45:30'),
-(77, 13, 5, 0.00, 0.00, 5706.0000, '2026-05-23 07:45:30'),
-(78, 13, 6, 0.00, 0.00, 5706.0000, '2026-05-23 07:45:30'),
-(79, 14, 1, 1.00, 0.00, 6491.0000, '2026-05-23 07:45:30'),
-(80, 14, 2, 0.00, 0.00, 6491.0000, '2026-05-23 07:45:30'),
-(81, 14, 3, 0.00, 0.00, 6491.0000, '2026-05-23 07:45:30'),
-(82, 14, 4, 3.00, 0.00, 6491.0000, '2026-05-23 07:45:30'),
-(83, 14, 5, 0.00, 0.00, 6491.0000, '2026-05-23 07:45:30'),
-(84, 14, 6, 0.00, 0.00, 6491.0000, '2026-05-23 07:45:30'),
-(85, 15, 1, 0.00, 0.00, 5563.0000, '2026-05-23 07:45:30'),
-(86, 15, 2, 0.00, 0.00, 5563.0000, '2026-05-23 07:45:30'),
-(87, 15, 3, 0.00, 0.00, 5563.0000, '2026-05-23 07:45:30'),
-(88, 15, 4, 0.00, 0.00, 5563.0000, '2026-05-23 07:45:30'),
-(89, 15, 5, 0.00, 0.00, 5563.0000, '2026-05-23 07:45:30'),
-(90, 15, 6, 0.00, 0.00, 5563.0000, '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1419,15 +1432,7 @@ CREATE TABLE `sucursales` (
   `es_punto_venta` tinyint(1) NOT NULL DEFAULT 1,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `sucursales`
---
-
-INSERT INTO `sucursales` (`id_sucursal`, `id_empresa`, `codigo`, `nombre`, `tipo`, `direccion`, `ciudad`, `telefono`, `responsable`, `es_punto_venta`, `activo`, `fecha_creacion`) VALUES
-(1, 1, 'SUC-PRI', 'Sucursal Principal Gallo', 'PRINCIPAL', 'Av. Gallo #18-20', 'Santa Cruz', '3-3334444', 'Por definir', 1, 1, '2026-05-23 07:45:30'),
-(2, 1, 'SUC-CEN', 'Sucursal Centro', 'SUCURSAL', 'Zona Centro - Multipunto', 'Santa Cruz', '3-3335555', 'Por definir', 1, 1, '2026-05-23 07:45:30');
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1442,14 +1447,7 @@ CREATE TABLE `tipos_cambio` (
   `fecha` date NOT NULL,
   `tasa_compra` decimal(18,6) NOT NULL,
   `tasa_venta` decimal(18,6) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `tipos_cambio`
---
-
-INSERT INTO `tipos_cambio` (`id_tipo_cambio`, `id_moneda_origen`, `id_moneda_destino`, `fecha`, `tasa_compra`, `tasa_venta`) VALUES
-(1, 2, 1, '2026-05-23', 6.860000, 6.960000);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1463,7 +1461,7 @@ CREATE TABLE `tipos_movimiento` (
   `nombre` varchar(80) NOT NULL,
   `efecto` enum('ENTRADA','SALIDA','TRANSFERENCIA','AJUSTE') NOT NULL,
   `afecta_costo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `tipos_movimiento`
@@ -1500,7 +1498,7 @@ CREATE TABLE `transferencias` (
   `id_usuario_envia` int(11) DEFAULT NULL,
   `id_usuario_recibe` int(11) DEFAULT NULL,
   `observaciones` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1515,7 +1513,7 @@ CREATE TABLE `transferencia_detalle` (
   `cantidad_enviada` decimal(14,2) NOT NULL,
   `cantidad_recibida` decimal(14,2) DEFAULT 0.00,
   `observacion` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1528,18 +1526,7 @@ CREATE TABLE `unidades_medida` (
   `codigo` varchar(10) NOT NULL,
   `nombre` varchar(40) NOT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `unidades_medida`
---
-
-INSERT INTO `unidades_medida` (`id_unidad`, `codigo`, `nombre`, `activo`) VALUES
-(1, 'UND', 'Unidad', 1),
-(2, 'CAJA', 'Caja', 1),
-(3, 'PAR', 'Par', 1),
-(4, 'SET', 'Conjunto', 1),
-(5, 'KIT', 'Kit', 1);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1563,16 +1550,16 @@ CREATE TABLE `usuarios` (
   `ultimo_login` datetime DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Volcado de datos para la tabla `usuarios`
 --
 
 INSERT INTO `usuarios` (`id_usuario`, `username`, `password_hash`, `nombres`, `apellidos`, `documento`, `email`, `telefono`, `id_rol`, `id_sucursal_default`, `foto_url`, `debe_cambiar_pass`, `ultimo_login`, `activo`, `fecha_creacion`) VALUES
-(1, 'admin', '$2b$10$923gBCZNMkBDUevlK3nGpevBk.x/aR5GwjdqdvfvHJ3RQJIfJccry', 'Administrador', 'del Sistema', '00000000', 'admin@electrohogar.bo', '70000000', 1, 1, NULL, 1, NULL, 1, '2026-05-23 07:45:30'),
-(2, 'vendedor1', '$2b$10$v9eKl1yIevok5lO/C8rsg.tGN/FS.QLUu6vCikf23PxBGqQPMEVjm', 'Vendedor', 'Uno', '11111111', 'vendedor1@electrohogar.bo', '71111111', 2, 1, NULL, 1, NULL, 1, '2026-05-23 07:45:30'),
-(3, 'almacen1', '$2b$10$mWN4w1jnMGRo6qLd33L7N.Dpb5mNvxDul29YHzqYJ8IKYttatelQW', 'Almacenero', 'Uno', '22222222', 'almacen1@electrohogar.bo', '72222222', 3, 1, NULL, 1, NULL, 1, '2026-05-23 07:45:30');
+(1, 'admin', '$2b$10$4Y5AuM3I2pmNRRZgzN7R8eq4ODfoYvmKjUK3awQOgGrfC4zkUYWGu', 'Administrador', 'del Sistema', '00000000', 'admin@electrohogar.bo', '70000000', 1, 1, NULL, 0, '2026-05-31 12:01:36', 1, '2026-05-25 07:48:46'),
+(2, 'vendedor1', '$2b$10$v9eKl1yIevok5lO/C8rsg.tGN/FS.QLUu6vCikf23PxBGqQPMEVjm', 'Vendedor', 'Uno', '11111111', 'vendedor1@electrohogar.bo', '71111111', 2, 1, NULL, 1, NULL, 1, '2026-05-25 07:48:46'),
+(3, 'almacen1', '$2b$10$mWN4w1jnMGRo6qLd33L7N.Dpb5mNvxDul29YHzqYJ8IKYttatelQW', 'Almacenero', 'Uno', '22222222', 'almacen1@electrohogar.bo', '72222222', 3, 1, NULL, 1, NULL, 1, '2026-05-25 07:48:46');
 
 -- --------------------------------------------------------
 
@@ -1583,19 +1570,7 @@ INSERT INTO `usuarios` (`id_usuario`, `username`, `password_hash`, `nombres`, `a
 CREATE TABLE `usuario_sucursal` (
   `id_usuario` int(11) NOT NULL,
   `id_sucursal` int(11) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `usuario_sucursal`
---
-
-INSERT INTO `usuario_sucursal` (`id_usuario`, `id_sucursal`) VALUES
-(1, 1),
-(1, 2),
-(2, 1),
-(2, 2),
-(3, 1),
-(3, 2);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1630,7 +1605,7 @@ CREATE TABLE `ventas` (
   `fecha_entrega` datetime DEFAULT NULL,
   `observaciones` text DEFAULT NULL,
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1646,7 +1621,7 @@ CREATE TABLE `venta_cuotas` (
   `monto` decimal(14,2) NOT NULL,
   `monto_pagado` decimal(14,2) NOT NULL DEFAULT 0.00,
   `estado` enum('PENDIENTE','PARCIAL','PAGADA','VENCIDA') NOT NULL DEFAULT 'PENDIENTE'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1662,12 +1637,15 @@ CREATE TABLE `venta_detalle` (
   `precio_unitario` decimal(14,2) NOT NULL,
   `descuento_porc` decimal(5,2) DEFAULT 0.00,
   `descuento_monto` decimal(14,2) DEFAULT 0.00,
+  `id_impuesto` int(11) DEFAULT NULL,
   `impuesto_porc` decimal(5,2) DEFAULT 0.00,
   `subtotal` decimal(14,2) NOT NULL,
   `costo_unitario` decimal(14,4) DEFAULT 0.0000 COMMENT 'Costo al momento de venta para rentabilidad',
   `bono_vendedor` decimal(14,2) DEFAULT 0.00,
+  `id_promocion` int(11) DEFAULT NULL COMMENT 'Promoción aplicada al ítem',
+  `id_combo` int(11) DEFAULT NULL COMMENT 'Combo asociado',
   `observacion` varchar(255) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Índices para tablas volcadas
@@ -1718,6 +1696,13 @@ ALTER TABLE `auditoria`
   ADD KEY `fk_audit_usuario` (`id_usuario`);
 
 --
+-- Indices de la tabla `bancos`
+--
+ALTER TABLE `bancos`
+  ADD PRIMARY KEY (`id_banco`),
+  ADD UNIQUE KEY `codigo` (`codigo`);
+
+--
 -- Indices de la tabla `cajas`
 --
 ALTER TABLE `cajas`
@@ -1754,6 +1739,21 @@ ALTER TABLE `cliente_direcciones`
   ADD KEY `fk_cd_cliente` (`id_cliente`);
 
 --
+-- Indices de la tabla `combos`
+--
+ALTER TABLE `combos`
+  ADD PRIMARY KEY (`id_combo`),
+  ADD UNIQUE KEY `codigo` (`codigo`);
+
+--
+-- Indices de la tabla `combo_detalle`
+--
+ALTER TABLE `combo_detalle`
+  ADD PRIMARY KEY (`id_combo_detalle`),
+  ADD UNIQUE KEY `uq_combo_prod` (`id_combo`,`id_producto`),
+  ADD KEY `fk_cmbd_producto` (`id_producto`);
+
+--
 -- Indices de la tabla `compras`
 --
 ALTER TABLE `compras`
@@ -1782,7 +1782,8 @@ ALTER TABLE `compra_cuotas`
 ALTER TABLE `compra_detalle`
   ADD PRIMARY KEY (`id_detalle`),
   ADD KEY `fk_cd_compra` (`id_compra`),
-  ADD KEY `fk_cd_producto` (`id_producto`);
+  ADD KEY `fk_cd_producto` (`id_producto`),
+  ADD KEY `fk_cd_impuesto` (`id_impuesto`);
 
 --
 -- Indices de la tabla `configuracion_sistema`
@@ -1790,6 +1791,29 @@ ALTER TABLE `compra_detalle`
 ALTER TABLE `configuracion_sistema`
   ADD PRIMARY KEY (`id_config`),
   ADD UNIQUE KEY `clave` (`clave`);
+
+--
+-- Indices de la tabla `cotizaciones`
+--
+ALTER TABLE `cotizaciones`
+  ADD PRIMARY KEY (`id_cotizacion`),
+  ADD UNIQUE KEY `numero` (`numero`),
+  ADD KEY `idx_cot_fecha` (`fecha`),
+  ADD KEY `idx_cot_cliente` (`id_cliente`),
+  ADD KEY `idx_cot_estado` (`estado`),
+  ADD KEY `fk_cot_sucursal` (`id_sucursal`),
+  ADD KEY `fk_cot_vendedor` (`id_vendedor`),
+  ADD KEY `fk_cot_moneda` (`id_moneda`),
+  ADD KEY `fk_cot_venta` (`id_venta_generada`);
+
+--
+-- Indices de la tabla `cotizacion_detalle`
+--
+ALTER TABLE `cotizacion_detalle`
+  ADD PRIMARY KEY (`id_detalle`),
+  ADD KEY `fk_cotd_cotizacion` (`id_cotizacion`),
+  ADD KEY `fk_cotd_producto` (`id_producto`),
+  ADD KEY `fk_cotd_impuesto` (`id_impuesto`);
 
 --
 -- Indices de la tabla `depositos`
@@ -1836,6 +1860,13 @@ ALTER TABLE `gastos`
   ADD KEY `fk_gasto_moneda` (`id_moneda`),
   ADD KEY `fk_gasto_usuario` (`id_usuario`),
   ADD KEY `idx_gastos_categoria` (`id_categoria_gasto`);
+
+--
+-- Indices de la tabla `impuestos`
+--
+ALTER TABLE `impuestos`
+  ADD PRIMARY KEY (`id_impuesto`),
+  ADD UNIQUE KEY `codigo` (`codigo`);
 
 --
 -- Indices de la tabla `kardex`
@@ -1914,9 +1945,11 @@ ALTER TABLE `productos`
   ADD UNIQUE KEY `codigo_barras` (`codigo_barras`),
   ADD KEY `idx_prod_modelo` (`modelo`),
   ADD KEY `idx_prod_marca` (`id_marca`),
+  ADD KEY `idx_prod_estado` (`estado`),
   ADD KEY `fk_prod_categoria` (`id_categoria`),
   ADD KEY `fk_prod_unidad` (`id_unidad`),
   ADD KEY `fk_prod_moneda` (`id_moneda_costo`),
+  ADD KEY `fk_prod_impuesto` (`id_impuesto_default`),
   ADD KEY `fk_prod_proveedor` (`id_proveedor_default`);
 
 --
@@ -1926,6 +1959,24 @@ ALTER TABLE `producto_precio_historico`
   ADD PRIMARY KEY (`id_historico`),
   ADD KEY `fk_pph_producto` (`id_producto`),
   ADD KEY `fk_pph_usuario` (`id_usuario`);
+
+--
+-- Indices de la tabla `promociones`
+--
+ALTER TABLE `promociones`
+  ADD PRIMARY KEY (`id_promocion`),
+  ADD UNIQUE KEY `codigo` (`codigo`),
+  ADD KEY `idx_prom_vigencia` (`fecha_inicio`,`fecha_fin`,`activo`);
+
+--
+-- Indices de la tabla `promocion_producto`
+--
+ALTER TABLE `promocion_producto`
+  ADD PRIMARY KEY (`id_promo_prod`),
+  ADD KEY `idx_pp_promocion` (`id_promocion`),
+  ADD KEY `idx_pp_producto` (`id_producto`),
+  ADD KEY `idx_pp_categoria` (`id_categoria`),
+  ADD KEY `idx_pp_marca` (`id_marca`);
 
 --
 -- Indices de la tabla `proveedores`
@@ -1947,6 +1998,7 @@ ALTER TABLE `proveedor_contactos`
 ALTER TABLE `proveedor_cuentas_pago`
   ADD PRIMARY KEY (`id_cuenta`),
   ADD KEY `fk_pcp_proveedor` (`id_proveedor`),
+  ADD KEY `fk_pcp_banco` (`id_banco`),
   ADD KEY `fk_pcp_moneda` (`id_moneda`);
 
 --
@@ -2074,7 +2126,10 @@ ALTER TABLE `venta_cuotas`
 ALTER TABLE `venta_detalle`
   ADD PRIMARY KEY (`id_detalle`),
   ADD KEY `fk_vd_venta` (`id_venta`),
-  ADD KEY `fk_vd_producto` (`id_producto`);
+  ADD KEY `fk_vd_producto` (`id_producto`),
+  ADD KEY `fk_vd_impuesto` (`id_impuesto`),
+  ADD KEY `fk_vd_promocion` (`id_promocion`),
+  ADD KEY `fk_vd_combo` (`id_combo`);
 
 --
 -- AUTO_INCREMENT de las tablas volcadas
@@ -2108,37 +2163,55 @@ ALTER TABLE `arqueos_caja`
 -- AUTO_INCREMENT de la tabla `auditoria`
 --
 ALTER TABLE `auditoria`
-  MODIFY `id_auditoria` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_auditoria` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT de la tabla `bancos`
+--
+ALTER TABLE `bancos`
+  MODIFY `id_banco` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `cajas`
 --
 ALTER TABLE `cajas`
-  MODIFY `id_caja` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_caja` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `categorias`
 --
 ALTER TABLE `categorias`
-  MODIFY `id_categoria` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id_categoria` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `categorias_gasto`
 --
 ALTER TABLE `categorias_gasto`
-  MODIFY `id_categoria_gasto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id_categoria_gasto` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `clientes`
 --
 ALTER TABLE `clientes`
-  MODIFY `id_cliente` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_cliente` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `cliente_direcciones`
 --
 ALTER TABLE `cliente_direcciones`
   MODIFY `id_direccion` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `combos`
+--
+ALTER TABLE `combos`
+  MODIFY `id_combo` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `combo_detalle`
+--
+ALTER TABLE `combo_detalle`
+  MODIFY `id_combo_detalle` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `compras`
@@ -2162,13 +2235,25 @@ ALTER TABLE `compra_detalle`
 -- AUTO_INCREMENT de la tabla `configuracion_sistema`
 --
 ALTER TABLE `configuracion_sistema`
-  MODIFY `id_config` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id_config` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `cotizaciones`
+--
+ALTER TABLE `cotizaciones`
+  MODIFY `id_cotizacion` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `cotizacion_detalle`
+--
+ALTER TABLE `cotizacion_detalle`
+  MODIFY `id_detalle` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `depositos`
 --
 ALTER TABLE `depositos`
-  MODIFY `id_deposito` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_deposito` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `devoluciones_venta`
@@ -2186,7 +2271,7 @@ ALTER TABLE `devolucion_venta_detalle`
 -- AUTO_INCREMENT de la tabla `empresas`
 --
 ALTER TABLE `empresas`
-  MODIFY `id_empresa` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_empresa` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `gastos`
@@ -2195,28 +2280,34 @@ ALTER TABLE `gastos`
   MODIFY `id_gasto` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `impuestos`
+--
+ALTER TABLE `impuestos`
+  MODIFY `id_impuesto` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `kardex`
 --
 ALTER TABLE `kardex`
-  MODIFY `id_kardex` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+  MODIFY `id_kardex` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `marcas`
 --
 ALTER TABLE `marcas`
-  MODIFY `id_marca` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id_marca` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `modulos`
 --
 ALTER TABLE `modulos`
-  MODIFY `id_modulo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id_modulo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT de la tabla `monedas`
 --
 ALTER TABLE `monedas`
-  MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `pagos_compra`
@@ -2234,13 +2325,13 @@ ALTER TABLE `pagos_venta`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=161;
+  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=214;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
 --
 ALTER TABLE `productos`
-  MODIFY `id_producto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id_producto` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `producto_precio_historico`
@@ -2249,10 +2340,22 @@ ALTER TABLE `producto_precio_historico`
   MODIFY `id_historico` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `promociones`
+--
+ALTER TABLE `promociones`
+  MODIFY `id_promocion` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `promocion_producto`
+--
+ALTER TABLE `promocion_producto`
+  MODIFY `id_promo_prod` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `proveedores`
 --
 ALTER TABLE `proveedores`
-  MODIFY `id_proveedor` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_proveedor` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `proveedor_contactos`
@@ -2264,7 +2367,7 @@ ALTER TABLE `proveedor_contactos`
 -- AUTO_INCREMENT de la tabla `proveedor_cuentas_pago`
 --
 ALTER TABLE `proveedor_cuentas_pago`
-  MODIFY `id_cuenta` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id_cuenta` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `roles`
@@ -2276,31 +2379,31 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT de la tabla `sesiones`
 --
 ALTER TABLE `sesiones`
-  MODIFY `id_sesion` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_sesion` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `stock`
 --
 ALTER TABLE `stock`
-  MODIFY `id_stock` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=91;
+  MODIFY `id_stock` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `sucursales`
 --
 ALTER TABLE `sucursales`
-  MODIFY `id_sucursal` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_sucursal` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_cambio`
 --
 ALTER TABLE `tipos_cambio`
-  MODIFY `id_tipo_cambio` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_tipo_cambio` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_movimiento`
 --
 ALTER TABLE `tipos_movimiento`
-  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `transferencias`
@@ -2318,7 +2421,7 @@ ALTER TABLE `transferencia_detalle`
 -- AUTO_INCREMENT de la tabla `unidades_medida`
 --
 ALTER TABLE `unidades_medida`
-  MODIFY `id_unidad` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id_unidad` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `usuarios`
@@ -2402,6 +2505,13 @@ ALTER TABLE `cliente_direcciones`
   ADD CONSTRAINT `fk_cd_cliente` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`) ON DELETE CASCADE;
 
 --
+-- Filtros para la tabla `combo_detalle`
+--
+ALTER TABLE `combo_detalle`
+  ADD CONSTRAINT `fk_cmbd_combo` FOREIGN KEY (`id_combo`) REFERENCES `combos` (`id_combo`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_cmbd_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`);
+
+--
 -- Filtros para la tabla `compras`
 --
 ALTER TABLE `compras`
@@ -2424,7 +2534,26 @@ ALTER TABLE `compra_cuotas`
 --
 ALTER TABLE `compra_detalle`
   ADD CONSTRAINT `fk_cd_compra` FOREIGN KEY (`id_compra`) REFERENCES `compras` (`id_compra`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_cd_impuesto` FOREIGN KEY (`id_impuesto`) REFERENCES `impuestos` (`id_impuesto`),
   ADD CONSTRAINT `fk_cd_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`);
+
+--
+-- Filtros para la tabla `cotizaciones`
+--
+ALTER TABLE `cotizaciones`
+  ADD CONSTRAINT `fk_cot_cliente` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`),
+  ADD CONSTRAINT `fk_cot_moneda` FOREIGN KEY (`id_moneda`) REFERENCES `monedas` (`id_moneda`),
+  ADD CONSTRAINT `fk_cot_sucursal` FOREIGN KEY (`id_sucursal`) REFERENCES `sucursales` (`id_sucursal`),
+  ADD CONSTRAINT `fk_cot_vendedor` FOREIGN KEY (`id_vendedor`) REFERENCES `usuarios` (`id_usuario`),
+  ADD CONSTRAINT `fk_cot_venta` FOREIGN KEY (`id_venta_generada`) REFERENCES `ventas` (`id_venta`);
+
+--
+-- Filtros para la tabla `cotizacion_detalle`
+--
+ALTER TABLE `cotizacion_detalle`
+  ADD CONSTRAINT `fk_cotd_cotizacion` FOREIGN KEY (`id_cotizacion`) REFERENCES `cotizaciones` (`id_cotizacion`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_cotd_impuesto` FOREIGN KEY (`id_impuesto`) REFERENCES `impuestos` (`id_impuesto`),
+  ADD CONSTRAINT `fk_cotd_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`);
 
 --
 -- Filtros para la tabla `depositos`
@@ -2500,6 +2629,7 @@ ALTER TABLE `permisos`
 --
 ALTER TABLE `productos`
   ADD CONSTRAINT `fk_prod_categoria` FOREIGN KEY (`id_categoria`) REFERENCES `categorias` (`id_categoria`),
+  ADD CONSTRAINT `fk_prod_impuesto` FOREIGN KEY (`id_impuesto_default`) REFERENCES `impuestos` (`id_impuesto`),
   ADD CONSTRAINT `fk_prod_marca` FOREIGN KEY (`id_marca`) REFERENCES `marcas` (`id_marca`),
   ADD CONSTRAINT `fk_prod_moneda` FOREIGN KEY (`id_moneda_costo`) REFERENCES `monedas` (`id_moneda`),
   ADD CONSTRAINT `fk_prod_proveedor` FOREIGN KEY (`id_proveedor_default`) REFERENCES `proveedores` (`id_proveedor`),
@@ -2513,6 +2643,15 @@ ALTER TABLE `producto_precio_historico`
   ADD CONSTRAINT `fk_pph_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`);
 
 --
+-- Filtros para la tabla `promocion_producto`
+--
+ALTER TABLE `promocion_producto`
+  ADD CONSTRAINT `fk_pp_categoria` FOREIGN KEY (`id_categoria`) REFERENCES `categorias` (`id_categoria`),
+  ADD CONSTRAINT `fk_pp_marca` FOREIGN KEY (`id_marca`) REFERENCES `marcas` (`id_marca`),
+  ADD CONSTRAINT `fk_pp_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`),
+  ADD CONSTRAINT `fk_pp_promocion` FOREIGN KEY (`id_promocion`) REFERENCES `promociones` (`id_promocion`) ON DELETE CASCADE;
+
+--
 -- Filtros para la tabla `proveedor_contactos`
 --
 ALTER TABLE `proveedor_contactos`
@@ -2522,6 +2661,7 @@ ALTER TABLE `proveedor_contactos`
 -- Filtros para la tabla `proveedor_cuentas_pago`
 --
 ALTER TABLE `proveedor_cuentas_pago`
+  ADD CONSTRAINT `fk_pcp_banco` FOREIGN KEY (`id_banco`) REFERENCES `bancos` (`id_banco`),
   ADD CONSTRAINT `fk_pcp_moneda` FOREIGN KEY (`id_moneda`) REFERENCES `monedas` (`id_moneda`),
   ADD CONSTRAINT `fk_pcp_proveedor` FOREIGN KEY (`id_proveedor`) REFERENCES `proveedores` (`id_proveedor`) ON DELETE CASCADE;
 
@@ -2609,7 +2749,10 @@ ALTER TABLE `venta_cuotas`
 -- Filtros para la tabla `venta_detalle`
 --
 ALTER TABLE `venta_detalle`
+  ADD CONSTRAINT `fk_vd_combo` FOREIGN KEY (`id_combo`) REFERENCES `combos` (`id_combo`),
+  ADD CONSTRAINT `fk_vd_impuesto` FOREIGN KEY (`id_impuesto`) REFERENCES `impuestos` (`id_impuesto`),
   ADD CONSTRAINT `fk_vd_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`),
+  ADD CONSTRAINT `fk_vd_promocion` FOREIGN KEY (`id_promocion`) REFERENCES `promociones` (`id_promocion`),
   ADD CONSTRAINT `fk_vd_venta` FOREIGN KEY (`id_venta`) REFERENCES `ventas` (`id_venta`) ON DELETE CASCADE;
 COMMIT;
 

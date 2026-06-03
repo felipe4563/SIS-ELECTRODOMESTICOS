@@ -24,9 +24,10 @@ router.get( '/codigo-barras/imprimir',              authMiddleware, checkPermiss
 router.get( '/codigo-barras/imprimir/:id_producto', authMiddleware, checkPermission('generar', 'codigo_barras'), ctrl.imprimirCodigoBarras);
 
 // ── Catálogo PDF ──────────────────────────────────────────────────────────────
-router.get( '/catalogo/marcas',     authMiddleware, checkPermission('ver',          'herramientas'), ctrl.getCatalogoMarcas);
-router.get( '/catalogo/categorias', authMiddleware, checkPermission('ver',          'herramientas'), ctrl.getCatalogoCategorias);
-router.get( '/catalogo/pdf',        authMiddleware, checkPermission('generar_pdf',  'catalogo'),     ctrl.generarCatalogoPDF);
+router.get( '/catalogo/marcas',      authMiddleware, checkPermission('ver',         'herramientas'), ctrl.getCatalogoMarcas);
+router.get( '/catalogo/categorias',  authMiddleware, checkPermission('ver',         'herramientas'), ctrl.getCatalogoCategorias);
+router.get( '/catalogo/sucursales',  authMiddleware, checkPermission('ver',         'herramientas'), ctrl.getCatalogoSucursales);
+router.get( '/catalogo/pdf',         authMiddleware, checkPermission('generar_pdf', 'catalogo'),     ctrl.generarCatalogoPDF);
 
 // ── Impresora ─────────────────────────────────────────────────────────────────
 router.get( '/impresora', authMiddleware, checkPermission('ver',        'herramientas'),  ctrl.getImpresora);

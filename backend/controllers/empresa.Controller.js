@@ -21,11 +21,47 @@ const getEmpresa = async (req, res) => {
     const [rows] = await db.promise().query(
       `SELECT * FROM empresas WHERE activo = 1 LIMIT 1`
     );
-    if (rows.length === 0)
-      return res.status(404).json({ error: 'No se encontró información de la empresa' });
-    return res.json({ empresa: rows[0] });
+    return res.json({ empresa: rows[0] ?? null });
   } catch (err) {
     console.error('[getEmpresa]', err);
+    return res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
+// POST /api/empresa
+const createEmpresa = async (req, res) => {
+  const { razon_social, nombre_comercial, nit, direccion, telefono, email } = req.body;
+
+  if (!razon_social?.trim())
+    return res.status(400).json({ error: 'La razón social es requerida' });
+
+  try {
+    const [existing] = await db.promise().query(
+      `SELECT id_empresa FROM empresas WHERE activo = 1 LIMIT 1`
+    );
+    if (existing.length > 0)
+      return res.status(409).json({ error: 'Ya existe una empresa registrada' });
+
+    const [result] = await db.promise().query(
+      `INSERT INTO empresas (razon_social, nombre_comercial, nit, direccion, telefono, email, activo)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [razon_social.trim(), nombre_comercial ?? null, nit ?? null,
+       direccion ?? null, telefono ?? null, email ?? null]
+    );
+
+    const ip = req.ip || req.socket?.remoteAddress || null;
+    await db.promise().query(
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen)
+       VALUES (?, 'empresas', ?, 'INSERT', ?)`,
+      [req.user.id_usuario, result.insertId, ip]
+    );
+
+    const [created] = await db.promise().query(
+      `SELECT * FROM empresas WHERE id_empresa = ?`, [result.insertId]
+    );
+    return res.status(201).json({ empresa: created[0] });
+  } catch (err) {
+    console.error('[createEmpresa]', err);
     return res.status(500).json({ error: 'Error en el servidor' });
   }
 };
@@ -112,4 +148,4 @@ const uploadLogo = async (req, res) => {
   }
 };
 
-module.exports = { getEmpresaPublico, getEmpresa, updateEmpresa, uploadLogo };
+module.exports = { getEmpresaPublico, getEmpresa, createEmpresa, updateEmpresa, uploadLogo };

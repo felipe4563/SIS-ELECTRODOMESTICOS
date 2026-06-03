@@ -421,14 +421,30 @@ exports.getCatalogoCategorias = async (req, res) => {
   }
 };
 
+exports.getCatalogoSucursales = async (req, res) => {
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT id_sucursal, nombre, tipo FROM sucursales WHERE activo = 1 ORDER BY tipo DESC, nombre ASC`
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ mensaje: e.message });
+  }
+};
+
 exports.generarCatalogoPDF = async (req, res) => {
   try {
-    const { id_marca, id_categoria } = req.query;
+    const { id_marca, id_categoria, id_sucursal } = req.query;
 
     let where = 'p.activo = 1';
     const params = [];
     if (id_marca)     { where += ' AND p.id_marca = ?';     params.push(id_marca); }
     if (id_categoria) { where += ' AND p.id_categoria = ?'; params.push(id_categoria); }
+
+    const stockJoin = id_sucursal
+      ? `LEFT JOIN stock s ON s.id_producto = p.id_producto
+           AND s.id_deposito IN (SELECT id_deposito FROM depositos WHERE id_sucursal = ${db.escape(id_sucursal)})`
+      : `LEFT JOIN stock s ON s.id_producto = p.id_producto`;
 
     const [prods] = await db.promise().query(`
       SELECT p.codigo_interno, p.codigo_barras, p.producto, p.detalle, p.modelo,
@@ -436,80 +452,197 @@ exports.generarCatalogoPDF = async (req, res) => {
              m.nombre AS marca, c.nombre AS categoria,
              COALESCE(SUM(s.cantidad), 0) AS stock_total
       FROM productos p
-      LEFT JOIN marcas m     ON m.id_marca    = p.id_marca
+      LEFT JOIN marcas m     ON m.id_marca     = p.id_marca
       LEFT JOIN categorias c ON c.id_categoria = p.id_categoria
-      LEFT JOIN stock s      ON s.id_producto = p.id_producto
+      ${stockJoin}
       WHERE ${where}
       GROUP BY p.id_producto
-      ORDER BY m.nombre, p.producto
+      HAVING stock_total > 0
+      ORDER BY c.nombre, m.nombre, p.producto
     `, params);
 
     const [[emp]] = await db.promise().query(`SELECT * FROM empresas LIMIT 1`);
 
-    const doc = new PDFDoc({ size: 'A4', margin: 40 });
+    let sucursalNombre = null;
+    if (id_sucursal) {
+      const [[suc]] = await db.promise().query(
+        `SELECT nombre FROM sucursales WHERE id_sucursal = ?`, [id_sucursal]
+      );
+      sucursalNombre = suc?.nombre ?? null;
+    }
+
+    const doc = new PDFDoc({
+      size: 'A4',
+      margin: 0,
+      info: { Title: 'Catálogo de Productos', Author: emp?.razon_social || 'Megaelectra' },
+    });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="catalogo.pdf"');
     doc.pipe(res);
 
-    const W = doc.page.width - 80;
+    const PW = doc.page.width;   // 595.28
+    const PH = doc.page.height;  // 841.89
+    const MX = 36;
+    const CW = PW - MX * 2;     // 523.28
 
-    // Encabezado
-    doc.rect(40, 40, W, 50).fill('#18181b');
-    doc.fillColor('#facc15').fontSize(16).font('Helvetica-Bold')
-       .text(emp?.nombre_comercial || emp?.razon_social || 'Megaelectra', 55, 52, { width: W - 30 });
-    doc.fillColor('#a1a1aa').fontSize(9).font('Helvetica')
-       .text(`Catálogo de Productos — ${new Date().toLocaleDateString('es-BO')}`, 55, 72, { width: W - 30 });
+    const logoUrl   = emp?.logo_url;
+    const logoPath  = logoUrl?.startsWith('/uploads/') ? path.join(__dirname, '..', logoUrl) : null;
+    const tieneLogo = logoPath && fs.existsSync(logoPath);
 
-    doc.moveDown(3);
+    const HEADER_H = 90;
+    const THEAD_H  = 18;
+    const ROW_H    = 15;
+    const CAT_H    = 20;
+    const FOOTER_Y = PH - 26;
 
-    // Tabla header
-    const colW = [60, 180, 70, 70, 70];
-    const colX = [40];
-    colW.forEach((w, i) => colX.push(colX[i] + w));
-    const headers = ['Código', 'Producto', 'P. Público', 'P. Mayor', 'Stock'];
+    // Columns — widths sum to CW (523): 62+193+80+78+48+62 = 523
+    const cols = [
+      { label: 'Código',             w: 62,  align: 'left',  bold: false },
+      { label: 'Producto / Descripción', w: 193, align: 'left',  bold: false },
+      { label: 'P. Público',         w: 80,  align: 'right', bold: true  },
+      { label: 'P. Mayor',           w: 78,  align: 'right', bold: true  },
+      { label: 'Bono',               w: 48,  align: 'right', bold: false },
+      { label: 'Stock',              w: 62,  align: 'right', bold: true  },
+    ];
 
-    let y = 110;
-    doc.rect(40, y, W, 18).fill('#27272a');
-    headers.forEach((h, i) => {
-      doc.fillColor('#facc15').fontSize(8).font('Helvetica-Bold')
-         .text(h, colX[i] + 3, y + 5, { width: colW[i] - 6 });
-    });
-    y += 18;
+    const colX = [];
+    let cx = MX;
+    cols.forEach(c => { colX.push(cx); cx += c.w; });
 
-    let row = 0;
-    for (const p of prods) {
-      if (y > 750) {
-        doc.addPage();
-        y = 40;
+    const fmtBs  = n => `Bs ${Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fechaLarga = new Date().toLocaleDateString('es-BO', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    let y = 0, pageNum = 0, isFirst = true;
+
+    const drawPageHeader = () => {
+      pageNum++;
+      // Dark header band
+      doc.rect(0, 0, PW, HEADER_H).fill('#0f172a');
+      // Gold accent bottom stripe
+      doc.rect(0, HEADER_H - 4, PW, 4).fill('#f59e0b');
+
+      let nameX = MX;
+      if (tieneLogo) {
+        try {
+          doc.image(logoPath, MX + 2, 14, { height: 62, fit: [68, 62] });
+          nameX = MX + 78;
+        } catch {}
       }
-      const bg = row % 2 === 0 ? '#fafafa' : '#f4f4f5';
-      doc.rect(40, y, W, 16).fill(bg);
 
-      const fmtN = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+      const nameW = PW - nameX - MX - 50;
+
+      doc.fillColor('#f59e0b').fontSize(7).font('Helvetica-Bold')
+         .text('CATÁLOGO DE PRODUCTOS', nameX, 18, { width: nameW, characterSpacing: 0.6 });
+
+      doc.fillColor('#f8fafc').fontSize(15).font('Helvetica-Bold')
+         .text(emp?.nombre_comercial || emp?.razon_social || 'Megaelectra', nameX, 30, { width: nameW });
+
+      const infoLine = sucursalNombre
+        ? `Sucursal ${sucursalNombre}  ·  ${fechaLarga}`
+        : fechaLarga;
+      doc.fillColor('#94a3b8').fontSize(8).font('Helvetica')
+         .text(infoLine, nameX, 52, { width: nameW });
+
+      // Page number top-right
+      doc.fillColor('#64748b').fontSize(7).font('Helvetica')
+         .text(`Pág. ${pageNum}`, PW - MX - 32, 18, { width: 32, align: 'right' });
+    };
+
+    const drawTableHead = (yy) => {
+      doc.rect(MX, yy, CW, THEAD_H).fill('#1e293b');
+      cols.forEach((col, i) => {
+        doc.fillColor('#f59e0b').fontSize(7).font('Helvetica-Bold')
+           .text(col.label, colX[i] + 3, yy + 5, { width: col.w - 6, align: col.align, lineBreak: false });
+      });
+      return yy + THEAD_H;
+    };
+
+    const drawFooter = () => {
+      doc.rect(MX, FOOTER_Y - 2, CW, 0.5).fill('#e2e8f0');
+      doc.fillColor('#94a3b8').fontSize(6.5).font('Helvetica')
+         .text(
+           `${emp?.nombre_comercial || emp?.razon_social || 'Megaelectra'}  ·  ${prods.length} productos con stock  ·  Generado ${new Date().toLocaleString('es-BO')}`,
+           MX, FOOTER_Y + 4, { width: CW, align: 'center' }
+         );
+    };
+
+    const newPage = () => {
+      if (!isFirst) { drawFooter(); doc.addPage(); }
+      isFirst = false;
+      drawPageHeader();
+      y = HEADER_H + 8;
+      y = drawTableHead(y);
+      y += 2;
+    };
+
+    newPage();
+
+    let lastCat = null, rowIdx = 0;
+
+    for (const p of prods) {
+      // Category section divider
+      if (p.categoria !== lastCat) {
+        if (y + CAT_H + ROW_H > FOOTER_Y - 24) newPage();
+        doc.rect(MX, y, CW, CAT_H).fill('#f59e0b');
+        doc.rect(MX, y, 4, CAT_H).fill('#b45309');
+        doc.fillColor('#1e293b').fontSize(8).font('Helvetica-Bold')
+           .text((p.categoria || 'Sin categoría').toUpperCase(), MX + 10, y + 6, { width: CW - 20, lineBreak: false });
+        y += CAT_H;
+        lastCat = p.categoria;
+        rowIdx  = 0;
+      }
+
+      if (y + ROW_H > FOOTER_Y - 24) newPage();
+
+      const bg = rowIdx % 2 === 0 ? '#ffffff' : '#f1f5f9';
+      doc.rect(MX, y, CW, ROW_H).fill(bg);
+      doc.rect(MX, y, 1.5, ROW_H).fill('#e2e8f0');
+
+      const nombre = [p.producto, p.capacidad, p.modelo, p.color].filter(Boolean).join(' · ');
+
       const vals = [
-        p.codigo_interno,
-        [p.producto, p.modelo, p.color].filter(Boolean).join(' / ').slice(0, 45),
-        `Bs ${fmtN(p.precio_publico)}`,
-        `Bs ${fmtN(p.precio_mayor)}`,
+        p.codigo_interno || '—',
+        nombre.length > 54 ? nombre.slice(0, 54) + '…' : nombre,
+        fmtBs(p.precio_publico),
+        fmtBs(p.precio_mayor),
+        Number(p.bono) > 0 ? fmtBs(p.bono) : '—',
         String(p.stock_total),
       ];
-      vals.forEach((v, i) => {
-        doc.fillColor('#18181b').fontSize(7).font('Helvetica')
-           .text(v, colX[i] + 3, y + 4, { width: colW[i] - 6, ellipsis: true });
+
+      cols.forEach((col, i) => {
+        let color = '#334155';
+        if (i === 2) color = '#0f766e'; // precio público: teal
+        if (i === 3) color = '#1d4ed8'; // precio mayor: blue
+        if (i === 4 && Number(p.bono) > 0) color = '#b45309'; // bono: amber
+        if (i === 5) color = '#1e293b'; // stock: dark
+
+        doc.fillColor(color)
+           .fontSize(7)
+           .font(col.bold ? 'Helvetica-Bold' : 'Helvetica')
+           .text(vals[i], colX[i] + 3, y + 4, { width: col.w - 6, align: col.align, lineBreak: false });
       });
 
-      y += 16;
-      row++;
+      y += ROW_H;
+      rowIdx++;
     }
 
-    // Footer
-    doc.fontSize(7).fillColor('#a1a1aa').font('Helvetica')
-       .text(`Total: ${prods.length} productos`, 40, y + 10, { width: W });
+    // Summary row
+    if (y + 22 < FOOTER_Y - 10) {
+      y += 8;
+      doc.rect(MX, y, CW, 0.5).fill('#e2e8f0');
+      y += 6;
+      doc.fillColor('#94a3b8').fontSize(7).font('Helvetica')
+         .text(
+           `${prods.length} producto${prods.length !== 1 ? 's' : ''} con stock disponible`,
+           MX, y, { width: CW }
+         );
+    }
 
+    drawFooter();
     doc.end();
   } catch (e) {
     console.error(e);
-    res.status(500).json({ mensaje: e.message });
+    res.status(500).json({ mensaje: 'Error al generar catálogo: ' + e.message });
   }
 };
 

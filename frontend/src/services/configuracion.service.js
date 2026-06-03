@@ -3,6 +3,7 @@ import api from '../api/axios';
 export const empresaService = {
   get:        ()           => api.get('/empresa'),
   getPublico: ()           => api.get('/empresa/publico'),
+  create:     (data)       => api.post('/empresa', data),
   update:     (id, data)   => api.put(`/empresa/${id}`, data),
   uploadLogo: (id, file)   => {
     const fd = new FormData();
@@ -40,11 +41,6 @@ export const tiposCambioService = {
   create:  (data)    => api.post('/tipos-cambio', data),
   update:  (id, data) => api.put(`/tipos-cambio/${id}`, data),
   remove:  (id)      => api.delete(`/tipos-cambio/${id}`),
-};
-
-export const parametrosService = {
-  getAll:  ()           => api.get('/configuracion'),
-  update:  (clave, valor) => api.put(`/configuracion/${clave}`, { valor }),
 };
 
 export const bancosService = {

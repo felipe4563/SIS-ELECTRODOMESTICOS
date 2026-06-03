@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { FaLock, FaSpinner, FaEye, FaEyeSlash, FaBolt, FaUser } from 'react-icons/fa';
 import { useAuth }           from '../contexts/AuthContext';
 import { useAbilityUpdater } from '../contexts/AbilityContext';
+import { redirigirPostAuth } from '../utils/authRedirect';
+import { buildAbility }      from '../casl/ability';
 
 const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
@@ -40,7 +42,7 @@ export default function Login() {
       } else if ((usuario.sucursales?.length ?? 0) > 1) {
         navigate('/seleccionar-sucursal', { replace: true, state: { from: location.state?.from } });
       } else {
-        navigate(destino, { replace: true });
+        await redirigirPostAuth(buildAbility(usuario.permisos ?? []), navigate, destino);
       }
     } catch { /* error manejado en AuthContext */ }
   };

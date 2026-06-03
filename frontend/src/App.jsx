@@ -49,9 +49,10 @@ import AjusteForm          from './pages/inventario/AjusteForm';
 import AjusteDetalle       from './pages/inventario/AjusteDetalle';
 
 // Compras
-import Compras       from './pages/compras/Compras';
-import CompraForm    from './pages/compras/CompraForm';
-import CompraDetalle from './pages/compras/CompraDetalle';
+import Compras           from './pages/compras/Compras';
+import CompraForm        from './pages/compras/CompraForm';
+import CompraDetalle     from './pages/compras/CompraDetalle';
+import EtiquetasImprimir from './pages/compras/EtiquetasImprimir';
 
 // ── Gastos ────────────────────────────────────────────────────────────────────
 import Gastos from './pages/gastos/Gastos';
@@ -92,12 +93,13 @@ import VentaDetalle  from './pages/ventas/VentaDetalle';
 import VentaImprimir from './pages/ventas/VentaImprimir';
 
 // ── Configuración base ───────────────────────────────────────────────────
+import ConfiguracionIndex  from './pages/configuracion/ConfiguracionIndex';
+import WizardConfiguracion from './pages/configuracion/WizardConfiguracion';
 import Empresa      from './pages/configuracion/Empresa';
 import Sucursales   from './pages/configuracion/Sucursales';
 import Depositos    from './pages/configuracion/Depositos';
 import Monedas      from './pages/configuracion/Monedas';
 import TiposCambio  from './pages/configuracion/TiposCambio';
-import Parametros   from './pages/configuracion/Parametros';
 import Bancos      from './pages/configuracion/Bancos';
 import Impuestos   from './pages/configuracion/Impuestos';
 
@@ -155,6 +157,16 @@ export default function App() {
               } />
 
               {/* ── Configuración base ─────────────────────────────────── */}
+              <Route path="/configuracion" element={
+                <PageRoute action="ver" subject="configuracion">
+                  <ConfiguracionIndex />
+                </PageRoute>
+              } />
+              <Route path="/configuracion/wizard" element={
+                <ProtectedRoute action="ver" subject="configuracion">
+                  <WizardConfiguracion />
+                </ProtectedRoute>
+              } />
               <Route path="/configuracion/empresa" element={
                 <PageRoute action="ver" subject="configuracion">
                   <Empresa />
@@ -178,11 +190,6 @@ export default function App() {
               <Route path="/configuracion/tipos-cambio" element={
                 <PageRoute action="ver" subject="tipos_cambio">
                   <TiposCambio />
-                </PageRoute>
-              } />
-              <Route path="/configuracion/parametros" element={
-                <PageRoute action="ver" subject="parametros">
-                  <Parametros />
                 </PageRoute>
               } />
               <Route path="/configuracion/bancos" element={
@@ -290,6 +297,11 @@ export default function App() {
               } />
               <Route path="/compras/:id/editar" element={
                 <PageRoute action="editar_pre_pedido" subject="compras"><CompraForm /></PageRoute>
+              } />
+              <Route path="/compras/:id/etiquetas" element={
+                <ProtectedRoute action="ver" subject="compras">
+                  <EtiquetasImprimir />
+                </ProtectedRoute>
               } />
 
               {/* Transferencias */}

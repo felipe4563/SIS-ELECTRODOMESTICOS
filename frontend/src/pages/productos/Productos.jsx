@@ -12,7 +12,7 @@ const labelCls  = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb
 const selectCls = inputCls;
 
 const EMPTY = {
-  codigo_interno: '', codigo_barras: '',
+  codigo_barras: '',
   id_marca: '', id_categoria: '', id_unidad: '', id_moneda_costo: '',
   producto: '', detalle: '', capacidad: '', caracteristicas: '', modelo: '', color: '',
   precio_real: '', costo_logistica: 0, costo_mcm: 0, precio_publico: '',
@@ -310,17 +310,10 @@ export default function Productos() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Identificación */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Código interno *</label>
-              <input name="codigo_interno" value={form.codigo_interno} onChange={handleChange} required
-                className={inputCls} placeholder="Ej: SAM-COC001" style={{ textTransform: 'uppercase' }} />
-            </div>
-            <div>
-              <label className={labelCls}>Código de barras</label>
-              <input name="codigo_barras" value={form.codigo_barras} onChange={handleChange}
-                className={inputCls} placeholder="EAN / UPC" />
-            </div>
+          <div>
+            <label className={labelCls}>Código de barras</label>
+            <input name="codigo_barras" value={form.codigo_barras} onChange={handleChange}
+              className={inputCls} placeholder="EAN / UPC (opcional)" />
           </div>
 
           {/* Catálogos */}

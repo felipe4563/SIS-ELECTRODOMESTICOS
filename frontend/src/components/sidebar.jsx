@@ -18,14 +18,14 @@ const MENU = [
     label: 'Configuración',
     action: 'ver', subject: 'configuracion',
     items: [
-      { label: 'Empresa',        path: '/configuracion/empresa',      icono: '🏢', action: 'ver',      subject: 'configuracion' },
-      { label: 'Sucursales',     path: '/configuracion/sucursales',   icono: '🏪', action: 'ver',      subject: 'sucursales' },
-      { label: 'Depósitos',      path: '/configuracion/depositos',    icono: '🏭', action: 'ver',      subject: 'depositos' },
-      { label: 'Monedas',        path: '/configuracion/monedas',      icono: '💱', action: 'ver',      subject: 'monedas' },
-      { label: 'Tipos de cambio',path: '/configuracion/tipos-cambio', icono: '📈', action: 'ver',      subject: 'tipos_cambio' },
-      { label: 'Bancos',         path: '/configuracion/bancos',       icono: '🏦', action: 'ver',      subject: 'bancos' },
-      { label: 'Impuestos',      path: '/configuracion/impuestos',    icono: '💲', action: 'ver',      subject: 'impuestos' },
-      { label: 'Parámetros',     path: '/configuracion/parametros',   icono: '⚙️', action: 'ver',      subject: 'parametros' },
+      { label: 'Panel de config.', path: '/configuracion',              icono: '🛠️', action: 'ver', subject: 'configuracion' },
+      { label: 'Empresa',          path: '/configuracion/empresa',      icono: '🏢', action: 'ver', subject: 'configuracion' },
+      { label: 'Sucursales',       path: '/configuracion/sucursales',   icono: '🏪', action: 'ver', subject: 'sucursales' },
+      { label: 'Depósitos',        path: '/configuracion/depositos',    icono: '🏭', action: 'ver', subject: 'depositos' },
+      { label: 'Monedas',          path: '/configuracion/monedas',      icono: '💱', action: 'ver', subject: 'monedas' },
+      { label: 'Tipos de cambio',  path: '/configuracion/tipos-cambio', icono: '📈', action: 'ver', subject: 'tipos_cambio' },
+      { label: 'Bancos',           path: '/configuracion/bancos',       icono: '🏦', action: 'ver', subject: 'bancos' },
+      { label: 'Impuestos',        path: '/configuracion/impuestos',    icono: '💲', action: 'ver', subject: 'impuestos' },
     ],
   },
   {
@@ -323,11 +323,7 @@ export default function Sidebar() {
         </svg>
       </button>
 
-      {/* Mobile — topbar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 h-14 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow-sm transition-colors duration-300">
-        <p className="text-sm font-bold text-zinc-900 dark:text-white">Megaelectra</p>
-      </div>
-
+  
       {/* Mobile — overlay */}
       <div
         onClick={() => setDrawerAbierto(false)}

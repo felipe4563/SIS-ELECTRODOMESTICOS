@@ -15,7 +15,7 @@ const APLICA_LABEL = {
 };
 
 const EMPTY_FORM = {
-  codigo: '', nombre: '', descripcion: '',
+  nombre: '', descripcion: '',
   tipo_descuento: 'PORCENTAJE', valor_descuento: '',
   fecha_inicio: '', fecha_fin: '',
   cantidad_minima: '1', aplica_a: 'PRODUCTO',
@@ -197,7 +197,6 @@ export default function Promociones() {
   };
 
   const handleSave = async () => {
-    if (!form.codigo.trim())        return setFormErr('El código es requerido');
     if (!form.nombre.trim())        return setFormErr('El nombre es requerido');
     if (!form.valor_descuento)      return setFormErr('El valor de descuento es requerido');
     if (!form.fecha_inicio || !form.fecha_fin) return setFormErr('Las fechas son requeridas');
@@ -390,12 +389,12 @@ export default function Promociones() {
             <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
               {/* Datos básicos */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Código *</label>
-                  <input name="codigo" value={form.codigo} onChange={handleChange}
-                    placeholder="PROMO-001"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
-                </div>
+                {editando && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Código</label>
+                    <p className="px-3 py-2 rounded-xl text-sm font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30">{editando.codigo}</p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Nombre *</label>
                   <input name="nombre" value={form.nombre} onChange={handleChange}

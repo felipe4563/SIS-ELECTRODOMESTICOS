@@ -114,7 +114,7 @@ const getCompra = async (req, res) => {
 
     const [detalle] = await db.promise().query(
       `SELECT cd.*,
-              p.codigo_interno, p.producto, p.detalle AS producto_detalle,
+              p.codigo_interno, p.codigo_barras, p.producto, p.detalle AS producto_detalle,
               m.nombre AS marca_nombre,
               u.nombre AS unidad_nombre, u.codigo AS unidad_codigo
        FROM compra_detalle cd
@@ -307,7 +307,7 @@ const confirmarPedido = async (req, res) => {
 const recibirMercaderia = async (req, res) => {
   try {
     const { id } = req.params;
-    const { recepciones, observaciones } = req.body;
+    const { recepciones, observaciones, codigos_barras } = req.body;
 
     if (!Array.isArray(recepciones) || !recepciones.length)
       return res.status(400).json({ error: 'Debe indicar las cantidades recibidas' });
@@ -384,6 +384,18 @@ const recibirMercaderia = async (req, res) => {
          comp.id_compra, comp.numero,
          req.user.id_usuario, observaciones || null]
       );
+    }
+
+    if (Array.isArray(codigos_barras) && codigos_barras.length > 0) {
+      for (const { id_producto, codigo_barras } of codigos_barras) {
+        if (id_producto && codigo_barras?.trim()) {
+          await db.promise().query(
+            `UPDATE productos SET codigo_barras = ?
+             WHERE id_producto = ? AND (codigo_barras IS NULL OR codigo_barras = '')`,
+            [codigo_barras.trim(), id_producto]
+          );
+        }
+      }
     }
 
     const [detRefresh] = await db.promise().query(

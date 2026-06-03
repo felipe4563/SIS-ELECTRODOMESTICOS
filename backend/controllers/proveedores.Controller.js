@@ -43,21 +43,26 @@ const getProveedor = async (req, res) => {
 
 const createProveedor = async (req, res) => {
   const {
-    codigo, razon_social, nombre_comercial, nit, tipo_proveedor,
+    razon_social, nombre_comercial, nit, tipo_proveedor,
     direccion, ciudad, pais, telefono, email, contacto_principal, plazo_credito_dias,
   } = req.body;
 
-  if (!codigo?.trim() || !razon_social?.trim())
-    return res.status(400).json({ error: 'Código y razón social son requeridos' });
+  if (!razon_social?.trim())
+    return res.status(400).json({ error: 'La razón social es requerida' });
 
   try {
+    const [[{ nextId }]] = await db.promise().query(
+      `SELECT COALESCE(MAX(id_proveedor), 0) + 1 AS nextId FROM proveedores`
+    );
+    const codigo = `PROV-${String(nextId).padStart(5, '0')}`;
+
     const [result] = await db.promise().query(
       `INSERT INTO proveedores
          (codigo, razon_social, nombre_comercial, nit, tipo_proveedor,
           direccion, ciudad, pais, telefono, email, contacto_principal, plazo_credito_dias)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        codigo.trim().toUpperCase(), razon_social.trim(),
+        codigo, razon_social.trim(),
         nombre_comercial?.trim() || null, nit?.trim() || null,
         tipo_proveedor || 'NACIONAL',
         direccion?.trim() || null, ciudad?.trim() || null, pais?.trim() || null,

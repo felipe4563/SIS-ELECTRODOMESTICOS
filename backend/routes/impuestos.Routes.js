@@ -3,8 +3,8 @@ const { authMiddleware, checkPermission } = require('../middlewares/authMiddlewa
 const ctrl = require('../controllers/impuestos.Controller');
 
 router.get('/',       authMiddleware, checkPermission('ver',      'impuestos'), ctrl.getImpuestos);
-router.post('/',      authMiddleware, checkPermission('gestionar','impuestos'), ctrl.createImpuesto);
-router.put('/:id',    authMiddleware, checkPermission('gestionar','impuestos'), ctrl.updateImpuesto);
-router.delete('/:id', authMiddleware, checkPermission('gestionar','impuestos'), ctrl.deleteImpuesto);
+router.post('/',      authMiddleware, checkPermission('crear',    'impuestos'), ctrl.createImpuesto);
+router.put('/:id',    authMiddleware, checkPermission('editar',   'impuestos'), ctrl.updateImpuesto);
+router.delete('/:id', authMiddleware, checkPermission('eliminar', 'impuestos'), ctrl.deleteImpuesto);
 
 module.exports = router;

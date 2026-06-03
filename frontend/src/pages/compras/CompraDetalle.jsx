@@ -97,13 +97,19 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
   const [recs, setRecs] = useState(() =>
     pendientes.map(d => ({
       id_detalle: d.id_detalle,
+      id_producto: d.id_producto,
       cantidad_recibida: +(Number(d.cantidad) - Number(d.cantidad_recibida)).toFixed(4),
+      codigo_barras: d.codigo_barras || (d.id_producto != null ? `BC${String(d.id_producto).padStart(8, '0')}` : ''),
+      barras_existente: !!d.codigo_barras,
     }))
   );
   const [obs, setObs] = useState('');
 
   const setRec = (idx, val) => setRecs(prev =>
     prev.map((r, i) => i === idx ? { ...r, cantidad_recibida: val } : r)
+  );
+  const setBarras = (idx, val) => setRecs(prev =>
+    prev.map((r, i) => i === idx ? { ...r, codigo_barras: val } : r)
   );
 
   return (
@@ -133,6 +139,25 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
                     </div>
                     <span className="text-xs text-zinc-400 whitespace-nowrap">{d.unidad_codigo}</span>
                   </div>
+                  <div className="mt-2">
+                    <p className="text-[11px] text-zinc-500 mb-1">Código de barras</p>
+                    {recs[idx]?.barras_existente ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs px-2 py-1 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
+                          {recs[idx].codigo_barras}
+                        </span>
+                        <span className="text-[10px] text-blue-500">del proveedor</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={recs[idx]?.codigo_barras ?? ''}
+                        onChange={e => setBarras(idx, e.target.value)}
+                        placeholder="Escanear o dejar generado"
+                        className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      />
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -149,7 +174,13 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
             className="flex-1 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
             Cancelar
           </button>
-          <button onClick={() => onConfirm({ recepciones: recs, observaciones: obs })}
+          <button onClick={() => onConfirm({
+              recepciones: recs.map(({ id_detalle, cantidad_recibida }) => ({ id_detalle, cantidad_recibida })),
+              observaciones: obs,
+              codigos_barras: recs
+                .filter(r => r.id_producto != null && r.codigo_barras?.trim())
+                .map(({ id_producto, codigo_barras }) => ({ id_producto, codigo_barras })),
+            })}
             disabled={loading || pendientes.length === 0}
             className="flex-1 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
             {loading ? 'Guardando…' : 'Confirmar recepción'}
@@ -298,6 +329,35 @@ export default function CompraDetalle() {
     }
   };
 
+  const handleRecibir = async (payload) => {
+    setSaving(true);
+    setModalErr('');
+    try {
+      await comprasService.recibir(id, payload);
+      setModal(null);
+      const productosRecibidos = payload.recepciones
+        .filter(r => Number(r.cantidad_recibida) > 0)
+        .map(r => {
+          const det = detalle.find(d => d.id_detalle === r.id_detalle);
+          const barras = payload.codigos_barras?.find(b => b.id_producto === det?.id_producto);
+          return {
+            nombre: det?.producto || '',
+            codigo_barras: barras?.codigo_barras || '',
+            copias: 1,
+          };
+        })
+        .filter(p => p.codigo_barras);
+      cargar();
+      if (productosRecibidos.length > 0) {
+        navigate(`/compras/${id}/etiquetas`, { state: { etiquetas: productosRecibidos } });
+      }
+    } catch (e) {
+      setModalErr(e?.response?.data?.error ?? 'Error al recibir mercadería');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (cargando) return <div className="flex items-center justify-center py-20 text-zinc-400">Cargando…</div>;
   if (!data)    return <div className="flex items-center justify-center py-20 text-zinc-400">Compra no encontrada</div>;
 
@@ -305,12 +365,26 @@ export default function CompraDetalle() {
   const badge = ESTADO_BADGE[compra.estado] ?? { label: compra.estado, cls: 'bg-zinc-100 text-zinc-600' };
 
   // Permisos de acción
-  const puedeEditar   = puede('editar_pre_pedido', 'compras') && compra.estado === 'PRE_PEDIDO';
-  const puedeConfirmar= puede('confirmar_pedido',  'compras') && compra.estado === 'PRE_PEDIDO';
-  const puedeRecibir  = puede('recibir',            'compras') && ['POR_LLEGAR','PARCIAL'].includes(compra.estado);
-  const puedePagar    = puede('pagar',              'compras') && compra.estado !== 'ANULADO' && Number(compra.saldo_pendiente) > 0;
-  const puedeAnular   = puede('anular',             'compras') && !['RECIBIDO','ANULADO'].includes(compra.estado);
-  const puedeAnulPago = puede('anular_pago',        'compras');
+  const puedeEditar    = puede('editar_pre_pedido', 'compras') && compra.estado === 'PRE_PEDIDO';
+  const puedeConfirmar = puede('confirmar_pedido',  'compras') && compra.estado === 'PRE_PEDIDO';
+  const puedeRecibir   = puede('recibir',            'compras') && ['POR_LLEGAR','PARCIAL'].includes(compra.estado);
+  const puedePagar     = puede('pagar',              'compras') && compra.estado !== 'ANULADO' && Number(compra.saldo_pendiente) > 0;
+  const puedeAnular    = puede('anular',             'compras') && !['RECIBIDO','ANULADO'].includes(compra.estado);
+  const puedeAnulPago  = puede('anular_pago',        'compras');
+
+  const etiquetasDisponibles = detalle.filter(d => d.codigo_barras);
+
+  const handleReimprimirEtiquetas = () => {
+    navigate(`/compras/${id}/etiquetas`, {
+      state: {
+        etiquetas: etiquetasDisponibles.map(d => ({
+          nombre: d.producto,
+          codigo_barras: d.codigo_barras,
+          copias: 1,
+        })),
+      },
+    });
+  };
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -327,7 +401,7 @@ export default function CompraDetalle() {
         <ModalRecibir
           detalle={detalle} loading={saving} error={modalErr}
           onClose={closeModal}
-          onConfirm={form => runAction(() => comprasService.recibir(id, form))}
+          onConfirm={handleRecibir}
         />
       )}
       {modal === 'pagar' && (
@@ -363,7 +437,6 @@ export default function CompraDetalle() {
           </div>
         </Modal>
       )}
-
       {/* Cabecera */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -404,6 +477,12 @@ export default function CompraDetalle() {
             <button onClick={() => openModal('pagar')}
               className="px-3 py-1.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 text-sm font-semibold transition-colors">
               Registrar pago
+            </button>
+          )}
+          {etiquetasDisponibles.length > 0 && (
+            <button onClick={handleReimprimirEtiquetas}
+              className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              🏷️ Etiquetas
             </button>
           )}
           {puedeAnular && (

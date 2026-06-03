@@ -49,7 +49,7 @@ function ModalCobrar({ clienteInicial, onClose, onSuccess }) {
   // Cargar monedas al montar
   useEffect(() => {
     api.get('/monedas').then(r => {
-      const list = r.data?.data ?? r.data ?? [];
+      const list = r.data?.monedas ?? r.data?.data ?? (Array.isArray(r.data) ? r.data : []);
       setMonedas(list);
       const base = list.find(m => m.es_moneda_base) ?? list[0];
       if (base) setForm(f => ({ ...f, id_moneda: base.id_moneda }));

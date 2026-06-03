@@ -66,18 +66,22 @@ const getCombo = async (req, res) => {
 const createCombo = async (req, res) => {
   try {
     const {
-      codigo, nombre, descripcion, precio_combo,
+      nombre, descripcion, precio_combo,
       fecha_inicio, fecha_fin, imagen_url, detalle = []
     } = req.body;
 
-    if (!codigo)           return res.status(400).json({ error: 'El código es requerido' });
     if (!nombre)           return res.status(400).json({ error: 'El nombre es requerido' });
     if (precio_combo == null) return res.status(400).json({ error: 'El precio es requerido' });
+
+    const [[{ nextId }]] = await db.promise().query(
+      `SELECT COALESCE(MAX(id_combo), 0) + 1 AS nextId FROM combos`
+    );
+    const codigo = `COMBO-${String(nextId).padStart(4, '0')}`;
 
     const [result] = await db.promise().query(
       `INSERT INTO combos (codigo, nombre, descripcion, precio_combo, fecha_inicio, fecha_fin, imagen_url)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [codigo.toUpperCase(), nombre, descripcion || null, precio_combo,
+      [codigo, nombre, descripcion || null, precio_combo,
        fecha_inicio || null, fecha_fin || null, imagen_url || null]
     );
 
@@ -301,23 +305,27 @@ const getPromocionesVigentes = async (req, res) => {
 const createPromocion = async (req, res) => {
   try {
     const {
-      codigo, nombre, descripcion,
+      nombre, descripcion,
       tipo_descuento = 'PORCENTAJE', valor_descuento,
       fecha_inicio, fecha_fin,
       cantidad_minima = 1, aplica_a = 'PRODUCTO'
     } = req.body;
 
-    if (!codigo)             return res.status(400).json({ error: 'El código es requerido' });
     if (!nombre)             return res.status(400).json({ error: 'El nombre es requerido' });
     if (valor_descuento == null) return res.status(400).json({ error: 'El valor de descuento es requerido' });
     if (!fecha_inicio || !fecha_fin) return res.status(400).json({ error: 'Las fechas son requeridas' });
+
+    const [[{ nextId }]] = await db.promise().query(
+      `SELECT COALESCE(MAX(id_promocion), 0) + 1 AS nextId FROM promociones`
+    );
+    const codigo = `PROMO-${String(nextId).padStart(4, '0')}`;
 
     const [result] = await db.promise().query(
       `INSERT INTO promociones
          (codigo, nombre, descripcion, tipo_descuento, valor_descuento,
           fecha_inicio, fecha_fin, cantidad_minima, aplica_a)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [codigo.toUpperCase(), nombre, descripcion || null, tipo_descuento,
+      [codigo, nombre, descripcion || null, tipo_descuento,
        valor_descuento, fecha_inicio, fecha_fin, cantidad_minima, aplica_a]
     );
 

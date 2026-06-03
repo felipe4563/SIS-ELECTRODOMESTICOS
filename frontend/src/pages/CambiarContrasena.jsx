@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaLock, FaEye, FaEyeSlash, FaSpinner, FaShieldAlt } from 'react-icons/fa';
 import { useAuth }           from '../contexts/AuthContext';
 import { useAbilityUpdater } from '../contexts/AbilityContext';
 import authService           from '../services/auth.service';
 import logo                  from '/logo.png';
+import { AbilityContext }    from '../contexts/AbilityContext';
+import { redirigirPostAuth } from '../utils/authRedirect';
 
 function CampoPassword({ label, name, placeholder, value, mostrar, onChange, onToggle }) {
   return (
@@ -44,6 +46,7 @@ export default function CambiarContrasena() {
   const { usuario, logout, marcarContrasenaActualizada } = useAuth();
   const { limpiar }  = useAbilityUpdater();
   const navigate     = useNavigate();
+  const ability      = useContext(AbilityContext);
 
   const esCambioObligatorio = usuario?.debe_cambiar_pass ?? false;
 
@@ -85,7 +88,7 @@ export default function CambiarContrasena() {
       });
       marcarContrasenaActualizada();
       setExito(true);
-      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+      setTimeout(() => redirigirPostAuth(ability, navigate, '/dashboard'), 1500);
     } catch (err) {
       setError(err.response?.data?.error || 'Error al cambiar la contraseña.');
     } finally {
