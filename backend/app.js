@@ -33,6 +33,7 @@ const cotizacionesRoutes  = require('./routes/cotizaciones.Routes');
 const cobrosRoutes        = require('./routes/cobros.Routes');
 const gastosRoutes        = require('./routes/gastos.Routes');
 const herramientasRoutes  = require('./routes/herramientas.Routes');
+const publicRoutes        = require('./routes/public.Routes');
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use('/api/cotizaciones',  cotizacionesRoutes);
 app.use('/api/cobros',        cobrosRoutes);
 app.use('/api/gastos',        gastosRoutes);
 app.use('/api/herramientas',  herramientasRoutes);
+app.use('/api/public',        publicRoutes);
 
 
 // ── Servidor ──────────────────────────────────────────────────────────────

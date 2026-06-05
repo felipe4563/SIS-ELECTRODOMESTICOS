@@ -254,6 +254,24 @@ const deleteProducto = async (req, res) => {
   }
 };
 
+// ── Imagen de producto ────────────────────────────────────────────────────
+
+const uploadImagen = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
+
+    const imagenUrl = `/uploads/productos/${req.file.filename}`;
+    await db.promise().query(`UPDATE productos SET imagen_url = ? WHERE id_producto = ?`, [imagenUrl, id]);
+    await auditLog(req.user.id_usuario, 'productos', id, 'UPDATE', getIp(req));
+
+    return res.json({ imagen_url: imagenUrl });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al subir imagen' });
+  }
+};
+
 // ── Histórico de precios ──────────────────────────────────────────────────
 
 const getHistoricoPrecios = async (req, res) => {
@@ -450,5 +468,5 @@ const importarDesdeExcel = async (req, res) => {
 module.exports = {
   getProductos, getProducto, createProducto, updateProducto, deleteProducto,
   getHistoricoPrecios, getStock,
-  importarDesdeExcel,
+  importarDesdeExcel, uploadImagen,
 };

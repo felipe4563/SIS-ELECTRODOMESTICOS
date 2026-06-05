@@ -17,4 +17,12 @@ export const productosService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  uploadImagen: (id, file) => {
+    const form = new FormData();
+    form.append('imagen', file);
+    return api.post(`/productos/${id}/imagen`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

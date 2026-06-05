@@ -12,7 +12,6 @@ const labelCls  = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb
 const selectCls = inputCls;
 
 const EMPTY = {
-  codigo_barras: '',
   id_marca: '', id_categoria: '', id_unidad: '', id_moneda_costo: '',
   producto: '', detalle: '', capacidad: '', caracteristicas: '', modelo: '', color: '',
   precio_real: '', costo_logistica: 0, costo_mcm: 0, precio_publico: '',
@@ -309,13 +308,6 @@ export default function Productos() {
           <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Identificación */}
-          <div>
-            <label className={labelCls}>Código de barras</label>
-            <input name="codigo_barras" value={form.codigo_barras} onChange={handleChange}
-              className={inputCls} placeholder="EAN / UPC (opcional)" />
-          </div>
-
           {/* Catálogos */}
           <div className="grid grid-cols-2 gap-4">
             <div>

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
+
+const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://megaelectra.rusoft.dev';
 
 export default function EtiquetasImprimir() {
-  const navigate        = useNavigate();
-  const { state }       = useLocation();
-  const [items, setItems]             = useState([]);
-  const [barcodeUrls, setBarcodeUrls] = useState({});
+  const navigate     = useNavigate();
+  const { state }    = useLocation();
+  const [items, setItems]   = useState([]);
+  const [qrUrls, setQrUrls] = useState({});
 
   useEffect(() => {
     if (!state?.etiquetas?.length) { navigate(-1); return; }
@@ -15,26 +17,20 @@ export default function EtiquetasImprimir() {
 
   useEffect(() => {
     if (items.length === 0) return;
-    const urls = {};
-    for (const item of items) {
-      if (!item.codigo_barras || urls[item.codigo_barras]) continue;
-      try {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        JsBarcode(svg, item.codigo_barras, {
-          format:       'CODE128',
-          width:        1.4,
-          height:       48,
-          displayValue: true,
-          fontSize:     8,
-          margin:       2,
-          textMargin:   1,
-        });
-        const svgStr = new XMLSerializer().serializeToString(svg);
-        urls[item.codigo_barras] =
-          'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
-      } catch { /* código inválido — se ignora */ }
-    }
-    setBarcodeUrls(urls);
+    const generar = async () => {
+      const urls = {};
+      for (const item of items) {
+        if (!item.codigo_interno || urls[item.codigo_interno]) continue;
+        try {
+          urls[item.codigo_interno] = await QRCode.toDataURL(
+            `${APP_URL}/p/${item.codigo_interno}`,
+            { width: 320, margin: 1, errorCorrectionLevel: 'M' }
+          );
+        } catch { /* código inválido — se ignora */ }
+      }
+      setQrUrls(urls);
+    };
+    generar();
   }, [items]);
 
   const setCopias = (idx, val) =>
@@ -57,7 +53,7 @@ export default function EtiquetasImprimir() {
           ← Volver
         </button>
         <span className="font-semibold text-zinc-900 dark:text-white text-sm">
-          Etiquetas de productos
+          Etiquetas QR de productos
         </span>
         <button
           onClick={() => window.print()}
@@ -71,7 +67,7 @@ export default function EtiquetasImprimir() {
       <div className="no-print pt-16 pb-8 px-4 bg-zinc-100 dark:bg-zinc-950 min-h-screen">
         <div className="max-w-2xl mx-auto space-y-3 pt-4">
           <p className="text-xs text-zinc-500 mb-2">
-            Etiquetas 30mm × 20mm — Code 128. Ajusta las copias por producto.
+            Etiquetas 40mm × 40mm — Código QR con enlace al producto. Ajusta las copias por producto.
           </p>
           {items.map((item, idx) => (
             <div
@@ -79,21 +75,24 @@ export default function EtiquetasImprimir() {
               className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-4"
             >
               <div className="shrink-0 bg-white p-1 rounded">
-                {barcodeUrls[item.codigo_barras] ? (
+                {qrUrls[item.codigo_interno] ? (
                   <img
-                    src={barcodeUrls[item.codigo_barras]}
-                    alt={item.codigo_barras}
-                    className="h-12 w-auto"
+                    src={qrUrls[item.codigo_interno]}
+                    alt={item.codigo_interno}
+                    className="w-16 h-16"
                   />
                 ) : (
-                  <div className="h-12 w-24 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+                  <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                   {item.nombre}
                 </p>
-                <p className="text-xs font-mono text-zinc-500">{item.codigo_barras}</p>
+                <p className="text-xs font-mono text-zinc-500">{item.codigo_interno}</p>
+                <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                  {APP_URL}/p/{item.codigo_interno}
+                </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <label className="text-xs text-zinc-500">Copias</label>
@@ -112,14 +111,26 @@ export default function EtiquetasImprimir() {
       {/* ── Zona de impresión (solo al imprimir) ───────────────────────── */}
       <div className="print-zone">
         {printLabels.map((item, idx) => (
-          <div key={`${item.codigo_barras ?? ''}-${idx}`} className="etiqueta">
-            {barcodeUrls[item.codigo_barras] && (
+          <div key={`${item.codigo_interno ?? ''}-${idx}`} className="etiqueta">
+            {qrUrls[item.codigo_interno] && (
               <img
-                src={barcodeUrls[item.codigo_barras]}
-                alt={item.codigo_barras}
-                style={{ width: '28mm', height: 'auto', display: 'block' }}
+                src={qrUrls[item.codigo_interno]}
+                alt={item.codigo_interno}
+                style={{ width: '34mm', height: '34mm', display: 'block' }}
               />
             )}
+            <p style={{
+              fontSize: '7pt',
+              textAlign: 'center',
+              margin: '1mm 0 0 0',
+              maxWidth: '38mm',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              fontFamily: 'sans-serif',
+            }}>
+              {item.nombre}
+            </p>
           </div>
         ))}
       </div>
@@ -129,18 +140,18 @@ export default function EtiquetasImprimir() {
         .print-zone { display: none; }
         .etiqueta:last-child { page-break-after: avoid; }
         @media print {
-          @page { size: 30mm 20mm; margin: 0; }
+          @page { size: 40mm 40mm; margin: 0; }
           .no-print  { display: none !important; }
           .print-zone { display: block !important; }
           .etiqueta {
             page-break-after: always;
-            width: 30mm;
-            height: 20mm;
+            width: 40mm;
+            height: 40mm;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 1mm;
+            padding: 2mm;
             box-sizing: border-box;
             overflow: hidden;
             background: white;

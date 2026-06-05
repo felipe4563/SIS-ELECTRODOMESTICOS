@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { comprasService } from '../../services/compras.service';
 import { monedasService }  from '../../services/configuracion.service';
@@ -339,14 +339,13 @@ export default function CompraDetalle() {
         .filter(r => Number(r.cantidad_recibida) > 0)
         .map(r => {
           const det = detalle.find(d => d.id_detalle === r.id_detalle);
-          const barras = payload.codigos_barras?.find(b => b.id_producto === det?.id_producto);
           return {
             nombre: det?.producto || '',
-            codigo_barras: barras?.codigo_barras || '',
+            codigo_interno: det?.codigo_interno || '',
             copias: 1,
           };
         })
-        .filter(p => p.codigo_barras);
+        .filter(p => p.codigo_interno);
       cargar();
       if (productosRecibidos.length > 0) {
         navigate(`/compras/${id}/etiquetas`, { state: { etiquetas: productosRecibidos } });
@@ -372,14 +371,14 @@ export default function CompraDetalle() {
   const puedeAnular    = puede('anular',             'compras') && !['RECIBIDO','ANULADO'].includes(compra.estado);
   const puedeAnulPago  = puede('anular_pago',        'compras');
 
-  const etiquetasDisponibles = detalle.filter(d => d.codigo_barras);
+  const etiquetasDisponibles = detalle.filter(d => d.codigo_interno);
 
   const handleReimprimirEtiquetas = () => {
     navigate(`/compras/${id}/etiquetas`, {
       state: {
         etiquetas: etiquetasDisponibles.map(d => ({
           nombre: d.producto,
-          codigo_barras: d.codigo_barras,
+          codigo_interno: d.codigo_interno,
           copias: 1,
         })),
       },
@@ -526,8 +525,10 @@ export default function CompraDetalle() {
               ['Flete',      fmtMonto(compra.flete)],
               ['Otros',      fmtMonto(compra.otros_costos)],
             ].map(([l, v]) => (
-              <><span key={l} className="text-zinc-500 dark:text-zinc-400">{l}</span>
-              <span className="text-right font-mono text-zinc-700 dark:text-zinc-300">{v}</span></>
+              <Fragment key={l}>
+                <span className="text-zinc-500 dark:text-zinc-400">{l}</span>
+                <span className="text-right font-mono text-zinc-700 dark:text-zinc-300">{v}</span>
+              </Fragment>
             ))}
             <span className="font-bold text-zinc-900 dark:text-white border-t border-zinc-200 dark:border-zinc-700 pt-1">TOTAL</span>
             <span className="text-right font-bold font-mono text-zinc-900 dark:text-white border-t border-zinc-200 dark:border-zinc-700 pt-1">{fmtMonto(compra.total)}</span>

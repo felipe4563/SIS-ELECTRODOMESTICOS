@@ -1,5 +1,7 @@
 const express = require('express');
 const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
 const router  = express.Router();
 const ctrl    = require('../controllers/productos.Controller');
 const { authMiddleware, checkPermission } = require('../middlewares/authMiddleware');
@@ -10,6 +12,24 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const ok = /\.xlsx?$/i.test(file.originalname);
     cb(ok ? null : new Error('Solo se permiten archivos .xlsx o .xls'), ok);
+  },
+});
+
+const imgDir = path.join(__dirname, '../uploads/productos');
+if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+
+const uploadImg = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, imgDir),
+    filename:    (_req, file, cb) => {
+      const ext  = path.extname(file.originalname).toLowerCase();
+      cb(null, `prod_${Date.now()}${ext}`);
+    },
+  }),
+  limits:     { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const ok = /image\/(jpeg|png|webp)/.test(file.mimetype);
+    cb(ok ? null : new Error('Solo se permiten imágenes JPG, PNG o WebP'), ok);
   },
 });
 
@@ -27,6 +47,12 @@ router.get('/:id/historico-precios',
 // ── Stock por depósito ────────────────────────────────────────────────────
 router.get('/:id/stock',
   authMiddleware, checkPermission('ver', 'productos'), ctrl.getStock);
+
+// ── Imagen de producto ────────────────────────────────────────────────────
+router.post('/:id/imagen',
+  authMiddleware, checkPermission('editar', 'productos'),
+  uploadImg.single('imagen'),
+  ctrl.uploadImagen);
 
 // ── Importación masiva ────────────────────────────────────────────────────
 router.post('/importar/excel',

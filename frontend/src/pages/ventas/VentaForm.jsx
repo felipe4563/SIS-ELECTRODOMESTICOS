@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ventasService }    from '../../services/ventas.service';
 import { clientesService }  from '../../services/clientes.service';
@@ -183,6 +183,11 @@ export default function VentaForm() {
   const [cargando,   setCargando]   = useState(esEdicion);
   const [error,      setError]      = useState('');
 
+  // Escáner QR
+  const [qrInput, setQrInput] = useState('');
+  const [qrError, setQrError] = useState('');
+  const qrTimerRef = useRef(null);
+
   // Modal producto rápido
   const [modalRapido, setModalRapido] = useState(false);
   const [rpForm, setRpForm]   = useState({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
@@ -301,6 +306,46 @@ export default function VentaForm() {
         .catch(() => setF('tipo_cambio', 6.96));
     }
   }, [form.id_moneda, monedas]); // eslint-disable-line
+
+  const handleQrScan = (val) => {
+    clearTimeout(qrTimerRef.current);
+    qrTimerRef.current = setTimeout(() => {
+      const trimmed = val.trim();
+      if (!trimmed) return;
+
+      const match   = trimmed.match(/\/p\/([^/?#\s]+)$/);
+      const codigo  = match ? decodeURIComponent(match[1]) : trimmed;
+
+      const prod = productos.find(p => p.codigo_interno === codigo);
+      if (!prod) {
+        setQrError(`No encontrado: ${codigo}`);
+        setTimeout(() => setQrError(''), 3000);
+        setQrInput('');
+        return;
+      }
+
+      const precio = form.tipo_venta === 'MAYOR'
+        ? (prod.precio_mayor ?? 0)
+        : (prod.precio_publico ?? 0);
+
+      setItems(prev => {
+        const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
+          return next;
+        }
+        return [...prev, {
+          id_producto:     String(prod.id_producto),
+          cantidad:        1,
+          precio_unitario: precio,
+          descuento_porc:  0,
+        }];
+      });
+      setQrInput('');
+      setQrError('');
+    }, 300);
+  };
 
   const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
@@ -558,6 +603,21 @@ export default function VentaForm() {
             className="text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors">
             + Agregar fila
           </button>
+        </div>
+        {/* Escáner QR */}
+        <div className="px-5 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/20 flex items-center gap-3">
+          <span className="text-xs text-zinc-400 flex-shrink-0 select-none">🔍 QR</span>
+          <input
+            type="text"
+            value={qrInput}
+            onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
+            onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+            placeholder="Escanee un código QR con la pistola…"
+            className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+          />
+          {qrError && (
+            <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

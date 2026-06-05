@@ -11,6 +11,7 @@ import Login              from './pages/Login';
 import SinPermiso         from './pages/SinPermiso';
 import CambiarContrasena  from './pages/CambiarContrasena';
 import SelectorSucursal   from './pages/SelectorSucursal';
+import ProductoPublico    from './pages/public/ProductoPublico';
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 import Dashboard from './pages/Dashboard';
@@ -138,6 +139,9 @@ export default function App() {
               {/* Rutas públicas */}
               <Route path="/login"       element={<Login />} />
               <Route path="/sin-permiso" element={<SinPermiso />} />
+
+              {/* Producto público — sin login */}
+              <Route path="/p/:codigo" element={<ProductoPublico />} />
 
               {/* Cambiar contraseña (requiere sesión) */}
               <Route path="/cambiar-contrasena" element={

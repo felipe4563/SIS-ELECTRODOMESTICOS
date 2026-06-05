@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen } from 'react-icons/fa';
+import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen, FaCamera } from 'react-icons/fa';
 import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../api/axios';
@@ -16,7 +16,14 @@ function TabDatos({ producto, onActualizar }) {
   const [editando,  setEditando]  = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState(null);
-  const [form,      setForm]      = useState({});
+  const [form,      setForm]      = useState({
+    codigo_interno: '', codigo_barras: '',
+    id_marca: '', id_categoria: '', id_unidad: '', id_moneda_costo: '',
+    producto: '', detalle: '', capacidad: '', caracteristicas: '', modelo: '', color: '',
+    precio_real: 0, costo_logistica: 0, costo_mcm: 0, precio_publico: 0,
+    bono: 0, precio_mayor: 0, id_proveedor_default: '',
+    stock_minimo: 0, stock_maximo: 0, notas: '', activo: true,
+  });
 
   const [marcas,      setMarcas]      = useState([]);
   const [categorias,  setCategorias]  = useState([]);
@@ -456,14 +463,20 @@ function TabHistorico({ idProducto }) {
   );
 }
 
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const buildImgUrl = (url) =>
+  !url ? null : url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
+
 // ── ProductoDetalle ───────────────────────────────────────────────────────
 export default function ProductoDetalle() {
   const { id }      = useParams();
   const navigate    = useNavigate();
   const { puede }   = usePermission();
-  const [producto,  setProducto]  = useState(null);
-  const [cargando,  setCargando]  = useState(true);
-  const [tabActivo, setTabActivo] = useState(0);
+  const imgRef      = useRef(null);
+  const [producto,   setProducto]  = useState(null);
+  const [cargando,   setCargando]  = useState(true);
+  const [tabActivo,  setTabActivo] = useState(0);
+  const [subiendoImg, setSubiendoImg] = useState(false);
 
   const TABS = ['Datos Generales', 'Stock', 'Histórico Precios'];
 
@@ -475,6 +488,21 @@ export default function ProductoDetalle() {
   }, [id, navigate]);
 
   useEffect(() => { cargarProducto(); }, [cargarProducto]);
+
+  const handleImgChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setSubiendoImg(true);
+    try {
+      const { data } = await productosService.uploadImagen(id, file);
+      setProducto(prev => ({ ...prev, imagen_url: data.imagen_url }));
+    } catch {
+      // error silencioso — el usuario verá que la imagen no cambió
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
 
   if (cargando) {
     return (
@@ -501,6 +529,37 @@ export default function ProductoDetalle() {
 
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 p-6">
           <div className="flex items-start gap-4">
+            {/* Imagen del producto */}
+            <div className="relative w-24 h-24 flex-shrink-0 group">
+              {buildImgUrl(producto.imagen_url) ? (
+                <img
+                  src={buildImgUrl(producto.imagen_url)}
+                  alt={producto.producto}
+                  className="w-full h-full object-cover rounded-xl border border-gray-200 dark:border-zinc-700"
+                />
+              ) : (
+                <div className="w-full h-full rounded-xl bg-gray-100 dark:bg-zinc-800 flex items-center justify-center border border-gray-200 dark:border-zinc-700">
+                  <FaBoxOpen className="h-8 w-8 text-gray-300 dark:text-zinc-600" />
+                </div>
+              )}
+              {puede('editar', 'productos') && (
+                <>
+                  <input ref={imgRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImgChange} />
+                  <button
+                    onClick={() => imgRef.current?.click()}
+                    disabled={subiendoImg}
+                    className="absolute inset-0 w-full h-full rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 disabled:cursor-not-allowed"
+                    title="Cambiar imagen"
+                  >
+                    {subiendoImg
+                      ? <FaSpinner className="animate-spin h-5 w-5 text-white" />
+                      : <><FaCamera className="h-4 w-4 text-white" /><span className="text-white text-[10px] font-medium">Cambiar</span></>
+                    }
+                  </button>
+                </>
+              )}
+            </div>
+
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3 flex-wrap mb-2">
                 <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 rounded-lg">
