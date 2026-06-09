@@ -5,6 +5,7 @@ import { proveedoresService } from '../../services/proveedores.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
+import { isValidEmail } from '../../utils/validation';
 
 const EMPTY = {
   razon_social: '', nombre_comercial: '', nit: '',
@@ -60,6 +61,9 @@ export default function Proveedores() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    if (form.email?.trim() && !isValidEmail(form.email)) {
+      return setError('El formato del email no es válido');
+    }
     setGuardando(true);
     try {
       await proveedoresService.create(form);

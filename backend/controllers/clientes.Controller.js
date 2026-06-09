@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { isValidEmail } = require('../utils/validators');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -49,6 +50,9 @@ const createCliente = async (req, res) => {
     } = req.body;
 
     if (!nombres && !razon_social) return res.status(400).json({ error: 'Debe ingresar nombres o razón social' });
+    if (email?.trim() && !isValidEmail(email)) {
+      return res.status(400).json({ error: 'El formato del email no es válido' });
+    }
 
     const [[{ nextId }]] = await db.promise().query(
       `SELECT COALESCE(MAX(id_cliente), 0) + 1 AS nextId FROM clientes`
@@ -91,6 +95,9 @@ const updateCliente = async (req, res) => {
       `SELECT id_cliente FROM clientes WHERE id_cliente = ?`, [id]
     );
     if (!exists) return res.status(404).json({ error: 'Cliente no encontrado' });
+    if (email?.trim() && !isValidEmail(email)) {
+      return res.status(400).json({ error: 'El formato del email no es válido' });
+    }
 
     await db.promise().query(
       `UPDATE clientes SET

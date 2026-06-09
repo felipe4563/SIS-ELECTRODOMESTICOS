@@ -8,6 +8,7 @@ import {
   depositosService,
   monedasService,
   tiposCambioService,
+  impuestosService,
 } from '../../services/configuracion.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -17,11 +18,12 @@ const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDi
 function calcSubtotal(it) {
   const base = Number(it.cantidad || 0) * Number(it.precio_unitario || 0);
   const desc = base * (Number(it.descuento_porc || 0) / 100);
-  return +(base - desc).toFixed(2);
+  const imp  = (base - desc) * (Number(it.impuesto_porc || 0) / 100);
+  return +(base - desc + imp).toFixed(2);
 }
 
 // ── Fila de producto ──────────────────────────────────────────────────────────
-function FilaProducto({ fila, productos, onChange, onRemove }) {
+function FilaProducto({ fila, productos, impuestos, onChange, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const opciones = useMemo(() => {
@@ -47,7 +49,19 @@ function FilaProducto({ fila, productos, onChange, onRemove }) {
         />
         <select
           value={fila.id_producto}
-          onChange={e => onChange('id_producto', e.target.value)}
+          onChange={e => {
+            const id   = e.target.value;
+            const prod = productos.find(p => String(p.id_producto) === String(id));
+            const impDef = prod?.id_impuesto_default
+              ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
+              : impuestos.find(i => i.es_default);
+            onChange({
+              id_producto:    id,
+              precio_unitario: prod ? String(prod.precio_real) : '0',
+              id_impuesto:    impDef ? String(impDef.id_impuesto) : '',
+              impuesto_porc:  impDef ? String(impDef.porcentaje) : '0',
+            });
+          }}
           className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
         >
           <option value="">— Seleccionar —</option>
@@ -82,6 +96,23 @@ function FilaProducto({ fila, productos, onChange, onRemove }) {
           className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-right focus:outline-none focus:ring-1 focus:ring-yellow-400"
         />
       </td>
+      <td className="px-2 py-2 w-36">
+        <select
+          value={fila.id_impuesto}
+          onChange={e => {
+            const imp = impuestos.find(i => String(i.id_impuesto) === e.target.value);
+            onChange({ id_impuesto: e.target.value, impuesto_porc: imp ? String(imp.porcentaje) : '0' });
+          }}
+          className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        >
+          <option value="">Sin imp.</option>
+          {impuestos.map(i => (
+            <option key={i.id_impuesto} value={i.id_impuesto}>
+              {i.codigo} ({Number(i.porcentaje).toFixed(0)}%)
+            </option>
+          ))}
+        </select>
+      </td>
       <td className="px-2 py-2 text-right font-mono text-sm font-semibold text-zinc-900 dark:text-white w-28">
         {fmtMonto(sub)}
       </td>
@@ -108,6 +139,7 @@ export default function CompraForm() {
   const [depositos,   setDepositos]   = useState([]);
   const [monedas,     setMonedas]     = useState([]);
   const [productos,   setProductos]   = useState([]);
+  const [impuestos,   setImpuestos]   = useState([]);
 
   // Datos del formulario
   const [datos, setDatos] = useState({
@@ -126,7 +158,7 @@ export default function CompraForm() {
   });
 
   const [items, setItems] = useState([
-    { id_producto: '', cantidad: '1', precio_unitario: '0', descuento_porc: '0' },
+    { id_producto: '', cantidad: '1', precio_unitario: '0', descuento_porc: '0', id_impuesto: '', impuesto_porc: '0' },
   ]);
 
   const [guardando, setGuardando] = useState(false);
@@ -139,12 +171,15 @@ export default function CompraForm() {
       depositosService.getAll(),
       monedasService.getAll(),
       productosService.getAll(),
-    ]).then(([rp, rs, rd, rm, rpr]) => {
+      impuestosService.getAll(),
+    ]).then(([rp, rs, rd, rm, rpr, ri]) => {
       setProveedores(rp.data.proveedores ?? rp.data ?? []);
       setSucursales( rs.data.sucursales  ?? rs.data ?? []);
       setDepositos(  rd.data.depositos   ?? rd.data ?? []);
       setMonedas(    rm.data.monedas     ?? rm.data ?? []);
       setProductos(  rpr.data.productos  ?? rpr.data ?? []);
+      const todos = ri.data.impuestos ?? ri.data ?? [];
+      setImpuestos(todos.filter(i => i.activo && (i.tipo === 'COMPRA' || i.tipo === 'AMBOS')));
     }).catch(() => {});
 
     if (esEdicion) {
@@ -169,6 +204,8 @@ export default function CompraForm() {
           cantidad:       String(d.cantidad),
           precio_unitario:String(d.precio_unitario),
           descuento_porc: String(d.descuento_porc),
+          id_impuesto:    d.id_impuesto ? String(d.id_impuesto) : '',
+          impuesto_porc:  String(d.impuesto_porc ?? 0),
         })));
       }).catch(() => {});
     }
@@ -204,13 +241,17 @@ export default function CompraForm() {
   }, [datos.id_moneda, monedas]);
 
   const addItem = () => setItems(prev => [
-    ...prev, { id_producto: '', cantidad: '1', precio_unitario: '0', descuento_porc: '0' },
+    ...prev, { id_producto: '', cantidad: '1', precio_unitario: '0', descuento_porc: '0', id_impuesto: '', impuesto_porc: '0' },
   ]);
 
   const removeItem = idx => setItems(prev => prev.filter((_, i) => i !== idx));
 
-  const updateItem = (idx, k, v) => setItems(prev =>
-    prev.map((it, i) => i === idx ? { ...it, [k]: v } : it)
+  const updateItem = (idx, kOrUpdates, v) => setItems(prev =>
+    prev.map((it, i) => {
+      if (i !== idx) return it;
+      if (typeof kOrUpdates === 'object') return { ...it, ...kOrUpdates };
+      return { ...it, [kOrUpdates]: v };
+    })
   );
 
   // Totales calculados
@@ -391,7 +432,7 @@ export default function CompraForm() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800">
-                {['Producto', 'Cantidad', 'Precio unit.', 'Desc. %', 'Subtotal', ''].map(h => (
+                {['Producto', 'Cantidad', 'Precio unit.', 'Desc. %', 'Impuesto', 'Subtotal', ''].map(h => (
                   <th key={h} className="text-left px-2 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">{h}</th>
                 ))}
               </tr>
@@ -402,6 +443,7 @@ export default function CompraForm() {
                   key={idx}
                   fila={it}
                   productos={productos}
+                  impuestos={impuestos}
                   onChange={(k, v) => updateItem(idx, k, v)}
                   onRemove={() => removeItem(idx)}
                 />

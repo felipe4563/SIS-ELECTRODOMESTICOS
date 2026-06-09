@@ -122,17 +122,23 @@ exports.listarBackups = async (req, res) => {
   }
 };
 
+const resolveBackupPath = (id) => {
+  if (!id || typeof id !== 'string') return null;
+  const resolved = path.resolve(BACKUP_DIR, id);
+  if (!resolved.startsWith(path.resolve(BACKUP_DIR) + path.sep)) return null;
+  return resolved;
+};
+
 exports.descargarBackup = async (req, res) => {
   try {
-    const { id } = req.params;
-    if (id.includes('..') || id.includes('/') || id.includes('\\'))
+    const filepath = resolveBackupPath(req.params.id);
+    if (!filepath)
       return res.status(400).json({ mensaje: 'Archivo inválido' });
 
-    const filepath = path.join(BACKUP_DIR, id);
     if (!fs.existsSync(filepath))
       return res.status(404).json({ mensaje: 'Backup no encontrado' });
 
-    res.download(filepath, id);
+    res.download(filepath, req.params.id);
   } catch (e) {
     res.status(500).json({ mensaje: e.message });
   }
@@ -140,10 +146,9 @@ exports.descargarBackup = async (req, res) => {
 
 exports.restaurarBackup = async (req, res) => {
   try {
-    const { id } = req.body;
-    if (!id || id.includes('..')) return res.status(400).json({ mensaje: 'Archivo inválido' });
+    const filepath = resolveBackupPath(req.body.id);
+    if (!filepath) return res.status(400).json({ mensaje: 'Archivo inválido' });
 
-    const filepath = path.join(BACKUP_DIR, id);
     if (!fs.existsSync(filepath)) return res.status(404).json({ mensaje: 'Backup no encontrado' });
 
     const sql  = fs.readFileSync(filepath, 'utf8');
@@ -164,11 +169,10 @@ exports.restaurarBackup = async (req, res) => {
 
 exports.eliminarBackup = async (req, res) => {
   try {
-    const { id } = req.params;
-    if (id.includes('..') || !id.endsWith('.sql'))
+    const filepath = resolveBackupPath(req.params.id);
+    if (!filepath || !req.params.id.endsWith('.sql'))
       return res.status(400).json({ mensaje: 'Archivo inválido' });
 
-    const filepath = path.join(BACKUP_DIR, id);
     if (!fs.existsSync(filepath)) return res.status(404).json({ mensaje: 'No encontrado' });
 
     fs.unlinkSync(filepath);

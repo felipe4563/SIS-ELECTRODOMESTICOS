@@ -1,5 +1,6 @@
 const db    = require('../config/db');
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
+const { isValidDate } = require('../utils/validators');
 
 const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
@@ -37,6 +38,10 @@ const getCotizaciones = async (req, res) => {
   try {
     const { estado, tipo_cotizacion, id_cliente, id_sucursal, fecha_desde, fecha_hasta, q,
             page = 1, limit = 50 } = req.query;
+    if (fecha_desde && !isValidDate(fecha_desde))
+      return res.status(400).json({ error: 'fecha_desde debe tener formato YYYY-MM-DD' });
+    if (fecha_hasta && !isValidDate(fecha_hasta))
+      return res.status(400).json({ error: 'fecha_hasta debe tener formato YYYY-MM-DD' });
     const conds = [], vals = [];
 
     if (estado)          { conds.push('co.estado = ?');                                vals.push(estado); }

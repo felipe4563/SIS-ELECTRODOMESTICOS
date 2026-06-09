@@ -82,12 +82,16 @@ export default function Impuestos() {
     }
   };
 
+  const puedeCrear    = puede('crear',    'impuestos');
+  const puedeEditar   = puede('editar',   'impuestos');
+  const puedeEliminar = puede('eliminar', 'impuestos');
+
   return (
     <div>
       <PageHeader
         title="Impuestos"
         description="Catálogo de tipos de impuesto"
-        action={puede('gestionar', 'impuestos') && (
+        action={puedeCrear && (
           <button onClick={abrirCrear}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
             <FaPlus className="h-3.5 w-3.5" /> Nuevo impuesto
@@ -130,16 +134,20 @@ export default function Impuestos() {
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeTipo(imp.tipo)}`}>{imp.tipo}</span>
               </div>
 
-              {puede('gestionar', 'impuestos') && (
+              {(puedeEditar || puedeEliminar) && (
                 <div className="flex items-center gap-2 pt-1 border-t border-gray-50 dark:border-zinc-800">
-                  <button onClick={() => abrirEditar(imp)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
-                    <FaEdit className="h-3 w-3" /> Editar
-                  </button>
-                  <button onClick={() => setConfirm(imp)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors ml-auto">
-                    <FaTrash className="h-3 w-3" /> Desactivar
-                  </button>
+                  {puedeEditar && (
+                    <button onClick={() => abrirEditar(imp)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
+                      <FaEdit className="h-3 w-3" /> Editar
+                    </button>
+                  )}
+                  {puedeEliminar && (
+                    <button onClick={() => setConfirm(imp)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors ml-auto">
+                      <FaTrash className="h-3 w-3" /> Desactivar
+                    </button>
+                  )}
                 </div>
               )}
             </div>

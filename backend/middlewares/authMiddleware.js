@@ -40,7 +40,12 @@ const authMiddleware = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secreto');
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[authMiddleware] FATAL: JWT_SECRET no configurado en variables de entorno');
+      return res.status(500).json({ error: 'Error de configuración del servidor' });
+    }
+    const decoded = jwt.verify(token, jwtSecret);
     const { id_usuario, rol, id_sucursal, debe_cambiar_pass } = decoded;
 
     // Verificar que la sesión no fue cerrada manualmente

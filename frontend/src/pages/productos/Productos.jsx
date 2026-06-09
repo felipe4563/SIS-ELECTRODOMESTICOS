@@ -407,6 +407,34 @@ export default function Productos() {
                   className={inputCls} placeholder="0.00" />
               </div>
             </div>
+
+            {/* Resumen calculado en tiempo real */}
+            {(() => {
+              const costoTotal = Number(form.precio_real || 0) + Number(form.costo_logistica || 0) + Number(form.costo_mcm || 0);
+              const utilidad   = Number(form.precio_publico || 0) - costoTotal;
+              const margen     = Number(form.precio_publico || 0) > 0 ? (utilidad / Number(form.precio_publico)) * 100 : 0;
+              const fmt = v => `Bs ${Number(v).toLocaleString('es-BO', { minimumFractionDigits: 2 })}`;
+              return (
+                <div className="grid grid-cols-3 gap-3 mt-3 p-3 bg-amber-50 dark:bg-amber-500/5 rounded-xl border border-amber-100 dark:border-amber-500/20">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mb-0.5">Costo total</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{fmt(costoTotal)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mb-0.5">Utilidad</p>
+                    <p className={`text-sm font-bold ${utilidad >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                      {fmt(utilidad)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mb-0.5">Margen</p>
+                    <p className={`text-sm font-bold ${margen >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                      {margen.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="grid grid-cols-3 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Precio mayorista</label>

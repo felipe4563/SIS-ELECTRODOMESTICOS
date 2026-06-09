@@ -3,6 +3,7 @@ const multer = require('multer');
 const path   = require('path');
 const fs     = require('fs');
 const { authMiddleware, checkPermission } = require('../middlewares/authMiddleware');
+const { validateMagic, IMAGES_ONLY }      = require('../middlewares/validateMagic');
 const ctrl = require('../controllers/empresa.Controller');
 
 // ── Multer para logo ──────────────────────────────────────────────────────
@@ -31,6 +32,6 @@ router.get('/publico',    ctrl.getEmpresaPublico);                              
 router.get('/',           authMiddleware, checkPermission('ver',    'configuracion'), ctrl.getEmpresa);
 router.post('/',          authMiddleware, checkPermission('editar', 'empresa'),       ctrl.createEmpresa);
 router.put('/:id',        authMiddleware, checkPermission('editar', 'empresa'),       ctrl.updateEmpresa);
-router.post('/:id/logo',  authMiddleware, checkPermission('editar', 'empresa'),       uploadLogo.single('logo'), ctrl.uploadLogo);
+router.post('/:id/logo',  authMiddleware, checkPermission('editar', 'empresa'),       uploadLogo.single('logo'), validateMagic(IMAGES_ONLY), ctrl.uploadLogo);
 
 module.exports = router;

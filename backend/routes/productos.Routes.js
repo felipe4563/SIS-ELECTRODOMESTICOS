@@ -5,6 +5,7 @@ const fs      = require('fs');
 const router  = express.Router();
 const ctrl    = require('../controllers/productos.Controller');
 const { authMiddleware, checkPermission } = require('../middlewares/authMiddleware');
+const { validateMagic, IMAGES_ONLY, EXCEL_ONLY } = require('../middlewares/validateMagic');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -52,12 +53,14 @@ router.get('/:id/stock',
 router.post('/:id/imagen',
   authMiddleware, checkPermission('editar', 'productos'),
   uploadImg.single('imagen'),
+  validateMagic(IMAGES_ONLY),
   ctrl.uploadImagen);
 
 // ── Importación masiva ────────────────────────────────────────────────────
 router.post('/importar/excel',
   authMiddleware, checkPermission('importar', 'productos'),
   upload.single('archivo'),
+  validateMagic(EXCEL_ONLY),
   ctrl.importarDesdeExcel);
 
 module.exports = router;

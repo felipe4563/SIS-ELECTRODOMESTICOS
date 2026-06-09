@@ -4,6 +4,7 @@ const path    = require('path');
 const fs      = require('fs');
 const router  = express.Router();
 const { authMiddleware, checkPermission } = require('../middlewares/authMiddleware');
+const { validateMagic, IMAGES_AND_PDF }   = require('../middlewares/validateMagic');
 const ctrl = require('../controllers/gastos.Controller');
 
 const storage = multer.diskStorage({
@@ -42,6 +43,6 @@ router.put('/:id', authMiddleware, checkPermission('editar', 'gastos'), ctrl.upd
 router.post('/:id/aprobar',      authMiddleware, checkPermission('aprobar', 'gastos'), ctrl.aprobarGasto);
 router.post('/:id/pagar',        authMiddleware, checkPermission('pagar',   'gastos'), ctrl.pagarGasto);
 router.post('/:id/anular',       authMiddleware, checkPermission('anular',  'gastos'), ctrl.anularGasto);
-router.post('/:id/comprobante',  authMiddleware, checkPermission('crear',   'gastos'), upload.single('comprobante'), ctrl.subirComprobante);
+router.post('/:id/comprobante',  authMiddleware, checkPermission('crear',   'gastos'), upload.single('comprobante'), validateMagic(IMAGES_AND_PDF), ctrl.subirComprobante);
 
 module.exports = router;

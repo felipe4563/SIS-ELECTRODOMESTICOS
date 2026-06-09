@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { isValidEmail } = require('../utils/validators');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -49,6 +50,8 @@ const createProveedor = async (req, res) => {
 
   if (!razon_social?.trim())
     return res.status(400).json({ error: 'La razón social es requerida' });
+  if (email?.trim() && !isValidEmail(email))
+    return res.status(400).json({ error: 'El formato del email no es válido' });
 
   try {
     const [[{ nextId }]] = await db.promise().query(
@@ -92,6 +95,8 @@ const updateProveedor = async (req, res) => {
 
   if (!codigo?.trim() || !razon_social?.trim())
     return res.status(400).json({ error: 'Código y razón social son requeridos' });
+  if (email?.trim() && !isValidEmail(email))
+    return res.status(400).json({ error: 'El formato del email no es válido' });
 
   try {
     const [result] = await db.promise().query(
@@ -165,6 +170,8 @@ const getContactos = async (req, res) => {
 const createContacto = async (req, res) => {
   const { nombre, cargo, telefono, email } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  if (email?.trim() && !isValidEmail(email))
+    return res.status(400).json({ error: 'El formato del email no es válido' });
   try {
     const [result] = await db.promise().query(
       `INSERT INTO proveedor_contactos (id_proveedor, nombre, cargo, telefono, email)
@@ -186,6 +193,8 @@ const updateContacto = async (req, res) => {
   const { id, idC } = req.params;
   const { nombre, cargo, telefono, email } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  if (email?.trim() && !isValidEmail(email))
+    return res.status(400).json({ error: 'El formato del email no es válido' });
   try {
     const [result] = await db.promise().query(
       `UPDATE proveedor_contactos SET nombre = ?, cargo = ?, telefono = ?, email = ?

@@ -1,5 +1,6 @@
 const db     = require('../config/db');
 const bcrypt = require('bcrypt');
+const { isValidEmail, validatePassword } = require('../utils/validators');
 
 // GET /api/usuarios
 const getUsuarios = async (req, res) => {
@@ -63,7 +64,11 @@ const createUsuario = async (req, res) => {
   if (!username?.trim() || !password || !nombres?.trim() || !apellidos?.trim() || !id_rol) {
     return res.status(400).json({ error: 'username, contraseña, nombres, apellidos y rol son requeridos' });
   }
-  if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+  const passError = validatePassword(password);
+  if (passError) return res.status(400).json({ error: passError });
+  if (email?.trim() && !isValidEmail(email)) {
+    return res.status(400).json({ error: 'El formato del email no es válido' });
+  }
 
   try {
     const hash = await bcrypt.hash(password, 10);
@@ -106,6 +111,9 @@ const updateUsuario = async (req, res) => {
 
   if (!nombres?.trim() || !apellidos?.trim() || !id_rol) {
     return res.status(400).json({ error: 'nombres, apellidos y rol son requeridos' });
+  }
+  if (email?.trim() && !isValidEmail(email)) {
+    return res.status(400).json({ error: 'El formato del email no es válido' });
   }
 
   try {
@@ -202,9 +210,8 @@ const resetPassword = async (req, res) => {
   const { id } = req.params;
   const { nueva_password } = req.body;
 
-  if (!nueva_password || nueva_password.length < 6) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
-  }
+  const passError = validatePassword(nueva_password);
+  if (passError) return res.status(400).json({ error: passError });
 
   try {
     const [oldRows] = await db.promise().query(
@@ -291,6 +298,9 @@ const updateMiPerfil = async (req, res) => {
 
   if (!nombres?.trim() || !apellidos?.trim()) {
     return res.status(400).json({ error: 'nombres y apellidos son requeridos' });
+  }
+  if (email?.trim() && !isValidEmail(email)) {
+    return res.status(400).json({ error: 'El formato del email no es válido' });
   }
 
   try {

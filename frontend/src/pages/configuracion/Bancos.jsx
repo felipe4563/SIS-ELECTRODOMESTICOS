@@ -66,12 +66,16 @@ export default function Bancos() {
     }
   };
 
+  const puedeCrear   = puede('crear',    'bancos');
+  const puedeEditar  = puede('editar',   'bancos');
+  const puedeEliminar = puede('eliminar', 'bancos');
+
   return (
     <div>
       <PageHeader
         title="Bancos"
         description="Catálogo de entidades bancarias"
-        action={puede('gestionar', 'bancos') && (
+        action={puedeCrear && (
           <button onClick={abrirCrear}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
             <FaPlus className="h-3.5 w-3.5" /> Nuevo banco
@@ -116,17 +120,17 @@ export default function Bancos() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
-                          {puede('gestionar', 'bancos') && (
-                            <>
-                              <button onClick={() => abrirEditar(b)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
-                                <FaEdit className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => setConfirm(b)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                                <FaTrash className="h-3.5 w-3.5" />
-                              </button>
-                            </>
+                          {puedeEditar && (
+                            <button onClick={() => abrirEditar(b)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
+                              <FaEdit className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {puedeEliminar && (
+                            <button onClick={() => setConfirm(b)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                              <FaTrash className="h-3.5 w-3.5" />
+                            </button>
                           )}
                         </div>
                       </td>

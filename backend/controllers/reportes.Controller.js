@@ -1,6 +1,7 @@
 const db   = require('../config/db');
 const xlsx = require('xlsx');
 const PDFDocument = require('pdfkit');
+const { isValidDate } = require('../utils/validators');
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const inicioMes = () => {
@@ -9,6 +10,18 @@ const inicioMes = () => {
 };
 const defaultDesde = (q) => q.fecha_desde || inicioMes();
 const defaultHasta = (q) => q.fecha_hasta || hoy();
+
+const validarFechas = (q, res) => {
+  if (q.fecha_desde && !isValidDate(q.fecha_desde)) {
+    res.status(400).json({ error: 'fecha_desde debe tener formato YYYY-MM-DD' });
+    return false;
+  }
+  if (q.fecha_hasta && !isValidDate(q.fecha_hasta)) {
+    res.status(400).json({ error: 'fecha_hasta debe tener formato YYYY-MM-DD' });
+    return false;
+  }
+  return true;
+};
 
 // ── Dashboard KPIs ─────────────────────────────────────────────────────────
 async function getDashboard(req, res) {
@@ -76,6 +89,7 @@ async function getDashboard(req, res) {
 
 // ── Ventas por período ─────────────────────────────────────────────────────
 async function getVentas(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal, id_vendedor, id_cliente, estado } = req.query;
     const desde = defaultDesde(req.query);
@@ -109,6 +123,7 @@ async function getVentas(req, res) {
 
 // ── Ventas por vendedor ────────────────────────────────────────────────────
 async function getVentasVendedor(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal } = req.query;
     const desde = defaultDesde(req.query);
@@ -139,6 +154,7 @@ async function getVentasVendedor(req, res) {
 
 // ── Ventas por cliente ─────────────────────────────────────────────────────
 async function getVentasCliente(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal } = req.query;
     const desde = defaultDesde(req.query);
@@ -168,6 +184,7 @@ async function getVentasCliente(req, res) {
 
 // ── Ventas por producto ────────────────────────────────────────────────────
 async function getVentasProducto(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal, id_categoria, id_marca } = req.query;
     const desde = defaultDesde(req.query);
@@ -200,6 +217,7 @@ async function getVentasProducto(req, res) {
 
 // ── Compras por período ────────────────────────────────────────────────────
 async function getCompras(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal, id_proveedor, estado } = req.query;
     const desde = defaultDesde(req.query);
@@ -265,6 +283,7 @@ async function getCuentasPagar(req, res) {
 
 // ── Rentabilidad ───────────────────────────────────────────────────────────
 async function getRentabilidad(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_categoria, id_marca, agrupar_por } = req.query;
     const desde = defaultDesde(req.query);
@@ -313,6 +332,7 @@ async function getRentabilidad(req, res) {
 
 // ── Estado de resultados ───────────────────────────────────────────────────
 async function getEstadoResultados(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal } = req.query;
     const desde = defaultDesde(req.query);
@@ -370,6 +390,7 @@ async function getEstadoResultados(req, res) {
 
 // ── Bonos por vendedor ─────────────────────────────────────────────────────
 async function getBonosVendedores(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal } = req.query;
     const desde = defaultDesde(req.query);
@@ -435,6 +456,7 @@ async function getStockConsolidado(req, res) {
 
 // ── Kardex por producto ────────────────────────────────────────────────────
 async function getKardexProducto(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_producto } = req.params;
     const { id_deposito } = req.query;
@@ -471,6 +493,7 @@ async function getKardexProducto(req, res) {
 
 // ── Arqueos de caja ───────────────────────────────────────────────────────
 async function getArqueosCaja(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal, id_caja, estado } = req.query;
     const desde = defaultDesde(req.query);
@@ -504,6 +527,7 @@ async function getArqueosCaja(req, res) {
 
 // ── Gastos por categoría ──────────────────────────────────────────────────
 async function getGastosCategoria(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal } = req.query;
     const desde = defaultDesde(req.query);
@@ -538,6 +562,7 @@ async function getGastosCategoria(req, res) {
 
 // ── Top productos ─────────────────────────────────────────────────────────
 async function getTopProductos(req, res) {
+  if (!validarFechas(req.query, res)) return;
   try {
     const { id_sucursal, id_categoria, id_marca } = req.query;
     const desde = defaultDesde(req.query);

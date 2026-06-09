@@ -5,9 +5,10 @@ import { clientesService }  from '../../services/clientes.service';
 import { productosService } from '../../services/productos.service';
 import { promocionesService } from '../../services/combosPromos.service';
 import { categoriasService, unidadesService } from '../../services/catalogo.service';
-import { sucursalesService, depositosService, monedasService } from '../../services/configuracion.service';
+import { sucursalesService, depositosService, monedasService, impuestosService } from '../../services/configuracion.service';
 import api from '../../api/axios';
 import { usePermission } from '../../hooks/usePermission';
+import { useAuth } from '../../contexts/AuthContext';
 
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 
@@ -31,7 +32,7 @@ function resolverPromo(prod, promociones) {
   return 0;
 }
 
-function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, onChange, onRemove }) {
+function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, onChange, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
@@ -50,7 +51,8 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, on
 
   const base     = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
   const desc     = base * (Number(fila.descuento_porc ?? 0) / 100);
-  const subtotal = +(base - desc).toFixed(2);
+  const imp      = (base - desc) * (Number(fila.impuesto_porc ?? 0) / 100);
+  const subtotal = +(base - desc + imp).toFixed(2);
 
   // Promo badge
   const promoPorc = prod ? resolverPromo(prod, promociones) : 0;
@@ -71,7 +73,14 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, on
             const p   = productos.find(x => String(x.id_producto) === id);
             const precio = tipoVenta === 'MAYOR' ? (p?.precio_mayor ?? 0) : (p?.precio_publico ?? 0);
             const descPromo = resolverPromo(p, promociones);
-            onChange({ id_producto: id, precio_unitario: precio, descuento_porc: descPromo });
+            const impDef = p?.id_impuesto_default
+              ? impuestos.find(i => String(i.id_impuesto) === String(p.id_impuesto_default))
+              : impuestos.find(i => i.es_default);
+            onChange({
+              id_producto: id, precio_unitario: precio, descuento_porc: descPromo,
+              id_impuesto: impDef ? String(impDef.id_impuesto) : '',
+              impuesto_porc: impDef ? Number(impDef.porcentaje) : 0,
+            });
           }}
           className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
         >
@@ -129,6 +138,24 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, on
           <p className="text-[10px] text-green-600 dark:text-green-400 text-center mt-0.5">auto</p>
         )}
       </td>
+      {/* Impuesto */}
+      <td className="px-3 py-2 w-36">
+        <select
+          value={fila.id_impuesto ?? ''}
+          onChange={e => {
+            const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
+            onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
+          }}
+          className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        >
+          <option value="">Sin imp.</option>
+          {impuestos.map(i => (
+            <option key={i.id_impuesto} value={i.id_impuesto}>
+              {i.codigo} ({Number(i.porcentaje).toFixed(0)}%)
+            </option>
+          ))}
+        </select>
+      </td>
       {/* Subtotal */}
       <td className="px-3 py-2 w-28 text-right font-mono text-sm font-semibold text-zinc-900 dark:text-white">
         {fmtMonto(subtotal)}
@@ -156,10 +183,11 @@ function Modal({ titulo, onClose, children, maxW = 'max-w-md' }) {
 }
 
 export default function VentaForm() {
-  const navigate  = useNavigate();
-  const { id }    = useParams();
-  const esEdicion = Boolean(id);
-  const { puede } = usePermission();
+  const navigate     = useNavigate();
+  const { id }       = useParams();
+  const esEdicion    = Boolean(id);
+  const { puede }    = usePermission();
+  const { usuario }  = useAuth();
 
   const [sucursales,  setSucursales]  = useState([]);
   const [depositos,   setDepositos]   = useState([]);
@@ -170,14 +198,15 @@ export default function VentaForm() {
   const [promociones, setPromociones] = useState([]);
   const [categorias,  setCategorias]  = useState([]);
   const [unidades,    setUnidades]    = useState([]);
+  const [impuestos,   setImpuestos]   = useState([]);
 
   const [form, setForm] = useState({
-    tipo_venta: 'MENOR', id_sucursal: '', id_deposito: '', id_cliente: '',
+    tipo_venta: 'MENOR', id_sucursal: usuario?.id_sucursal ? String(usuario.id_sucursal) : '', id_deposito: '', id_cliente: '',
     id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0,
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
   });
-  const [items, setItems]           = useState([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
+  const [items, setItems] = useState([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
   const [clienteInfo, setClienteInfo] = useState(null);
   const [guardando,  setGuardando]  = useState(false);
   const [cargando,   setCargando]   = useState(esEdicion);
@@ -205,8 +234,18 @@ export default function VentaForm() {
       promocionesService.getVigentes(),
       categoriasService.getAll(),
       unidadesService.getAll(),
-    ]).then(([rs, rd, rc, rp, rm, rprom, rcat, run]) => {
-      if (rs.status === 'fulfilled')    setSucursales(rs.value.data.sucursales ?? rs.value.data ?? []);
+      impuestosService.getAll(),
+    ]).then(([rs, rd, rc, rp, rm, rprom, rcat, run, ri]) => {
+      if (rs.status === 'fulfilled') {
+        const todas = rs.value.data.sucursales ?? rs.value.data ?? [];
+        const asignadas = usuario?.sucursales;
+        if (asignadas?.length) {
+          const ids = new Set(asignadas.map(s => s.id_sucursal));
+          setSucursales(todas.filter(s => ids.has(s.id_sucursal)));
+        } else {
+          setSucursales(todas);
+        }
+      }
       if (rd.status === 'fulfilled') {
         const deps = rd.value.data.depositos ?? rd.value.data ?? [];
         setDepositos(deps.filter(d => d.permite_venta && d.activo));
@@ -222,6 +261,10 @@ export default function VentaForm() {
       if (rprom.status === 'fulfilled') setPromociones(rprom.value.data.promociones ?? []);
       if (rcat.status === 'fulfilled')  setCategorias((rcat.value.data.categorias ?? rcat.value.data ?? []).filter(c => c.activo));
       if (run.status === 'fulfilled')   setUnidades(run.value.data.unidades ?? run.value.data ?? []);
+      if (ri.status === 'fulfilled') {
+        const todos = ri.value.data.impuestos ?? ri.value.data ?? [];
+        setImpuestos(todos.filter(i => i.activo && (i.tipo === 'VENTA' || i.tipo === 'AMBOS')));
+      }
     });
 
     if (esEdicion) {
@@ -240,10 +283,12 @@ export default function VentaForm() {
             observaciones: v.observaciones ?? '',
           });
           setItems((v.detalle ?? []).map(d => ({
-            id_producto: String(d.id_producto),
-            cantidad: d.cantidad,
+            id_producto:   String(d.id_producto),
+            cantidad:      d.cantidad,
             precio_unitario: d.precio_unitario,
             descuento_porc: d.descuento_porc ?? 0,
+            id_impuesto:   d.id_impuesto ? String(d.id_impuesto) : '',
+            impuesto_porc: d.impuesto_porc ?? 0,
           })));
         })
         .catch(() => navigate('/ventas'))
@@ -335,11 +380,16 @@ export default function VentaForm() {
           next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
           return next;
         }
+        const impDef = prod.id_impuesto_default
+          ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
+          : impuestos.find(i => i.es_default);
         return [...prev, {
           id_producto:     String(prod.id_producto),
           cantidad:        1,
           precio_unitario: precio,
           descuento_porc:  0,
+          id_impuesto:    impDef ? String(impDef.id_impuesto) : '',
+          impuesto_porc:  impDef ? Number(impDef.porcentaje) : 0,
         }];
       });
       setQrInput('');
@@ -347,16 +397,17 @@ export default function VentaForm() {
     }, 300);
   };
 
-  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
+  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
-  const limpiarItems = () => setItems([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
+  const limpiarItems = () => setItems([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
 
   // Totals
   const subtotal  = items.reduce((s, it) => {
     const base = Number(it.cantidad ?? 0) * Number(it.precio_unitario ?? 0);
     const desc = base * (Number(it.descuento_porc ?? 0) / 100);
-    return s + (base - desc);
+    const imp  = (base - desc) * (Number(it.impuesto_porc ?? 0) / 100);
+    return s + (base - desc + imp);
   }, 0);
   const descMonto = subtotal * (Number(form.descuento_porc) / 100);
   const impuesto  = Number(form.impuesto);
@@ -470,7 +521,7 @@ export default function VentaForm() {
           <div>
             <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Sucursal *</label>
             <select value={form.id_sucursal} onChange={e => setF('id_sucursal', e.target.value)}
-              disabled={esEdicion} className={inputCls}>
+              disabled={esEdicion || sucursales.length <= 1} className={inputCls}>
               <option value="">— seleccionar —</option>
               {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
             </select>
@@ -627,6 +678,7 @@ export default function VentaForm() {
                 <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Cantidad</th>
                 <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Precio unit.</th>
                 <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Desc %</th>
+                <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Impuesto</th>
                 <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Subtotal</th>
                 <th className="w-10" />
               </tr>
@@ -638,6 +690,7 @@ export default function VentaForm() {
                   productos={productos} stockMap={stockMap}
                   tipoVenta={form.tipo_venta}
                   promociones={promociones}
+                  impuestos={impuestos}
                   onChange={patch => updateItem(i, patch)}
                   onRemove={() => removeItem(i)}
                 />

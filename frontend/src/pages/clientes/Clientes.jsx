@@ -5,6 +5,7 @@ import { clientesService } from '../../services/clientes.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
+import { isValidEmail } from '../../utils/validation';
 
 const EMPTY = {
   tipo_cliente: 'MINORISTA', tipo_documento: 'CI', documento: '',
@@ -68,6 +69,9 @@ export default function Clientes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    if (form.email?.trim() && !isValidEmail(form.email)) {
+      return setError('El formato del email no es válido');
+    }
     setGuardando(true);
     try {
       await clientesService.create(form);

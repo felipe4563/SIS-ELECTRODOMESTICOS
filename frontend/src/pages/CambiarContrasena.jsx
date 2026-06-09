@@ -7,6 +7,7 @@ import authService           from '../services/auth.service';
 import logo                  from '/logo.png';
 import { AbilityContext }    from '../contexts/AbilityContext';
 import { redirigirPostAuth } from '../utils/authRedirect';
+import { validatePassword }  from '../utils/validation';
 
 function CampoPassword({ label, name, placeholder, value, mostrar, onChange, onToggle }) {
   return (
@@ -73,8 +74,8 @@ export default function CambiarContrasena() {
     e.preventDefault();
     setError(null);
 
-    if (form.contrasena_nueva.length < 6)
-      return setError('La nueva contraseña debe tener al menos 6 caracteres.');
+    const passErr = validatePassword(form.contrasena_nueva);
+    if (passErr) return setError(passErr);
     if (form.contrasena_nueva !== form.confirmar)
       return setError('Las contraseñas nuevas no coinciden.');
     if (!esCambioObligatorio && !form.contrasena_actual)
