@@ -8,6 +8,11 @@ export const combosService = {
   remove:          (id)          => api.delete(`/combos/${id}`),
   getDetalle:      (id)          => api.get(`/combos/${id}/productos`),
   updateDetalle:   (id, data)    => api.post(`/combos/${id}/productos`, data),
+  uploadImagen:    (id, file)    => {
+    const form = new FormData();
+    form.append('imagen', file);
+    return api.post(`/combos/${id}/imagen`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
 
 export const promocionesService = {

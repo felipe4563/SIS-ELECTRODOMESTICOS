@@ -51,8 +51,8 @@ exports.getProductoPorCodigo = async (req, res) => {
     ).catch(() => [[]]);
 
     // 4. Combos activos que contienen este producto
-    const [combos] = await db.promise().query(
-      `SELECT c.nombre, c.descripcion, c.precio_combo, c.imagen_url
+    const [combosRaw] = await db.promise().query(
+      `SELECT c.id_combo, c.nombre, c.descripcion, c.precio_combo, c.imagen_url
        FROM combos c
        JOIN combo_detalle cd ON cd.id_combo = c.id_combo AND cd.id_producto = ?
        WHERE c.activo = 1
@@ -60,6 +60,32 @@ exports.getProductoPorCodigo = async (req, res) => {
          AND (c.fecha_fin    IS NULL OR c.fecha_fin    >= CURDATE())`,
       [producto.id_producto]
     ).catch(() => [[]]);
+
+    let combos = combosRaw;
+    if (combosRaw.length > 0) {
+      const comboIds = combosRaw.map(c => c.id_combo);
+      const [detalle] = await db.promise().query(
+        `SELECT cd.id_combo, p.producto, p.imagen_url AS producto_imagen, cd.cantidad
+         FROM combo_detalle cd
+         JOIN productos p ON p.id_producto = cd.id_producto
+         WHERE cd.id_combo IN (?)`,
+        [comboIds]
+      ).catch(() => [[]]);
+
+      const detalleMap = {};
+      for (const row of detalle) {
+        if (!detalleMap[row.id_combo]) detalleMap[row.id_combo] = [];
+        detalleMap[row.id_combo].push({
+          producto: row.producto,
+          imagen_url: row.producto_imagen,
+          cantidad: row.cantidad,
+        });
+      }
+      combos = combosRaw.map(({ id_combo, ...rest }) => ({
+        ...rest,
+        productos: detalleMap[id_combo] ?? [],
+      }));
+    }
 
     const stockTotal = Number(producto.stock_total);
     let disponibilidad;

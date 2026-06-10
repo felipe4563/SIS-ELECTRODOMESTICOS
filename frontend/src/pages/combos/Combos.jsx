@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { combosService } from '../../services/combosPromos.service';
 import { productosService } from '../../services/productos.service';
+
+const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
 const EMPTY_FORM = {
   nombre: '', descripcion: '',
@@ -47,6 +49,11 @@ export default function Combos() {
 
   // Búsqueda de producto dentro del modal
   const [prodSearch, setProdSearch]   = useState('');
+
+  // Imagen
+  const imgInputRef                   = useRef();
+  const [imgFile, setImgFile]         = useState(null);
+  const [imgPreview, setImgPreview]   = useState(null);
 
   // Modal confirmar baja
   const [showConfirm, setShowConfirm] = useState(false);
@@ -105,6 +112,8 @@ export default function Combos() {
     setDetalle([]);
     setProdSearch('');
     setFormErr('');
+    setImgFile(null);
+    setImgPreview(null);
     setShowModal(true);
   };
 
@@ -122,6 +131,8 @@ export default function Combos() {
     });
     setFormErr('');
     setProdSearch('');
+    setImgFile(null);
+    setImgPreview(null);
     // Cargar detalle
     try {
       const r = await combosService.getDetalle(combo.id_combo);
@@ -132,7 +143,17 @@ export default function Combos() {
     setShowModal(true);
   };
 
-  const closeModal = () => { setShowModal(false); setEditando(null); };
+  const closeModal = () => {
+    setShowModal(false); setEditando(null);
+    setImgFile(null); setImgPreview(null);
+  };
+
+  const handleImgSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImgFile(file);
+    setImgPreview(URL.createObjectURL(file));
+  };
 
   const handleChange = e => {
     const { name, value, type, checked } = e.target;
@@ -173,14 +194,19 @@ export default function Combos() {
         precio_combo: parseFloat(form.precio_combo),
         detalle: detalle.map(d => ({ id_producto: d.id_producto, cantidad: d.cantidad })),
       };
+      let comboId;
       if (editando) {
         await combosService.update(editando.id_combo, payload);
-        // Actualizar productos por separado
         await combosService.updateDetalle(editando.id_combo, {
           detalle: detalle.map(d => ({ id_producto: d.id_producto, cantidad: d.cantidad })),
         });
+        comboId = editando.id_combo;
       } else {
-        await combosService.create(payload);
+        const res = await combosService.create(payload);
+        comboId = res.data.combo?.id_combo ?? res.data.id_combo;
+      }
+      if (imgFile && comboId) {
+        await combosService.uploadImagen(comboId, imgFile);
       }
       closeModal();
       load();
@@ -346,10 +372,25 @@ export default function Combos() {
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">URL imagen</label>
-                  <input name="imagen_url" value={form.imagen_url} onChange={handleChange}
-                    placeholder="https://..."
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Imagen</label>
+                  <input ref={imgInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImgSelect} />
+                  <div className="flex items-center gap-3">
+                    {/* Preview */}
+                    {(imgPreview || form.imagen_url) && (
+                      <img
+                        src={imgPreview || (form.imagen_url?.startsWith('http') ? form.imagen_url : BACKEND + form.imagen_url)}
+                        alt="preview"
+                        className="w-16 h-16 object-cover rounded-xl border border-gray-200 dark:border-zinc-700 shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <button type="button" onClick={() => imgInputRef.current?.click()}
+                        className="px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors text-left">
+                        {imgFile ? imgFile.name : 'Seleccionar imagen…'}
+                      </button>
+                      <p className="text-[10px] text-gray-400">JPG, PNG o WebP · máx. 5 MB</p>
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Fecha inicio</label>

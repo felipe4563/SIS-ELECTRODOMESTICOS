@@ -211,22 +211,7 @@ export default function ProductoPublico() {
                   </div>
                   <div className="pp-combos-list">
                     {producto.combos.map((c, i) => (
-                      <div key={i} className="pp-combo">
-                        <span className="pp-combo-icon">📦</span>
-                        <div className="pp-combo-body">
-                          <p className="pp-combo-name">{c.nombre}</p>
-                          {c.descripcion && (
-                            <p className="pp-combo-desc">{c.descripcion}</p>
-                          )}
-                        </div>
-                        <div className="pp-combo-price">
-                          <sup>Bs</sup>
-                          {Number(c.precio_combo).toLocaleString('es-BO', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </div>
-                      </div>
+                      <ComboCard key={i} combo={c} buildUrl={buildUrl} />
                     ))}
                   </div>
                 </section>
@@ -240,6 +225,78 @@ export default function ProductoPublico() {
         </main>
       </div>
     </>
+  );
+}
+
+function ComboCard({ combo, buildUrl }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const comboImg = buildUrl(combo.imagen_url);
+
+  return (
+    <div className="pp-combo">
+      {/* Imagen del combo */}
+      <div className="pp-combo-img-wrap">
+        {comboImg && !imgFailed ? (
+          <img
+            src={comboImg}
+            alt={combo.nombre}
+            className="pp-combo-img"
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div className="pp-combo-img-placeholder">
+            <svg viewBox="0 0 40 40" fill="none" width="28" height="28">
+              <rect x="4" y="8" width="32" height="25" rx="3"
+                stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" />
+              <circle cx="13" cy="17" r="4" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M4 26 L16 16 L24 22 L30 16 L36 24"
+                stroke="currentColor" strokeWidth="1.5"
+                strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="pp-combo-body">
+        <p className="pp-combo-name">{combo.nombre}</p>
+        {combo.descripcion && (
+          <p className="pp-combo-desc">{combo.descripcion}</p>
+        )}
+
+        {/* Productos del combo */}
+        {combo.productos?.length > 0 && (
+          <div className="pp-combo-productos">
+            {combo.productos.map((p, j) => {
+              const pImg = buildUrl(p.imagen_url);
+              return (
+                <div key={j} className="pp-combo-prod">
+                  {pImg ? (
+                    <img src={pImg} alt={p.producto} className="pp-combo-prod-img"
+                      onError={e => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div className="pp-combo-prod-dot" />
+                  )}
+                  <span className="pp-combo-prod-name">
+                    {p.cantidad > 1 && <strong>{p.cantidad}× </strong>}
+                    {p.producto}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Precio */}
+      <div className="pp-combo-price">
+        <sup>Bs</sup>
+        {Number(combo.precio_combo).toLocaleString('es-BO', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -728,37 +785,97 @@ body { background: var(--bg); }
 }
 
 .pp-combos-list {
-  display: flex; flex-direction: column; gap: 0.65rem;
+  display: flex; flex-direction: column; gap: 0.75rem;
 }
 .pp-combo {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 1rem 1.25rem;
-  display: flex; align-items: center; gap: 0.9rem;
+  border-radius: 16px;
+  padding: 1rem 1.25rem 1rem 1rem;
+  display: flex; align-items: flex-start; gap: 1rem;
   transition: border-color 0.18s, box-shadow 0.18s;
   cursor: default;
 }
 .pp-combo:hover {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-glow), 0 4px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 4px 24px rgba(0,0,0,0.12);
 }
-.pp-combo-icon { font-size: 1.4rem; flex-shrink: 0; }
+
+/* Imagen combo */
+.pp-combo-img-wrap {
+  width: 72px; height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--img-bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.pp-combo-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.pp-combo-img-placeholder {
+  color: rgba(129,140,248,0.22);
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+}
+
+/* Body */
 .pp-combo-body { flex: 1; min-width: 0; }
 .pp-combo-name {
   font-size: 0.9rem; font-weight: 600;
-  color: var(--text); margin-bottom: 0.1rem;
+  color: var(--text); margin-bottom: 0.15rem;
 }
 .pp-combo-desc {
-  font-size: 0.74rem; color: var(--text-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.73rem; color: var(--text-2);
+  line-height: 1.45; margin-bottom: 0.55rem;
 }
+
+/* Productos del combo */
+.pp-combo-productos {
+  display: flex; flex-direction: column; gap: 0.32rem;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border);
+}
+.pp-combo-prod {
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.pp-combo-prod-img {
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.pp-combo-prod-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-left: 7px;
+}
+.pp-combo-prod-name {
+  font-size: 0.72rem;
+  color: var(--text-2);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-combo-prod-name strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Precio */
 .pp-combo-price {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 1.85rem; line-height: 1;
   color: var(--price);
   flex-shrink: 0;
   display: flex; align-items: flex-start; gap: 0.12rem;
+  align-self: center;
 }
 .pp-combo-price sup {
   font-family: 'Jost', sans-serif;

@@ -1,5 +1,6 @@
 const db   = require('../config/db');
-const xlsx = require('xlsx');
+const path = require('path');
+const fs   = require('fs');
 const PDFDocument = require('pdfkit');
 const { isValidDate } = require('../utils/validators');
 
@@ -293,35 +294,35 @@ async function getRentabilidad(req, res) {
     let selectGroup, groupBy;
     if (agrupar === 'marca') {
       selectGroup = `m.id_marca AS id_grupo, m.nombre AS grupo`;
-      groupBy = 'm.id_marca';
+      groupBy = 'm.id_marca, m.nombre';
     } else if (agrupar === 'categoria') {
       selectGroup = `cat.id_categoria AS id_grupo, cat.nombre AS grupo`;
-      groupBy = 'cat.id_categoria';
+      groupBy = 'cat.id_categoria, cat.nombre';
     } else {
       selectGroup = `p.id_producto AS id_grupo, CONCAT(p.codigo_interno,' - ',p.producto) AS grupo`;
-      groupBy = 'p.id_producto';
+      groupBy = 'p.id_producto, p.codigo_interno, p.producto';
     }
 
     let sql = `
       SELECT ${selectGroup},
         SUM(vd.cantidad) AS cantidad_vendida,
         SUM(vd.subtotal) AS ingresos,
-        SUM(vd.cantidad * vd.costo_unitario) AS costo_ventas,
-        SUM(vd.subtotal) - SUM(vd.cantidad * vd.costo_unitario) AS utilidad_bruta,
+        SUM(COALESCE(vd.cantidad * vd.costo_unitario, 0)) AS costo_ventas,
+        SUM(vd.subtotal) - SUM(COALESCE(vd.cantidad * vd.costo_unitario, 0)) AS utilidad_bruta,
         CASE WHEN SUM(vd.subtotal) > 0
-          THEN ROUND((SUM(vd.subtotal) - SUM(vd.cantidad * vd.costo_unitario)) / SUM(vd.subtotal) * 100, 2)
+          THEN ROUND((SUM(vd.subtotal) - SUM(COALESCE(vd.cantidad * vd.costo_unitario, 0))) / SUM(vd.subtotal) * 100, 2)
           ELSE 0 END AS margen_pct
       FROM venta_detalle vd
       JOIN ventas v ON v.id_venta=vd.id_venta
       JOIN productos p ON p.id_producto=vd.id_producto
-      JOIN marcas m ON m.id_marca=p.id_marca
-      JOIN categorias cat ON cat.id_categoria=p.id_categoria
+      LEFT JOIN marcas m ON m.id_marca=p.id_marca
+      LEFT JOIN categorias cat ON cat.id_categoria=p.id_categoria
       WHERE DATE(v.fecha) BETWEEN ? AND ? AND v.estado NOT IN ('ANULADA','BORRADOR')
     `;
     const params = [desde, hasta];
     if (id_categoria) { sql += ' AND p.id_categoria=?'; params.push(id_categoria); }
     if (id_marca)     { sql += ' AND p.id_marca=?';     params.push(id_marca); }
-    sql += ` GROUP BY ${groupBy} ORDER BY utilidad_bruta IS NULL, utilidad_bruta DESC LIMIT 200`;
+    sql += ` GROUP BY ${groupBy} ORDER BY utilidad_bruta DESC LIMIT 200`;
 
     const [rows] = await db.promise().query(sql, params);
     res.json(rows);
@@ -595,10 +596,33 @@ async function getTopProductos(req, res) {
   }
 }
 
-// ── Exportar reporte (Excel o PDF) ────────────────────────────────────────
+// ── Labels legibles para columnas PDF ────────────────────────────────────
+const COL_LABELS = {
+  numero: 'N°', fecha: 'Fecha', fecha_pedido: 'Fecha',
+  cliente: 'Cliente', vendedor: 'Vendedor', sucursal: 'Sucursal',
+  condicion_pago: 'Condición', total: 'Total Bs',
+  saldo_pendiente: 'Saldo Bs', estado: 'Estado',
+  proveedor: 'Proveedor', codigo: 'Código', codigo_interno: 'Código',
+  producto: 'Producto', marca: 'Marca', categoria: 'Categoría',
+  cantidad_vendida: 'Unidades', monto_total: 'Total Bs',
+  precio_promedio: 'P. Prom Bs', tipo_cliente: 'Tipo',
+  telefono: 'Teléfono', limite_credito: 'Límite Bs',
+  total_pendiente: 'Saldo Bs', dias_credito: 'Días créd.',
+  contacto_principal: 'Contacto', plazo_credito_dias: 'Plazo días',
+  deposito: 'Depósito', cantidad: 'Cantidad', disponible: 'Disponible',
+  costo_promedio: 'Costo Prom.', precio_publico: 'P. Público',
+  stock_minimo: 'Mínimo', grupo: 'Grupo', ingresos: 'Ingresos Bs',
+  costo_ventas: 'Costo Bs', utilidad_bruta: 'Utilidad Bs',
+  margen_pct: 'Margen %', num_gastos: 'N° Gastos',
+  total_monto: 'Total Bs', efectivo: 'Efectivo Bs',
+  otros_metodos: 'Otros Bs', num_ventas: 'N° Ventas',
+  total_ventas: 'Total ventas', total_bonos: 'Bonos Bs',
+};
+
+// ── Exportar reporte PDF ───────────────────────────────────────────────────
 async function exportarReporte(req, res) {
   try {
-    const { tipo, formato } = req.query;
+    const { tipo } = req.query;
     const desde = req.query.fecha_desde || inicioMes();
     const hasta = req.query.fecha_hasta || hoy();
 
@@ -723,62 +747,92 @@ async function exportarReporte(req, res) {
       return res.status(400).json({ error: 'tipo no válido' });
     }
 
+    // ── Datos de empresa ────────────────────────────────────────────────────
+    const [[empresa]] = await db.promise().query(
+      `SELECT razon_social, nombre_comercial, nit, direccion, telefono, email, logo_url
+       FROM empresas WHERE activo=1 LIMIT 1`
+    ).catch(() => [[null]]);
+
     const nombre = `${titulo.replace(/\s+/g, '-')}_${desde}_${hasta}`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}.pdf"`);
 
-    if (formato === 'excel') {
-      const datos = rows.map(r => {
-        const o = {};
-        columnas.forEach(c => { o[c] = r[c] != null ? r[c] : ''; });
-        return o;
-      });
-      const ws = xlsx.utils.json_to_sheet(datos);
-      const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, titulo.slice(0, 31));
-      const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${nombre}.xlsx"`);
-      return res.send(buf);
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+    doc.pipe(res);
+
+    const pageW   = doc.page.width  - 60;
+    const marginL = 30;
+    const colW    = Math.floor(pageW / columnas.length);
+    const rowH    = 15;
+
+    // ── Encabezado empresa ──────────────────────────────────────────────────
+    const headerTop = 30;
+    let logoW = 0;
+
+    if (empresa?.logo_url && empresa.logo_url.startsWith('/uploads/')) {
+      const logoFile = path.join(__dirname, '..', empresa.logo_url);
+      if (fs.existsSync(logoFile)) {
+        try {
+          doc.image(logoFile, marginL, headerTop, { height: 52, fit: [100, 52] });
+          logoW = 108;
+        } catch (_) { /* skip si imagen no soportada */ }
+      }
     }
 
-    if (formato === 'pdf') {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${nombre}.pdf"`);
-      const doc = new PDFDocument({ margin: 25, size: 'A4', layout: 'landscape' });
-      doc.pipe(res);
+    const textX    = marginL + logoW;
+    const nombreEm = empresa?.nombre_comercial || empresa?.razon_social || 'MEGAELECTRA';
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#0f172a')
+       .text(nombreEm, textX, headerTop, { width: pageW - logoW });
 
-      const pageW = doc.page.width - 50;
-      const colW  = Math.floor(pageW / columnas.length);
-      const rowH  = 15;
+    let infoY = headerTop + 18;
+    doc.font('Helvetica').fontSize(8).fillColor('#475569');
+    if (empresa?.nit)       { doc.text(`NIT: ${empresa.nit}`,           textX, infoY); infoY += 11; }
+    if (empresa?.direccion) { doc.text(empresa.direccion,               textX, infoY); infoY += 11; }
+    const contacto = [empresa?.telefono, empresa?.email].filter(Boolean).join('  ·  ');
+    if (contacto)           { doc.text(contacto,                         textX, infoY); infoY += 11; }
 
-      doc.fontSize(13).font('Helvetica-Bold').text(titulo, { align: 'center' });
-      doc.fontSize(8).font('Helvetica').text(`Período: ${desde} al ${hasta}  |  ${rows.length} registros`, { align: 'center' });
-      doc.moveDown(0.5);
+    // Línea separadora
+    const sepY = Math.max(infoY, headerTop + 56) + 6;
+    doc.moveTo(marginL, sepY).lineTo(marginL + pageW, sepY)
+       .strokeColor('#e2e8f0').lineWidth(1).stroke();
 
-      let y = doc.y;
-      const drawRow = (cols, bg, fontName, fontColor) => {
-        doc.rect(25, y, pageW, rowH).fill(bg);
-        doc.font(fontName).fontSize(7).fill(fontColor);
-        cols.forEach((val, i) => {
-          doc.text(String(val ?? ''), 27 + i * colW, y + 4, { width: colW - 3, lineBreak: false });
-        });
-        doc.fill('black');
-        y += rowH;
-        if (y > doc.page.height - 40) {
-          doc.addPage({ size: 'A4', layout: 'landscape', margin: 25 });
-          y = 30;
-        }
-      };
+    // ── Título del reporte ──────────────────────────────────────────────────
+    let titleY = sepY + 10;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a')
+       .text(titulo.toUpperCase(), marginL, titleY, { width: pageW, align: 'center' });
+    titleY += 16;
+    doc.font('Helvetica').fontSize(8).fillColor('#64748b')
+       .text(`Período: ${desde}  al  ${hasta}   ·   ${rows.length} registro${rows.length !== 1 ? 's' : ''}`, marginL, titleY, { width: pageW, align: 'center' });
+    titleY += 14;
 
-      drawRow(columnas.map(c => c.replace(/_/g,' ').toUpperCase()), '#1e293b', 'Helvetica-Bold', 'white');
-      rows.forEach((row, i) => {
-        drawRow(columnas.map(c => row[c]), i % 2 === 0 ? '#f8fafc' : 'white', 'Helvetica', 'black');
+    // ── Tabla ───────────────────────────────────────────────────────────────
+    let y = titleY + 4;
+
+    const drawRow = (vals, bg, fontName, fontColor) => {
+      doc.rect(marginL, y, pageW, rowH).fill(bg);
+      doc.font(fontName).fontSize(7).fillColor(fontColor);
+      vals.forEach((val, i) => {
+        doc.text(String(val ?? ''), marginL + 2 + i * colW, y + 4, { width: colW - 4, lineBreak: false });
       });
+      doc.fillColor('black');
+      y += rowH;
+      if (y > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 30 });
+        y = 30;
+      }
+    };
 
-      doc.end();
-      return;
-    }
+    const headers = columnas.map(c => (COL_LABELS[c] || c.replace(/_/g, ' ')).toUpperCase());
+    drawRow(headers, '#1e293b', 'Helvetica-Bold', 'white');
+    rows.forEach((row, i) => {
+      drawRow(columnas.map(c => row[c]), i % 2 === 0 ? '#f8fafc' : 'white', 'Helvetica', '#1e293b');
+    });
 
-    res.status(400).json({ error: 'formato debe ser excel o pdf' });
+    // Pie de página
+    doc.font('Helvetica').fontSize(7).fillColor('#94a3b8')
+       .text(`Generado el ${new Date().toLocaleString('es-BO')}`, marginL, doc.page.height - 25, { width: pageW, align: 'right' });
+
+    doc.end();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

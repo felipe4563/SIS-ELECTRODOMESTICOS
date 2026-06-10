@@ -455,9 +455,24 @@ const upsertAplicaciones = async (req, res) => {
   }
 };
 
+const uploadImagenCombo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
+    const imagenUrl = `/uploads/combos/${req.file.filename}`;
+    await db.promise().query(`UPDATE combos SET imagen_url = ? WHERE id_combo = ?`, [imagenUrl, id]);
+    await auditLog(req.user.id_usuario, 'combos', id, 'UPDATE', getIp(req));
+    return res.json({ imagen_url: imagenUrl });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al subir imagen' });
+  }
+};
+
 module.exports = {
   getCombos, getCombo, createCombo, updateCombo, deleteCombo,
   getComboDetalle, upsertComboDetalle,
+  uploadImagenCombo,
   getPromociones, getPromocion, getPromocionesVigentes,
   createPromocion, updatePromocion, deletePromocion,
   getAplicaciones, upsertAplicaciones,
