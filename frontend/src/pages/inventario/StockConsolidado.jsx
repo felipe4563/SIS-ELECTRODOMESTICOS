@@ -1,45 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
 import { inventarioService } from '../../services/inventario.service';
+import { reportesService } from '../../services/reportes.service';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtNum = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
-function exportarCSV(depositos, productosFiltrados) {
-  const sep = ',';
-  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-
-  const headers = [
-    'Código', 'Producto', 'Marca', 'Categoría', 'Unidad', 'Stock Mín.',
-    ...depositos.flatMap(d => [`${d.codigo} Disp.`, `${d.codigo} Res.`]),
-    'Total Disp.', 'Estado',
-  ];
-
-  const rows = productosFiltrados.map(p => {
-    const totalDisp = depositos.reduce((sum, d) => sum + (p.stock[d.id_deposito]?.cantidad_disponible ?? 0), 0);
-    return [
-      p.codigo_interno,
-      p.producto,
-      p.marca_nombre,
-      p.categoria_nombre,
-      `${p.unidad_nombre} (${p.unidad_codigo})`,
-      p.stock_minimo,
-      ...depositos.flatMap(d => [
-        p.stock[d.id_deposito]?.cantidad_disponible ?? 0,
-        p.stock[d.id_deposito]?.cantidad_reservada  ?? 0,
-      ]),
-      totalDisp,
-      p.activo ? 'Activo' : 'Inactivo',
-    ].map(esc).join(sep);
-  });
-
-  const csv     = [headers.map(esc).join(sep), ...rows].join('\n');
-  const blob    = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url     = URL.createObjectURL(blob);
-  const a       = document.createElement('a');
-  a.href        = url;
-  a.download    = `stock_consolidado_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportarPDF(setPdfCargando, filtros) {
+  setPdfCargando(true);
+  try {
+    const r = await reportesService.exportarReporte('stock', 'pdf', filtros);
+    const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stock_consolidado_${new Date().toISOString().slice(0, 10)}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch { /* silencioso */ }
+  finally { setPdfCargando(false); }
 }
 
 // ── Estado de fila ────────────────────────────────────────────────────────────
@@ -51,12 +28,13 @@ function estadoStock(totalDisp, stockMin) {
 
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function StockConsolidado() {
-  const [data,    setData]    = useState({ depositos: [], productos: [] });
-  const [cargando,setCargando]= useState(true);
-  const [busqueda,setBusqueda]= useState('');
-  const [filMarca,setFilMarca]= useState('');
-  const [filCat,  setFilCat]  = useState('');
-  const [filEstado,setFilEstado] = useState(''); // '' | 'ok' | 'bajo' | 'sin'
+  const [data,       setData]       = useState({ depositos: [], productos: [] });
+  const [cargando,   setCargando]   = useState(true);
+  const [pdfCargando,setPdfCargando]= useState(false);
+  const [busqueda,   setBusqueda]   = useState('');
+  const [filMarca,   setFilMarca]   = useState('');
+  const [filCat,     setFilCat]     = useState('');
+  const [filEstado,  setFilEstado]  = useState(''); // '' | 'ok' | 'bajo' | 'sin'
 
   const cargar = async () => {
     setCargando(true);
@@ -128,11 +106,14 @@ export default function StockConsolidado() {
             ↻ Actualizar
           </button>
           <button
-            onClick={() => exportarCSV(depositos, productosFiltrados)}
-            disabled={productosFiltrados.length === 0}
-            className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-medium disabled:opacity-50 transition-colors"
+            onClick={() => exportarPDF(setPdfCargando, { busqueda, filMarca, filCat, filEstado })}
+            disabled={pdfCargando || productosFiltrados.length === 0}
+            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 transition-colors flex items-center gap-1.5"
           >
-            ⬇ Exportar CSV
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            {pdfCargando ? 'Generando…' : 'Exportar PDF'}
           </button>
         </div>
       </div>

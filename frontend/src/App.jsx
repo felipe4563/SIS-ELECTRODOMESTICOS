@@ -249,6 +249,11 @@ export default function App() {
                   <Productos />
                 </PageRoute>
               } />
+              <Route path="/productos/etiquetas" element={
+                <ProtectedRoute action="ver" subject="productos">
+                  <EtiquetasImprimir />
+                </ProtectedRoute>
+              } />
               <Route path="/productos/:id" element={
                 <PageRoute action="ver" subject="productos">
                   <ProductoDetalle />

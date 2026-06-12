@@ -619,10 +619,268 @@ const COL_LABELS = {
   total_ventas: 'Total ventas', total_bonos: 'Bonos Bs',
 };
 
+// ── PDF Stock Consolidado por Depósito ────────────────────────────────────
+async function exportarStockPDF(req, res) {
+  try {
+    const [[empresa]] = await db.promise().query(
+      `SELECT razon_social, nombre_comercial, nit, direccion, telefono, email, logo_url
+       FROM empresas WHERE activo=1 LIMIT 1`
+    ).catch(() => [[null]]);
+
+    const [depositos] = await db.promise().query(
+      `SELECT d.id_deposito, d.codigo, d.nombre AS nombre_dep, s.nombre AS sucursal
+       FROM depositos d
+       JOIN sucursales s ON s.id_sucursal = d.id_sucursal
+       WHERE d.activo = 1
+       ORDER BY s.nombre, d.nombre`
+    );
+
+    const { busqueda = '', filMarca = '', filCat = '', filEstado = '' } = req.query;
+
+    const where = ['p.activo = 1'];
+    const params = [];
+    if (busqueda) {
+      where.push('(p.producto LIKE ? OR p.codigo_interno LIKE ? OR COALESCE(p.codigo_barras,\'\') LIKE ?)');
+      const q = `%${busqueda}%`;
+      params.push(q, q, q);
+    }
+    if (filMarca) { where.push('m.nombre = ?');   params.push(filMarca); }
+    if (filCat)   { where.push('cat.nombre = ?'); params.push(filCat);   }
+
+    const [stockRows] = await db.promise().query(
+      `SELECT p.id_producto, p.codigo_interno, p.producto,
+         m.nombre AS marca, cat.nombre AS categoria,
+         um.codigo AS unidad,
+         st.id_deposito,
+         COALESCE(st.cantidad_disponible, 0) AS disponible,
+         COALESCE(st.cantidad_reservada,  0) AS reservado,
+         p.stock_minimo
+       FROM stock st
+       JOIN productos p    ON p.id_producto    = st.id_producto
+       JOIN marcas m       ON m.id_marca        = p.id_marca
+       JOIN categorias cat ON cat.id_categoria  = p.id_categoria
+       JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
+       WHERE ${where.join(' AND ')}
+       ORDER BY st.id_deposito, p.producto`,
+      params
+    );
+
+    // Filtro por estado (requiere sumar disponible total por producto)
+    let filas = stockRows;
+    if (filEstado) {
+      const totales = {};
+      for (const r of stockRows) {
+        if (!totales[r.id_producto]) totales[r.id_producto] = { min: Number(r.stock_minimo), total: 0 };
+        totales[r.id_producto].total += Number(r.disponible);
+      }
+      const validos = new Set(
+        Object.entries(totales)
+          .filter(([, { min, total }]) => {
+            if (filEstado === 'sin')  return total === 0;
+            if (filEstado === 'bajo') return total > 0 && total <= min;
+            if (filEstado === 'ok')   return total > min;
+            return true;
+          })
+          .map(([id]) => Number(id))
+      );
+      filas = stockRows.filter(r => validos.has(r.id_producto));
+    }
+
+    // Agrupar por deposito
+    const byDep = {};
+    for (const r of filas) {
+      if (!byDep[r.id_deposito]) byDep[r.id_deposito] = [];
+      byDep[r.id_deposito].push(r);
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="stock_consolidado_${hoy()}.pdf"`);
+
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape', autoFirstPage: true });
+    doc.pipe(res);
+
+    const PW = doc.page.width - 60;  // 781
+    const PH = doc.page.height;       // 595
+    const ML = 30;
+
+    // Columnas: anchos suman exactamente PW=781
+    const COLS = [
+      { label: 'CÓDIGO',    w: 80,  align: 'left'   },
+      { label: 'PRODUCTO',  w: 250, align: 'left'   },
+      { label: 'MARCA',     w: 90,  align: 'left'   },
+      { label: 'CATEGORÍA', w: 95,  align: 'left'   },
+      { label: 'UNID.',     w: 38,  align: 'center' },
+      { label: 'DISP.',     w: 55,  align: 'right'  },
+      { label: 'RESERV.',   w: 55,  align: 'right'  },
+      { label: 'MÍN.',      w: 48,  align: 'right'  },
+      { label: 'ESTADO',    w: 70,  align: 'center' },
+    ];
+
+    const ROW_H  = 15;
+    const HEAD_H = 18;
+
+    function colX(i) {
+      return ML + COLS.slice(0, i).reduce((s, c) => s + c.w, 0);
+    }
+
+    function needPage(y, extra) {
+      if (y + (extra || ROW_H) > PH - 30) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 30 });
+        return 30;
+      }
+      return y;
+    }
+
+    function drawCompanyHeader() {
+      let y = 30;
+      let logoW = 0;
+      if (empresa?.logo_url?.startsWith('/uploads/')) {
+        const logoFile = path.join(__dirname, '..', empresa.logo_url);
+        if (fs.existsSync(logoFile)) {
+          try { doc.image(logoFile, ML, y, { height: 46, fit: [88, 46] }); logoW = 96; }
+          catch (_) {}
+        }
+      }
+      const tx = ML + logoW;
+      const nombre = empresa?.nombre_comercial || empresa?.razon_social || 'MEGAELECTRA';
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#0f172a')
+         .text(nombre, tx, y, { width: PW - logoW, lineBreak: false });
+      y += 16;
+      doc.font('Helvetica').fontSize(8).fillColor('#64748b');
+      if (empresa?.nit)       { doc.text(`NIT: ${empresa.nit}`, tx, y, { lineBreak: false }); y += 10; }
+      if (empresa?.direccion) { doc.text(empresa.direccion,      tx, y, { lineBreak: false }); y += 10; }
+      const cnt = [empresa?.telefono, empresa?.email].filter(Boolean).join('  ·  ');
+      if (cnt)                { doc.text(cnt,                     tx, y, { lineBreak: false }); y += 10; }
+      const sepY = Math.max(y, 80) + 4;
+      doc.moveTo(ML, sepY).lineTo(ML + PW, sepY).strokeColor('#cbd5e1').lineWidth(0.8).stroke();
+      let ty = sepY + 8;
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a')
+         .text('STOCK CONSOLIDADO POR DEPÓSITO', ML, ty, { width: PW, align: 'center', lineBreak: false });
+      ty += 14;
+      const filtrosActivos = [
+        busqueda && `Búsqueda: "${busqueda}"`,
+        filMarca && `Marca: ${filMarca}`,
+        filCat   && `Categoría: ${filCat}`,
+        filEstado === 'sin'  && 'Estado: Sin stock',
+        filEstado === 'bajo' && 'Estado: Bajo mínimo',
+        filEstado === 'ok'   && 'Estado: Stock OK',
+      ].filter(Boolean);
+      const subtitulo = filtrosActivos.length
+        ? filtrosActivos.join('  ·  ')
+        : `Generado: ${new Date().toLocaleString('es-BO')}  ·  ${depositos.length} depósito${depositos.length !== 1 ? 's' : ''}`;
+      doc.font('Helvetica').fontSize(8).fillColor('#94a3b8')
+         .text(subtitulo, ML, ty, { width: PW, align: 'center', lineBreak: false });
+      if (filtrosActivos.length) {
+        ty += 11;
+        doc.font('Helvetica').fontSize(7.5).fillColor('#cbd5e1')
+           .text(`Generado: ${new Date().toLocaleString('es-BO')}`, ML, ty, { width: PW, align: 'center', lineBreak: false });
+      }
+      return ty + 16;
+    }
+
+    function drawTableHead(y) {
+      doc.rect(ML, y, PW, HEAD_H).fill('#1e293b');
+      doc.font('Helvetica-Bold').fontSize(6.5).fillColor('white');
+      COLS.forEach((col, i) => {
+        doc.text(col.label, colX(i) + 2, y + 5, { width: col.w - 4, align: col.align, lineBreak: false });
+      });
+      return y + HEAD_H;
+    }
+
+    function drawDataRow(prod, idx, y) {
+      const disp = Number(prod.disponible);
+      const res  = Number(prod.reservado);
+      const min  = Number(prod.stock_minimo);
+      const isOut = disp === 0;
+      const isLow = disp > 0 && disp <= min;
+      const bg = isOut ? '#fff1f2' : isLow ? '#fff7ed' : idx % 2 === 0 ? '#f8fafc' : '#ffffff';
+      doc.rect(ML, y, PW, ROW_H).fill(bg);
+      doc.font('Helvetica').fontSize(6.8).fillColor('#334155');
+      const vals = [
+        prod.codigo_interno,
+        prod.producto,
+        prod.marca,
+        prod.categoria,
+        prod.unidad,
+        disp.toLocaleString('es-BO'),
+        res > 0 ? res.toLocaleString('es-BO') : '—',
+        min.toLocaleString('es-BO'),
+      ];
+      vals.forEach((v, i) => {
+        doc.text(String(v ?? ''), colX(i) + 2, y + 4, { width: COLS[i].w - 4, align: COLS[i].align, lineBreak: false });
+      });
+      const eLabel = isOut ? 'Sin stock' : isLow ? 'Bajo mín.' : 'OK';
+      const eColor = isOut ? '#dc2626' : isLow ? '#d97706' : '#16a34a';
+      doc.font('Helvetica-Bold').fontSize(6.5).fillColor(eColor)
+         .text(eLabel, colX(8) + 2, y + 4, { width: COLS[8].w - 4, align: 'center', lineBreak: false });
+      return y + ROW_H;
+    }
+
+    let y = drawCompanyHeader();
+
+    for (let di = 0; di < depositos.length; di++) {
+      const dep   = depositos[di];
+      const prods = byDep[dep.id_deposito] || [];
+
+      if (di > 0) y += 6;
+      // Espacio mínimo: cabecera sección + cabecera tabla + 1 fila
+      y = needPage(y, 22 + HEAD_H + ROW_H);
+
+      // Cabecera de sección (depósito)
+      doc.rect(ML, y, PW, 22).fill('#1e293b');
+      const depLabel = dep.codigo ? `${dep.codigo} – ${dep.nombre_dep}` : dep.nombre_dep;
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#fbbf24')
+         .text(depLabel, ML + 8, y + 3, { lineBreak: false });
+      doc.font('Helvetica').fontSize(7.5).fillColor('#94a3b8')
+         .text(`Sucursal: ${dep.sucursal}  ·  ${prods.length} producto${prods.length !== 1 ? 's' : ''}`,
+               ML + 8, y + 13, { lineBreak: false });
+      y += 22;
+
+      if (prods.length === 0) {
+        y = needPage(y, 16);
+        doc.rect(ML, y, PW, 16).fill('#f8fafc');
+        doc.font('Helvetica').fontSize(7.5).fillColor('#94a3b8')
+           .text('Sin productos con stock en este depósito', ML + 8, y + 4, { lineBreak: false });
+        y += 16;
+        continue;
+      }
+
+      y = drawTableHead(y);
+
+      for (let i = 0; i < prods.length; i++) {
+        const prev = y;
+        y = needPage(y);
+        if (y !== prev) y = drawTableHead(y);
+        y = drawDataRow(prods[i], i, y);
+      }
+
+      // Fila resumen del depósito
+      y = needPage(y, 14);
+      const totDisp = prods.reduce((s, p) => s + Number(p.disponible), 0);
+      const sinStk  = prods.filter(p => Number(p.disponible) === 0).length;
+      const bajMin  = prods.filter(p => Number(p.disponible) > 0 && Number(p.disponible) <= Number(p.stock_minimo)).length;
+      doc.rect(ML, y, PW, 14).fill('#e2e8f0');
+      doc.font('Helvetica-Bold').fontSize(7).fillColor('#475569')
+         .text(`Total disponible: ${totDisp.toLocaleString('es-BO')}  ·  Sin stock: ${sinStk}  ·  Bajo mínimo: ${bajMin}`,
+               ML + 8, y + 4, { lineBreak: false });
+      y += 14;
+    }
+
+    doc.font('Helvetica').fontSize(7).fillColor('#cbd5e1')
+       .text(`Stock Consolidado · ${new Date().toLocaleDateString('es-BO')}`,
+             ML, PH - 20, { width: PW, align: 'right', lineBreak: false });
+
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
 // ── Exportar reporte PDF ───────────────────────────────────────────────────
 async function exportarReporte(req, res) {
   try {
     const { tipo } = req.query;
+    if (tipo === 'stock') return exportarStockPDF(req, res);
     const desde = req.query.fecha_desde || inicioMes();
     const hasta = req.query.fecha_hasta || hoy();
 
@@ -659,25 +917,6 @@ async function exportarReporte(req, res) {
         [desde, hasta]
       );
       columnas = ['numero','fecha_pedido','proveedor','sucursal','condicion_pago','total','saldo_pendiente','estado'];
-
-    } else if (tipo === 'stock') {
-      titulo = 'Stock Consolidado';
-      [rows] = await db.promise().query(
-        `SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
-          d.nombre AS deposito, s.nombre AS sucursal,
-          COALESCE(st.cantidad,0) AS cantidad,
-          COALESCE(st.cantidad_disponible,0) AS disponible,
-          COALESCE(st.costo_promedio,0) AS costo_promedio,
-          p.precio_publico, p.stock_minimo
-         FROM stock st
-         JOIN productos p  ON p.id_producto=st.id_producto
-         JOIN depositos d  ON d.id_deposito=st.id_deposito
-         JOIN sucursales s ON s.id_sucursal=d.id_sucursal
-         JOIN marcas m     ON m.id_marca=p.id_marca
-         JOIN categorias cat ON cat.id_categoria=p.id_categoria
-         WHERE p.activo=1 ORDER BY p.producto LIMIT 5000`
-      );
-      columnas = ['codigo_interno','producto','marca','categoria','deposito','sucursal','cantidad','disponible','costo_promedio','precio_publico','stock_minimo'];
 
     } else if (tipo === 'cuentas-cobrar') {
       titulo = 'Cuentas por Cobrar';

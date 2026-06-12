@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlus, FaSpinner, FaBoxOpen, FaEye, FaTrash, FaFileExcel, FaDownload } from 'react-icons/fa';
+import { FaPlus, FaSpinner, FaBoxOpen, FaEye, FaTrash, FaFileExcel, FaDownload, FaQrcode } from 'react-icons/fa';
 import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
@@ -56,6 +56,30 @@ export default function Productos() {
   const [unidades,   setUnidades]   = useState([]);
   const [monedas,    setMonedas]    = useState([]);
   const [proveedores,setProveedores]= useState([]);
+
+  // Selección para etiquetas QR
+  const [seleccionados, setSeleccionados] = useState(new Set());
+
+  const toggleSeleccion = (id) =>
+    setSeleccionados(prev => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+
+  const toggleTodos = () =>
+    setSeleccionados(prev =>
+      prev.size === visibles.length
+        ? new Set()
+        : new Set(visibles.map(p => p.id_producto))
+    );
+
+  const imprimirEtiquetas = () => {
+    const etiquetas = lista
+      .filter(p => seleccionados.has(p.id_producto))
+      .map(p => ({ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }));
+    navigate('/productos/etiquetas', { state: { etiquetas } });
+  };
 
   // Importación
   const [importando, setImportando] = useState(false);
@@ -169,6 +193,13 @@ export default function Productos() {
         description="Catálogo de productos con precios y stock"
         action={
           <div className="flex items-center gap-2">
+            {seleccionados.size > 0 && (
+              <button onClick={imprimirEtiquetas}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-500/20 transition-all">
+                <FaQrcode className="h-3.5 w-3.5" />
+                Imprimir QR ({seleccionados.size})
+              </button>
+            )}
             {puedeImportar && (
               <>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
@@ -231,6 +262,14 @@ export default function Productos() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800">
+                    <th className="px-4 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={visibles.length > 0 && seleccionados.size === visibles.length}
+                        onChange={toggleTodos}
+                        className="rounded border-gray-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-400"
+                      />
+                    </th>
                     {['Código','Producto','Marca / Cat.','Modelo','Precios','Stock','Estado',''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
@@ -238,7 +277,15 @@ export default function Productos() {
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
                   {visibles.map(p => (
-                    <tr key={p.id_producto} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <tr key={p.id_producto} className={`hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors ${seleccionados.has(p.id_producto) ? 'bg-amber-50/60 dark:bg-amber-500/5' : ''}`}>
+                      <td className="px-4 py-3 w-8">
+                        <input
+                          type="checkbox"
+                          checked={seleccionados.has(p.id_producto)}
+                          onChange={() => toggleSeleccion(p.id_producto)}
+                          className="rounded border-gray-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-400"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{p.codigo_interno}</span>
                         {p.codigo_barras && <p className="text-xs text-gray-400 dark:text-zinc-600 font-mono">{p.codigo_barras}</p>}
@@ -279,6 +326,12 @@ export default function Productos() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
+                          <button
+                            onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }] } })}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
+                            title="Imprimir etiqueta QR">
+                            <FaQrcode className="h-3.5 w-3.5" />
+                          </button>
                           <button onClick={() => navigate(`/productos/${p.id_producto}`)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
                             title="Ver detalle">

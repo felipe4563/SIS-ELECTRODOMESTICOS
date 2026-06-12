@@ -247,84 +247,326 @@ exports.exportarProductos = async (req, res) => {
   }
 };
 
+// Normaliza las cabeceras del Excel eliminando espacios extra
+function normalizarHeaders(data) {
+  if (!data.length) return data;
+  return data.map(row => {
+    const normalized = {};
+    for (const key of Object.keys(row)) {
+      normalized[key.trim()] = row[key];
+    }
+    return normalized;
+  });
+}
+
+// Detecta si el archivo usa el formato de lista de precios del usuario
+function esFormatoListaPrecios(headers) {
+  const h = headers.map(h => h.trim().toUpperCase());
+  return h.includes('MARCA') && h.includes('REAL BS.') && !h.includes('CODIGO_INTERNO');
+}
+
+// Resuelve o crea una marca por nombre
+async function resolverMarca(conn, nombre) {
+  const [[row]] = await conn.query(`SELECT id_marca FROM marcas WHERE nombre = ?`, [nombre]);
+  if (row) return row.id_marca;
+  const [ins] = await conn.query(`INSERT INTO marcas (nombre, activo) VALUES (?, 1)`, [nombre]);
+  return ins.insertId;
+}
+
+// Resuelve o crea una categoría por nombre
+async function resolverCategoria(conn, nombre) {
+  const [[row]] = await conn.query(`SELECT id_categoria FROM categorias WHERE nombre = ?`, [nombre]);
+  if (row) return row.id_categoria;
+  const [ins] = await conn.query(`INSERT INTO categorias (nombre, activo) VALUES (?, 1)`, [nombre]);
+  return ins.insertId;
+}
+
+// Resuelve o crea un proveedor por nombre
+async function resolverProveedor(conn, nombre) {
+  const [[row]] = await conn.query(`SELECT id_proveedor FROM proveedores WHERE razon_social = ?`, [nombre]);
+  if (row) return row.id_proveedor;
+  let codigo = nombre.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20) || 'PROV';
+  // Si el codigo ya existe, agregar sufijo numérico
+  const [[codExiste]] = await conn.query(`SELECT id_proveedor FROM proveedores WHERE codigo = ?`, [codigo]);
+  if (codExiste) codigo = codigo.slice(0, 17) + String(Date.now()).slice(-3);
+  const [ins] = await conn.query(
+    `INSERT INTO proveedores (codigo, razon_social, activo) VALUES (?, ?, 1)`,
+    [codigo, nombre]
+  );
+  return ins.insertId;
+}
+
 exports.importarProductos = async (req, res) => {
   if (!req.file) return res.status(400).json({ mensaje: 'No se recibió archivo' });
 
   try {
     const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const dataRaw = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-    if (data.length === 0) return res.status(400).json({ mensaje: 'El archivo está vacío' });
+    if (dataRaw.length === 0) return res.status(400).json({ mensaje: 'El archivo está vacío' });
 
-    const conn = db.promise();
+    const data   = normalizarHeaders(dataRaw);
+    const keys   = Object.keys(data[0]);
+    const usandoListaPrecios = esFormatoListaPrecios(keys);
+
+    const conn   = db.promise();
     const errores = [];
     let creados = 0, actualizados = 0;
+    let marcasCreadas = 0, categoriasCreadas = 0, proveedoresCreados = 0;
 
-    for (let i = 0; i < data.length; i++) {
-      const fila = i + 2;
-      const r    = data[i];
+    const [[moneda]] = await conn.query(`SELECT id_moneda FROM monedas WHERE es_moneda_base = 1 LIMIT 1`);
+    const idMoneda   = moneda?.id_moneda ?? 1;
+    let [[uniDefault]] = await conn.query(`SELECT id_unidad FROM unidades_medida LIMIT 1`);
+    if (!uniDefault) {
+      await conn.query(
+        `INSERT IGNORE INTO unidades_medida (codigo, nombre, activo) VALUES ('UND', 'Unidad', 1)`
+      );
+      [[uniDefault]] = await conn.query(`SELECT id_unidad FROM unidades_medida LIMIT 1`);
+    }
+    const idUnidadDefault = uniDefault.id_unidad;
 
-      if (!r.codigo_interno) { errores.push({ fila, campo: 'codigo_interno', msg: 'Requerido' }); continue; }
-      if (!r.producto)       { errores.push({ fila, campo: 'producto',       msg: 'Requerido' }); continue; }
+    const [depositos] = await conn.query(`SELECT id_deposito, codigo, nombre FROM depositos WHERE activo = 1`);
+    const depositoMap = {};
+    for (const dep of depositos) {
+      const norm = s => s.trim().toUpperCase().replace(/[\s\-()\[\]\/]/g, '');
+      depositoMap[norm(dep.codigo)] = dep.id_deposito;
+      depositoMap[norm(dep.nombre)] = dep.id_deposito;
+    }
+    let depositosCreados = 0;
 
-      try {
-        // Resolver IDs
-        const [[marca]] = await conn.query(`SELECT id_marca FROM marcas WHERE nombre = ?`, [r.marca || '']);
-        const [[cat]]   = await conn.query(`SELECT id_categoria FROM categorias WHERE nombre = ?`, [r.categoria || '']);
-        const [[uni]]   = await conn.query(`SELECT id_unidad FROM unidades_medida WHERE nombre = ?`, [r.unidad || '']);
+    const resolverDeposito = async (colName) => {
+      const norm = colName.trim().toUpperCase().replace(/[\s\-()\[\]\/]/g, '');
+      if (depositoMap[norm]) return depositoMap[norm];
+      for (const [key, id] of Object.entries(depositoMap)) {
+        if (key.includes(norm) || norm.includes(key)) return id;
+      }
 
-        if (!marca) { errores.push({ fila, campo: 'marca', msg: `Marca "${r.marca}" no existe` }); continue; }
-        if (!cat)   { errores.push({ fila, campo: 'categoria', msg: `Categoría "${r.categoria}" no existe` }); continue; }
-        if (!uni)   { errores.push({ fila, campo: 'unidad', msg: `Unidad "${r.unidad}" no existe` }); continue; }
-
-        const [[moneda]] = await conn.query(`SELECT id_moneda FROM monedas WHERE es_moneda_base = 1 LIMIT 1`);
-        const idMoneda   = moneda?.id_moneda ?? 1;
-
-        const ESTADOS_VALIDOS = ['NUEVO','USADO','EXHIBICION','RECONDICIONADO','DESCONTINUADO'];
-        const estado = ESTADOS_VALIDOS.includes(r.estado?.toUpperCase()) ? r.estado.toUpperCase() : 'NUEVO';
-
-        const campos = {
-          codigo_barras:    r.codigo_barras    || null,
-          id_marca:         marca.id_marca,
-          id_categoria:     cat.id_categoria,
-          id_unidad:        uni.id_unidad,
-          producto:         String(r.producto),
-          detalle:          r.detalle          || null,
-          modelo:           r.modelo           || null,
-          color:            r.color            || null,
-          capacidad:        r.capacidad        || null,
-          caracteristicas:  r.caracteristicas  || null,
-          id_moneda_costo:  idMoneda,
-          precio_real:      Number(r.precio_real)      || 0,
-          costo_logistica:  Number(r.costo_logistica)  || 0,
-          costo_mcm:        Number(r.costo_mcm)        || 0,
-          precio_publico:   Number(r.precio_publico)   || 0,
-          bono:             Number(r.bono)             || 0,
-          precio_mayor:     Number(r.precio_mayor)     || 0,
-          stock_minimo:     Number(r.stock_minimo)     || 0,
-          stock_maximo:     Number(r.stock_maximo)     || 0,
-          estado,
-          notas:            r.notas || null,
-        };
-
-        const [[existe]] = await conn.query(
-          `SELECT id_producto FROM productos WHERE codigo_interno = ?`, [r.codigo_interno]
+      // Auto-crear: buscar sucursal principal o crear una
+      let [[suc]] = await conn.query(
+        `SELECT id_sucursal FROM sucursales WHERE activo = 1 ORDER BY (tipo = 'PRINCIPAL') DESC LIMIT 1`
+      );
+      if (!suc) {
+        const [[emp]] = await conn.query(`SELECT id_empresa FROM empresas LIMIT 1`);
+        const idEmpresa = emp?.id_empresa ?? 1;
+        const [insSuc] = await conn.query(
+          `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, activo) VALUES (?,?,?,?,1)`,
+          [idEmpresa, 'PRINCIPAL', 'Sucursal Principal', 'PRINCIPAL']
         );
+        suc = { id_sucursal: insSuc.insertId };
+      }
 
-        if (existe) {
-          await conn.query(`UPDATE productos SET ? WHERE id_producto = ?`, [campos, existe.id_producto]);
-          actualizados++;
-        } else {
-          await conn.query(`INSERT INTO productos SET codigo_interno = ?, ?`, [r.codigo_interno, campos]);
-          creados++;
+      const codigoDep = colName.trim().toUpperCase().replace(/\s+/g, '').slice(0, 20);
+      const [insDep] = await conn.query(
+        `INSERT INTO depositos (id_sucursal, codigo, nombre, tipo, activo) VALUES (?,?,?,?,1)`,
+        [suc.id_sucursal, codigoDep, colName.trim(), 'PUNTO_VENTA']
+      );
+      const newId = insDep.insertId;
+      depositoMap[norm] = newId;
+      depositosCreados++;
+      return newId;
+    };
+
+    const COLS_PRODUCTO_LP = new Set([
+      'MARCA','PRODUCTO','DETALLE','CAP.','CARACTERISTICAS','MODELO',
+      'COLOR','REAL BS.','LOG','MCM','PRECIO PUBLICO','BONO','PROVEEDOR',
+      'TOTAL CAJAS','UTILIDAD',
+    ]);
+    const stockCols = usandoListaPrecios
+      ? keys.filter(k => !COLS_PRODUCTO_LP.has(k.toUpperCase()))
+      : [];
+    let stockActualizados = 0;
+
+    if (usandoListaPrecios) {
+      // ── Formato lista de precios: MARCA, PRODUCTO, DETALLE, CAP., CARACTERISTICAS, MODELO, COLOR, REAL BS., LOG, MCM, PRECIO PUBLICO, BONO, ...
+      for (let i = 0; i < data.length; i++) {
+        const fila = i + 2;
+        const r    = data[i];
+
+        const marcaNombre     = String(r['MARCA'] || '').trim();
+        const productoBase    = String(r['PRODUCTO'] || '').trim();
+
+        // Saltar filas completamente vacías
+        if (!marcaNombre && !productoBase) continue;
+
+        const detalle         = String(r['DETALLE'] || '').trim();
+        const capacidad       = String(r['CAP.'] || '').trim();
+        const caracteristicas = String(r['CARACTERISTICAS'] || '').trim();
+        const modelo          = String(r['MODELO'] || '').trim();
+        const color           = String(r['COLOR'] || '').trim();
+        const precioReal      = Number(r['REAL BS.']) || 0;
+        const costoLog        = Number(r['LOG']) || 0;
+        const costoMcm        = Number(r['MCM']) || (precioReal + costoLog);
+        const precioPublico   = Number(r['PRECIO PUBLICO']) || 0;
+        const bono            = Number(r['BONO']) || 0;
+        const proveedorNombre = String(r['PROVEEDOR'] || '').trim();
+
+        if (!marcaNombre || !productoBase) {
+          errores.push({ fila, campo: 'MARCA/PRODUCTO', msg: 'Ambos campos son requeridos' });
+          continue;
         }
-      } catch (e) {
-        errores.push({ fila, campo: '-', msg: e.message });
+
+        // codigo_interno = MODELO si está, si no genera uno
+        const codigoInterno = modelo ||
+          `${marcaNombre.replace(/[^A-Z0-9]/gi, '').slice(0, 5)}-${productoBase.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-${detalle.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-${i}`
+            .toUpperCase();
+
+        // Nombre del producto: PRODUCTO + " " + DETALLE
+        const nombreProducto = detalle ? `${productoBase} ${detalle}` : productoBase;
+
+        try {
+          const [[marcaExiste]] = await conn.query(`SELECT id_marca FROM marcas WHERE nombre = ?`, [marcaNombre]);
+          const idMarca = await resolverMarca(conn, marcaNombre);
+          if (!marcaExiste) marcasCreadas++;
+
+          // Categoría = nombre del PRODUCTO (ej: COCINA, FREIDORA, LAVADORA)
+          const [[catExiste]] = await conn.query(`SELECT id_categoria FROM categorias WHERE nombre = ?`, [productoBase]);
+          const idCategoria = await resolverCategoria(conn, productoBase);
+          if (!catExiste) categoriasCreadas++;
+
+          let idProveedorDefault = null;
+          if (proveedorNombre) {
+            const [[provExiste]] = await conn.query(`SELECT id_proveedor FROM proveedores WHERE razon_social = ?`, [proveedorNombre]);
+            idProveedorDefault = await resolverProveedor(conn, proveedorNombre);
+            if (!provExiste) proveedoresCreados++;
+          }
+
+          const [[existe]] = await conn.query(
+            `SELECT id_producto FROM productos WHERE codigo_interno = ?`, [codigoInterno]
+          );
+
+          const campos = {
+            codigo_interno:  codigoInterno,
+            id_marca:        idMarca,
+            id_categoria:    idCategoria,
+            id_unidad:       idUnidadDefault,
+            producto:        nombreProducto,
+            detalle:         detalle || null,
+            modelo:          modelo  || null,
+            color:           color   || null,
+            capacidad:       capacidad || null,
+            caracteristicas: caracteristicas || null,
+            id_moneda_costo: idMoneda,
+            precio_real:     precioReal,
+            costo_logistica: costoLog,
+            costo_mcm:       costoMcm,
+            precio_publico:  precioPublico,
+            bono:            bono,
+            precio_mayor:        0,
+            stock_minimo:        0,
+            stock_maximo:        0,
+            id_proveedor_default: idProveedorDefault,
+            estado:              'NUEVO',
+            activo:              1,
+          };
+
+          let idProducto;
+          if (existe) {
+            idProducto = existe.id_producto;
+            const { codigo_interno: _ci, ...camposUpdate } = campos;
+            await conn.query(`UPDATE productos SET ? WHERE id_producto = ?`, [camposUpdate, idProducto]);
+            actualizados++;
+          } else {
+            const [ins] = await conn.query(`INSERT INTO productos SET ?`, [campos]);
+            idProducto = ins.insertId;
+            creados++;
+          }
+
+          for (const col of stockCols) {
+            const cantidad = Number(r[col]) || 0;
+            if (cantidad <= 0) continue;
+            const idDeposito = await resolverDeposito(col);
+            if (!idDeposito) continue;
+            await conn.query(
+              `INSERT INTO stock (id_producto, id_deposito, cantidad) VALUES (?,?,?)
+               ON DUPLICATE KEY UPDATE cantidad = ?`,
+              [idProducto, idDeposito, cantidad, cantidad]
+            );
+            stockActualizados++;
+          }
+        } catch (e) {
+          errores.push({ fila, campo: '-', msg: e.message });
+        }
+      }
+    } else {
+      // ── Formato plantilla estándar: codigo_interno, producto, marca, categoria, unidad, ...
+      for (let i = 0; i < data.length; i++) {
+        const fila = i + 2;
+        const r    = data[i];
+
+        // Saltar filas completamente vacías
+        if (!r.codigo_interno && !r.producto) continue;
+
+        if (!r.codigo_interno) { errores.push({ fila, campo: 'codigo_interno', msg: 'Requerido' }); continue; }
+        if (!r.producto)       { errores.push({ fila, campo: 'producto',       msg: 'Requerido' }); continue; }
+
+        try {
+          const [[marca]] = await conn.query(`SELECT id_marca FROM marcas WHERE nombre = ?`, [r.marca || '']);
+          const [[cat]]   = await conn.query(`SELECT id_categoria FROM categorias WHERE nombre = ?`, [r.categoria || '']);
+          const [[uni]]   = await conn.query(`SELECT id_unidad FROM unidades_medida WHERE nombre = ?`, [r.unidad || '']);
+
+          if (!marca) { errores.push({ fila, campo: 'marca',     msg: `Marca "${r.marca}" no existe` }); continue; }
+          if (!cat)   { errores.push({ fila, campo: 'categoria', msg: `Categoría "${r.categoria}" no existe` }); continue; }
+          if (!uni)   { errores.push({ fila, campo: 'unidad',    msg: `Unidad "${r.unidad}" no existe` }); continue; }
+
+          const ESTADOS_VALIDOS = ['NUEVO','USADO','EXHIBICION','RECONDICIONADO','DESCONTINUADO'];
+          const estado = ESTADOS_VALIDOS.includes(r.estado?.toUpperCase()) ? r.estado.toUpperCase() : 'NUEVO';
+
+          const [[existe]] = await conn.query(
+            `SELECT id_producto FROM productos WHERE codigo_interno = ?`, [r.codigo_interno]
+          );
+
+          const campos = {
+            codigo_interno:  String(r.codigo_interno),
+            codigo_barras:   r.codigo_barras   || null,
+            id_marca:        marca.id_marca,
+            id_categoria:    cat.id_categoria,
+            id_unidad:       uni.id_unidad,
+            producto:        String(r.producto),
+            detalle:         r.detalle         || null,
+            modelo:          r.modelo          || null,
+            color:           r.color           || null,
+            capacidad:       r.capacidad       || null,
+            caracteristicas: r.caracteristicas || null,
+            id_moneda_costo: idMoneda,
+            precio_real:     Number(r.precio_real)     || 0,
+            costo_logistica: Number(r.costo_logistica) || 0,
+            costo_mcm:       Number(r.costo_mcm)       || 0,
+            precio_publico:  Number(r.precio_publico)  || 0,
+            bono:            Number(r.bono)            || 0,
+            precio_mayor:    Number(r.precio_mayor)    || 0,
+            stock_minimo:    Number(r.stock_minimo)    || 0,
+            stock_maximo:    Number(r.stock_maximo)    || 0,
+            estado,
+            notas:           r.notas || null,
+          };
+
+          if (existe) {
+            const { codigo_interno: _ci, ...camposUpdate } = campos;
+            await conn.query(`UPDATE productos SET ? WHERE id_producto = ?`, [camposUpdate, existe.id_producto]);
+            actualizados++;
+          } else {
+            await conn.query(`INSERT INTO productos SET ?`, [campos]);
+            creados++;
+          }
+        } catch (e) {
+          errores.push({ fila, campo: '-', msg: e.message });
+        }
       }
     }
 
-    res.json({ ok: true, creados, actualizados, errores });
+    res.json({
+      ok: true,
+      formato: usandoListaPrecios ? 'lista_precios' : 'plantilla',
+      creados,
+      actualizados,
+      errores,
+      marcasCreadas,
+      categoriasCreadas,
+      proveedoresCreados,
+      stockActualizados,
+      depositosCreados,
+    });
   } catch (e) {
     res.status(500).json({ mensaje: 'Error al procesar archivo: ' + e.message });
   }
