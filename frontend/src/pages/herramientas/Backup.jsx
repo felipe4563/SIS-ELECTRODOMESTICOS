@@ -95,6 +95,11 @@ export default function Backup() {
           </button>
         </div>
 
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs">
+          <span>⏰</span>
+          <span>Copia automática diaria a las 02:00 AM · Se conservan los últimos 10 archivos automáticos</span>
+        </div>
+
         {loading ? (
           <p className="text-sm text-zinc-400 animate-pulse">Cargando backups…</p>
         ) : backups.length === 0 ? (

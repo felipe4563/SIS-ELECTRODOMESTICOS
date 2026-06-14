@@ -30,9 +30,9 @@ const upload = multer({
 
 // ── Categorías de gasto ──────────────────────────────────────────────────────
 router.get('/categorias',        authMiddleware, checkPermission('ver',                  'gastos'), ctrl.getCategorias);
-router.post('/categorias',       authMiddleware, checkPermission('gestionar_categorias', 'gastos'), ctrl.crearCategoria);
-router.put('/categorias/:id',    authMiddleware, checkPermission('gestionar_categorias', 'gastos'), ctrl.updateCategoria);
-router.delete('/categorias/:id', authMiddleware, checkPermission('gestionar_categorias', 'gastos'), ctrl.deleteCategoria);
+router.post('/categorias',       authMiddleware, checkPermission('categorias_gestionar', 'gastos'), ctrl.crearCategoria);
+router.put('/categorias/:id',    authMiddleware, checkPermission('categorias_gestionar', 'gastos'), ctrl.updateCategoria);
+router.delete('/categorias/:id', authMiddleware, checkPermission('categorias_gestionar', 'gastos'), ctrl.deleteCategoria);
 
 // ── Gastos ────────────────────────────────────────────────────────────────────
 router.get('/',    authMiddleware, checkPermission('ver',    'gastos'), ctrl.getGastos);

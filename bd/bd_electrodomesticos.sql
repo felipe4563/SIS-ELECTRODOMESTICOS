@@ -3,14 +3,13 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 31-05-2026 a las 18:02:02
+-- Tiempo de generación: 14-06-2026 a las 16:28:02
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
-SET FOREIGN_KEY_CHECKS=0;
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -120,7 +119,15 @@ INSERT INTO `auditoria` (`id_auditoria`, `id_usuario`, `tabla`, `id_registro`, `
 (3, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:01:24'),
 (4, 1, 'usuarios', 1, 'LOGOUT', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:27'),
 (5, 1, 'usuarios', 1, 'LOGIN', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:36'),
-(6, 1, 'usuarios', 1, 'UPDATE', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:50');
+(6, 1, 'usuarios', 1, 'UPDATE', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:50'),
+(7, 1, 'usuarios', 1, 'LOGIN', NULL, NULL, '127.0.0.1', '2026-06-14 10:26:04'),
+(8, 1, 'empresas', 1, 'UPDATE', NULL, NULL, '127.0.0.1', '2026-06-14 10:26:11'),
+(9, 1, 'depositos', 1, 'INSERT', NULL, NULL, '127.0.0.1', '2026-06-14 10:26:34'),
+(10, 1, 'monedas', 1, 'INSERT', NULL, NULL, '127.0.0.1', '2026-06-14 10:26:49'),
+(11, 1, 'monedas', 2, 'INSERT', NULL, NULL, '127.0.0.1', '2026-06-14 10:27:10'),
+(12, 1, 'tipos_cambio', 1, 'INSERT', NULL, NULL, '127.0.0.1', '2026-06-14 10:27:29'),
+(13, 1, 'bancos', 1, 'INSERT', NULL, NULL, '127.0.0.1', '2026-06-14 10:27:39'),
+(14, 1, 'impuestos', 1, 'INSERT', NULL, NULL, '127.0.0.1', '2026-06-14 10:27:51');
 
 -- --------------------------------------------------------
 
@@ -136,6 +143,13 @@ CREATE TABLE `bancos` (
   `pais` varchar(60) DEFAULT 'Bolivia',
   `activo` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `bancos`
+--
+
+INSERT INTO `bancos` (`id_banco`, `codigo`, `nombre`, `sigla`, `pais`, `activo`) VALUES
+(1, 'UNION', 'Banco Union', 'BUN', 'Bolivia', 1);
 
 -- --------------------------------------------------------
 
@@ -408,6 +422,13 @@ CREATE TABLE `depositos` (
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `depositos`
+--
+
+INSERT INTO `depositos` (`id_deposito`, `id_sucursal`, `codigo`, `nombre`, `tipo`, `direccion`, `encargado`, `permite_venta`, `activo`, `fecha_creacion`) VALUES
+(1, 1, 'DEP-1', 'Deposito P', 'ALMACEN', '', '', 1, 1, '2026-06-14 10:26:34');
+
 -- --------------------------------------------------------
 
 --
@@ -461,6 +482,13 @@ CREATE TABLE `empresas` (
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `empresas`
+--
+
+INSERT INTO `empresas` (`id_empresa`, `razon_social`, `nombre_comercial`, `nit`, `direccion`, `telefono`, `email`, `logo_url`, `activo`, `fecha_creacion`) VALUES
+(1, 'MEGAELECTRA', 'MEGAELECTRA', '1234567890', '', '74819122', '', NULL, 1, '2026-06-14 14:23:49');
+
 -- --------------------------------------------------------
 
 --
@@ -502,6 +530,13 @@ CREATE TABLE `impuestos` (
   `es_default` tinyint(1) NOT NULL DEFAULT 0,
   `activo` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `impuestos`
+--
+
+INSERT INTO `impuestos` (`id_impuesto`, `codigo`, `nombre`, `porcentaje`, `tipo`, `es_default`, `activo`) VALUES
+(1, 'IVA', 'IVA', 13.00, 'AMBOS', 0, 1);
 
 -- --------------------------------------------------------
 
@@ -595,6 +630,14 @@ CREATE TABLE `monedas` (
   `es_moneda_base` tinyint(1) NOT NULL DEFAULT 0,
   `activo` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `monedas`
+--
+
+INSERT INTO `monedas` (`id_moneda`, `codigo`, `nombre`, `simbolo`, `decimales`, `es_moneda_base`, `activo`) VALUES
+(1, 'BOB', 'Boliviano', 'Bs', 1, 1, 1),
+(2, 'DL', 'Dolar', '$', 0, 0, 1);
 
 -- --------------------------------------------------------
 
@@ -1395,7 +1438,8 @@ CREATE TABLE `sesiones` (
 --
 
 INSERT INTO `sesiones` (`id_sesion`, `id_usuario`, `token`, `ip_origen`, `user_agent`, `fecha_inicio`, `fecha_expiracion`, `cerrada`) VALUES
-(1, 1, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjMDIyM2JiOS00ODkyLTQ2OGUtOGFjYy00MTY2NTY5YTdiNmUiLCJpZF91c3VhcmlvIjoxLCJyb2wiOjEsInJvbF9ub21icmUiOiJBRE1JTklTVFJBRE9SIiwiaWRfc3VjdXJzYWwiOjEsImRlYmVfY2FtYmlhcl9wYXNzIjp0cnVlLCJwZXJtaXNvcyI6WyJkYXNoYm9hcmQudm', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2026-05-31 12:01:36', '2026-05-31 20:01:36', 0);
+(1, 1, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjMDIyM2JiOS00ODkyLTQ2OGUtOGFjYy00MTY2NTY5YTdiNmUiLCJpZF91c3VhcmlvIjoxLCJyb2wiOjEsInJvbF9ub21icmUiOiJBRE1JTklTVFJBRE9SIiwiaWRfc3VjdXJzYWwiOjEsImRlYmVfY2FtYmlhcl9wYXNzIjp0cnVlLCJwZXJtaXNvcyI6WyJkYXNoYm9hcmQudm', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2026-05-31 12:01:36', '2026-05-31 20:01:36', 1),
+(2, 1, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3ODI2ZDNhMC0wNjA2LTQ5NTQtYTMxMi1hYWZmYTFjM2UzZTQiLCJpZF91c3VhcmlvIjoxLCJyb2wiOjEsInJvbF9ub21icmUiOiJBRE1JTklTVFJBRE9SIiwiaWRfc3VjdXJzYWwiOjEsImRlYmVfY2FtYmlhcl9wYXNzIjpmYWxzZSwicGVybWlzb3MiOlsiZGFzaGJvYXJkLn', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36', '2026-06-14 10:26:04', '2026-06-14 18:26:04', 0);
 
 -- --------------------------------------------------------
 
@@ -1435,6 +1479,13 @@ CREATE TABLE `sucursales` (
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `sucursales`
+--
+
+INSERT INTO `sucursales` (`id_sucursal`, `id_empresa`, `codigo`, `nombre`, `tipo`, `direccion`, `ciudad`, `telefono`, `responsable`, `es_punto_venta`, `activo`, `fecha_creacion`) VALUES
+(1, 1, 'PRINCIPAL', 'Sucursal Principal', 'PRINCIPAL', NULL, NULL, NULL, NULL, 1, 1, '2026-06-14 14:23:49');
+
 -- --------------------------------------------------------
 
 --
@@ -1449,6 +1500,13 @@ CREATE TABLE `tipos_cambio` (
   `tasa_compra` decimal(18,6) NOT NULL,
   `tasa_venta` decimal(18,6) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `tipos_cambio`
+--
+
+INSERT INTO `tipos_cambio` (`id_tipo_cambio`, `id_moneda_origen`, `id_moneda_destino`, `fecha`, `tasa_compra`, `tasa_venta`) VALUES
+(1, 2, 1, '2026-06-14', 6.960000, 6.980000);
 
 -- --------------------------------------------------------
 
@@ -1554,25 +1612,11 @@ CREATE TABLE `usuarios` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Volcado de datos para la tabla `empresas`
---
-
-INSERT INTO `empresas` (`id_empresa`, `razon_social`, `nombre_comercial`, `nit`, `direccion`, `telefono`, `email`, `logo_url`, `activo`) VALUES
-(1, 'MEGAELECTRA', 'MEGAELECTRA', NULL, NULL, NULL, NULL, NULL, 1);
-
---
--- Volcado de datos para la tabla `sucursales`
---
-
-INSERT INTO `sucursales` (`id_sucursal`, `id_empresa`, `codigo`, `nombre`, `tipo`, `direccion`, `ciudad`, `telefono`, `responsable`, `es_punto_venta`, `activo`) VALUES
-(1, 1, 'PRINCIPAL', 'Sucursal Principal', 'PRINCIPAL', NULL, NULL, NULL, NULL, 1, 1);
-
---
 -- Volcado de datos para la tabla `usuarios`
 --
 
 INSERT INTO `usuarios` (`id_usuario`, `username`, `password_hash`, `nombres`, `apellidos`, `documento`, `email`, `telefono`, `id_rol`, `id_sucursal_default`, `foto_url`, `debe_cambiar_pass`, `ultimo_login`, `activo`, `fecha_creacion`) VALUES
-(1, 'admin', '$2b$10$4Y5AuM3I2pmNRRZgzN7R8eq4ODfoYvmKjUK3awQOgGrfC4zkUYWGu', 'Administrador', 'del Sistema', '00000000', 'admin@electrohogar.bo', '70000000', 1, 1, NULL, 0, '2026-05-31 12:01:36', 1, '2026-05-25 07:48:46'),
+(1, 'admin', '$2b$10$4Y5AuM3I2pmNRRZgzN7R8eq4ODfoYvmKjUK3awQOgGrfC4zkUYWGu', 'Administrador', 'del Sistema', '00000000', 'admin@electrohogar.bo', '70000000', 1, 1, NULL, 0, '2026-06-14 10:26:04', 1, '2026-05-25 07:48:46'),
 (2, 'vendedor1', '$2b$10$v9eKl1yIevok5lO/C8rsg.tGN/FS.QLUu6vCikf23PxBGqQPMEVjm', 'Vendedor', 'Uno', '11111111', 'vendedor1@electrohogar.bo', '71111111', 2, 1, NULL, 1, NULL, 1, '2026-05-25 07:48:46'),
 (3, 'almacen1', '$2b$10$mWN4w1jnMGRo6qLd33L7N.Dpb5mNvxDul29YHzqYJ8IKYttatelQW', 'Almacenero', 'Uno', '22222222', 'almacen1@electrohogar.bo', '72222222', 3, 1, NULL, 1, NULL, 1, '2026-05-25 07:48:46');
 
@@ -2178,13 +2222,13 @@ ALTER TABLE `arqueos_caja`
 -- AUTO_INCREMENT de la tabla `auditoria`
 --
 ALTER TABLE `auditoria`
-  MODIFY `id_auditoria` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_auditoria` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `bancos`
 --
 ALTER TABLE `bancos`
-  MODIFY `id_banco` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_banco` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `cajas`
@@ -2268,7 +2312,7 @@ ALTER TABLE `cotizacion_detalle`
 -- AUTO_INCREMENT de la tabla `depositos`
 --
 ALTER TABLE `depositos`
-  MODIFY `id_deposito` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_deposito` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `devoluciones_venta`
@@ -2286,7 +2330,7 @@ ALTER TABLE `devolucion_venta_detalle`
 -- AUTO_INCREMENT de la tabla `empresas`
 --
 ALTER TABLE `empresas`
-  MODIFY `id_empresa` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_empresa` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `gastos`
@@ -2298,7 +2342,7 @@ ALTER TABLE `gastos`
 -- AUTO_INCREMENT de la tabla `impuestos`
 --
 ALTER TABLE `impuestos`
-  MODIFY `id_impuesto` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_impuesto` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `kardex`
@@ -2322,7 +2366,7 @@ ALTER TABLE `modulos`
 -- AUTO_INCREMENT de la tabla `monedas`
 --
 ALTER TABLE `monedas`
-  MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `pagos_compra`
@@ -2394,7 +2438,7 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT de la tabla `sesiones`
 --
 ALTER TABLE `sesiones`
-  MODIFY `id_sesion` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_sesion` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `stock`
@@ -2406,19 +2450,19 @@ ALTER TABLE `stock`
 -- AUTO_INCREMENT de la tabla `sucursales`
 --
 ALTER TABLE `sucursales`
-  MODIFY `id_sucursal` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_sucursal` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_cambio`
 --
 ALTER TABLE `tipos_cambio`
-  MODIFY `id_tipo_cambio` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_tipo_cambio` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_movimiento`
 --
 ALTER TABLE `tipos_movimiento`
-  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `transferencias`
@@ -2769,7 +2813,6 @@ ALTER TABLE `venta_detalle`
   ADD CONSTRAINT `fk_vd_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`),
   ADD CONSTRAINT `fk_vd_promocion` FOREIGN KEY (`id_promocion`) REFERENCES `promociones` (`id_promocion`),
   ADD CONSTRAINT `fk_vd_venta` FOREIGN KEY (`id_venta`) REFERENCES `ventas` (`id_venta`) ON DELETE CASCADE;
-SET FOREIGN_KEY_CHECKS=1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -37,6 +37,8 @@ const gastosRoutes        = require('./routes/gastos.Routes');
 const herramientasRoutes  = require('./routes/herramientas.Routes');
 const publicRoutes        = require('./routes/public.Routes');
 
+const backupScheduler = require('./cron/backupScheduler');
+
 const app = express();
 
 // ── CORS ──────────────────────────────────────────────────────────────────
@@ -52,7 +54,7 @@ const corsOptions = {
 // ── Rate limiting ─────────────────────────────────────────────────────────
 const limiterGlobal = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes, intenta más tarde.' },
@@ -114,4 +116,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Conectado a la base de datos MySQL`);
   console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
+  backupScheduler.iniciar();
 });

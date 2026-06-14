@@ -182,6 +182,8 @@ exports.eliminarBackup = async (req, res) => {
   }
 };
 
+exports.generarSQLDump = generarSQLDump;
+
 // ── EXCEL ─────────────────────────────────────────────────────────────────────
 
 const PLANTILLA_COLS = [
@@ -228,9 +230,10 @@ exports.exportarProductos = async (req, res) => {
       ORDER BY p.producto
     `);
 
+    const fmtVal = v => (typeof v === 'number' ? Math.round(v) : (v ?? ''));
     const data = [
       [...PLANTILLA_COLS, 'stock_total'],
-      ...rows.map(r => PLANTILLA_COLS.map(c => r[c] ?? '').concat(r.stock_total)),
+      ...rows.map(r => PLANTILLA_COLS.map(c => fmtVal(r[c])).concat(Math.round(Number(r.stock_total) || 0))),
     ];
 
     const wb = XLSX.utils.book_new();
@@ -357,9 +360,13 @@ exports.importarProductos = async (req, res) => {
       }
 
       const codigoDep = colName.trim().toUpperCase().replace(/\s+/g, '').slice(0, 20);
+      const DEP_KEYWORDS = ['SUR', 'DEPOSITO', 'ALMACEN', 'BODEGA', 'PEMO', 'DEPOSITO_PEQUENO'];
+      const tipoDep = DEP_KEYWORDS.some(k => colName.toUpperCase().includes(k))
+        ? 'DEPOSITO_PEQUENO'
+        : 'PUNTO_VENTA';
       const [insDep] = await conn.query(
         `INSERT INTO depositos (id_sucursal, codigo, nombre, tipo, activo) VALUES (?,?,?,?,1)`,
-        [suc.id_sucursal, codigoDep, colName.trim(), 'PUNTO_VENTA']
+        [suc.id_sucursal, codigoDep, colName.trim(), tipoDep]
       );
       const newId = insDep.insertId;
       depositoMap[norm] = newId;
@@ -394,11 +401,11 @@ exports.importarProductos = async (req, res) => {
         const caracteristicas = String(r['CARACTERISTICAS'] || '').trim();
         const modelo          = String(r['MODELO'] || '').trim();
         const color           = String(r['COLOR'] || '').trim();
-        const precioReal      = Number(r['REAL BS.']) || 0;
-        const costoLog        = Number(r['LOG']) || 0;
-        const costoMcm        = Number(r['MCM']) || (precioReal + costoLog);
-        const precioPublico   = Number(r['PRECIO PUBLICO']) || 0;
-        const bono            = Number(r['BONO']) || 0;
+        const precioReal      = Math.round(Number(r['REAL BS.']) || 0);
+        const costoLog        = Math.round(Number(r['LOG']) || 0);
+        const costoMcm        = Math.round(Number(r['MCM']) || 0);
+        const precioPublico   = Math.round(Number(r['PRECIO PUBLICO']) || 0);
+        const bono            = Math.round(Number(r['BONO']) || 0);
         const proveedorNombre = String(r['PROVEEDOR'] || '').trim();
 
         if (!marcaNombre || !productoBase) {
@@ -452,7 +459,7 @@ exports.importarProductos = async (req, res) => {
             costo_mcm:       costoMcm,
             precio_publico:  precioPublico,
             bono:            bono,
-            precio_mayor:        0,
+            precio_mayor:    costoMcm,
             stock_minimo:        0,
             stock_maximo:        0,
             id_proveedor_default: idProveedorDefault,
@@ -735,20 +742,23 @@ exports.generarCatalogoPDF = async (req, res) => {
     const logoPath  = logoUrl?.startsWith('/uploads/') ? path.join(__dirname, '..', logoUrl) : null;
     const tieneLogo = logoPath && fs.existsSync(logoPath);
 
-    const HEADER_H = 90;
-    const THEAD_H  = 18;
-    const ROW_H    = 15;
-    const CAT_H    = 20;
-    const FOOTER_Y = PH - 26;
+    const HEADER_H  = 90;
+    const THEAD_H   = 18;
+    const CAT_H     = 22;
+    const FOOTER_Y  = PH - 26;
+    const MIN_ROW_H = 18;
+    const PAD_V     = 4;   // top/bottom padding inside each row
+    const FS_MAIN   = 7;
+    const FS_SUB    = 6.5;
 
-    // Columns — widths sum to CW (523): 62+193+80+78+48+62 = 523
+    // Columns — widths sum to CW (523): 60+200+78+76+46+63 = 523
     const cols = [
-      { label: 'Código',             w: 62,  align: 'left',  bold: false },
-      { label: 'Producto / Descripción', w: 193, align: 'left',  bold: false },
-      { label: 'P. Público',         w: 80,  align: 'right', bold: true  },
-      { label: 'P. Mayor',           w: 78,  align: 'right', bold: true  },
-      { label: 'Bono',               w: 48,  align: 'right', bold: false },
-      { label: 'Stock',              w: 62,  align: 'right', bold: true  },
+      { label: 'Código',                w: 60,  align: 'left',  bold: false },
+      { label: 'Producto / Descripción',w: 200, align: 'left',  bold: false },
+      { label: 'P. Público',            w: 78,  align: 'right', bold: true  },
+      { label: 'P. Mayor',              w: 76,  align: 'right', bold: true  },
+      { label: 'Bono',                  w: 46,  align: 'right', bold: false },
+      { label: 'Stock',                 w: 63,  align: 'right', bold: true  },
     ];
 
     const colX = [];
@@ -762,9 +772,7 @@ exports.generarCatalogoPDF = async (req, res) => {
 
     const drawPageHeader = () => {
       pageNum++;
-      // Dark header band
       doc.rect(0, 0, PW, HEADER_H).fill('#0f172a');
-      // Gold accent bottom stripe
       doc.rect(0, HEADER_H - 4, PW, 4).fill('#f59e0b');
 
       let nameX = MX;
@@ -789,7 +797,6 @@ exports.generarCatalogoPDF = async (req, res) => {
       doc.fillColor('#94a3b8').fontSize(8).font('Helvetica')
          .text(infoLine, nameX, 52, { width: nameW });
 
-      // Page number top-right
       doc.fillColor('#64748b').fontSize(7).font('Helvetica')
          .text(`Pág. ${pageNum}`, PW - MX - 32, 18, { width: 32, align: 'right' });
     };
@@ -821,58 +828,81 @@ exports.generarCatalogoPDF = async (req, res) => {
       y += 2;
     };
 
+    // Calculate dynamic row height based on text content
+    const calcRowH = (p) => {
+      const nameW = cols[1].w - 6;
+      const lineaMain = p.producto || '—';
+      const lineaSub  = [p.detalle, p.capacidad, p.modelo, p.color].filter(Boolean).join(' · ');
+
+      const hMain = doc.font('Helvetica-Bold').fontSize(FS_MAIN).heightOfString(lineaMain, { width: nameW });
+      const hSub  = lineaSub
+        ? doc.font('Helvetica').fontSize(FS_SUB).heightOfString(lineaSub, { width: nameW }) + 2
+        : 0;
+
+      return Math.max(MIN_ROW_H, PAD_V + hMain + hSub + PAD_V);
+    };
+
     newPage();
 
     let lastCat = null, rowIdx = 0;
 
     for (const p of prods) {
-      // Category section divider
       if (p.categoria !== lastCat) {
-        if (y + CAT_H + ROW_H > FOOTER_Y - 24) newPage();
+        const rowH = calcRowH(p);
+        if (y + CAT_H + rowH > FOOTER_Y - 24) newPage();
         doc.rect(MX, y, CW, CAT_H).fill('#f59e0b');
         doc.rect(MX, y, 4, CAT_H).fill('#b45309');
         doc.fillColor('#1e293b').fontSize(8).font('Helvetica-Bold')
-           .text((p.categoria || 'Sin categoría').toUpperCase(), MX + 10, y + 6, { width: CW - 20, lineBreak: false });
+           .text((p.categoria || 'Sin categoría').toUpperCase(), MX + 10, y + 7, { width: CW - 20, lineBreak: false });
         y += CAT_H;
         lastCat = p.categoria;
         rowIdx  = 0;
       }
 
-      if (y + ROW_H > FOOTER_Y - 24) newPage();
+      const rowH = calcRowH(p);
+      if (y + rowH > FOOTER_Y - 24) newPage();
 
       const bg = rowIdx % 2 === 0 ? '#ffffff' : '#f1f5f9';
-      doc.rect(MX, y, CW, ROW_H).fill(bg);
-      doc.rect(MX, y, 1.5, ROW_H).fill('#e2e8f0');
+      doc.rect(MX, y, CW, rowH).fill(bg);
+      doc.rect(MX, y, 1.5, rowH).fill('#e2e8f0');
 
-      const nombre = [p.producto, p.capacidad, p.modelo, p.color].filter(Boolean).join(' · ');
+      // Col 0: Código — vertically centered
+      const yCtr = y + (rowH - FS_MAIN) / 2 - 1;
+      doc.fillColor('#64748b').fontSize(FS_MAIN).font('Helvetica')
+         .text(p.codigo_interno || '—', colX[0] + 3, yCtr, { width: cols[0].w - 6, align: 'left', lineBreak: false });
 
-      const vals = [
-        p.codigo_interno || '—',
-        nombre.length > 54 ? nombre.slice(0, 54) + '…' : nombre,
-        fmtBs(p.precio_publico),
-        fmtBs(p.precio_mayor),
-        Number(p.bono) > 0 ? fmtBs(p.bono) : '—',
-        String(p.stock_total),
+      // Col 1: Nombre (bold) + detalle/specs (gray subtitle), wrapping freely
+      const nameW    = cols[1].w - 6;
+      const lineaMain = p.producto || '—';
+      const lineaSub  = [p.detalle, p.capacidad, p.modelo, p.color].filter(Boolean).join(' · ');
+
+      doc.fillColor('#1e293b').fontSize(FS_MAIN).font('Helvetica-Bold')
+         .text(lineaMain, colX[1] + 3, y + PAD_V, { width: nameW, lineBreak: true });
+
+      if (lineaSub) {
+        const hMain = doc.font('Helvetica-Bold').fontSize(FS_MAIN).heightOfString(lineaMain, { width: nameW });
+        doc.fillColor('#64748b').fontSize(FS_SUB).font('Helvetica')
+           .text(lineaSub, colX[1] + 3, y + PAD_V + hMain + 1, { width: nameW, lineBreak: true });
+      }
+
+      // Cols 2-5: prices and stock, vertically centered
+      const priceVals = [
+        { v: fmtBs(p.precio_publico), color: '#0f766e', bold: true  },
+        { v: fmtBs(p.precio_mayor),   color: '#1d4ed8', bold: true  },
+        { v: Number(p.bono) > 0 ? fmtBs(p.bono) : '—', color: Number(p.bono) > 0 ? '#b45309' : '#94a3b8', bold: false },
+        { v: String(p.stock_total),    color: '#1e293b', bold: true  },
       ];
 
-      cols.forEach((col, i) => {
-        let color = '#334155';
-        if (i === 2) color = '#0f766e'; // precio público: teal
-        if (i === 3) color = '#1d4ed8'; // precio mayor: blue
-        if (i === 4 && Number(p.bono) > 0) color = '#b45309'; // bono: amber
-        if (i === 5) color = '#1e293b'; // stock: dark
-
-        doc.fillColor(color)
-           .fontSize(7)
-           .font(col.bold ? 'Helvetica-Bold' : 'Helvetica')
-           .text(vals[i], colX[i] + 3, y + 4, { width: col.w - 6, align: col.align, lineBreak: false });
+      priceVals.forEach(({ v, color, bold }, offset) => {
+        const i = offset + 2;
+        doc.fillColor(color).fontSize(FS_MAIN).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+           .text(v, colX[i] + 3, yCtr, { width: cols[i].w - 6, align: cols[i].align, lineBreak: false });
       });
 
-      y += ROW_H;
+      y += rowH;
       rowIdx++;
     }
 
-    // Summary row
     if (y + 22 < FOOTER_Y - 10) {
       y += 8;
       doc.rect(MX, y, CW, 0.5).fill('#e2e8f0');

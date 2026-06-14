@@ -105,8 +105,8 @@ function TabDatos({ producto, onActualizar }) {
   const costosEditables = editando && puedeEditarCostos;
   const bonoEditable    = editando && puedeEditarBono;
 
-  const costo_total = Number(form.precio_real || 0) + Number(form.costo_logistica || 0) + Number(form.costo_mcm || 0);
-  const utilidad    = Number(form.precio_publico || 0) - costo_total;
+  const costo_total = Number(form.costo_mcm || 0);
+  const utilidad    = Number(form.precio_publico || 0) - costo_total - Number(form.bono || 0);
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 p-6">
@@ -514,8 +514,8 @@ export default function ProductoDetalle() {
 
   if (!producto) return null;
 
-  const costo_total = Number(producto.precio_real) + Number(producto.costo_logistica) + Number(producto.costo_mcm);
-  const utilidad    = Number(producto.precio_publico) - costo_total;
+  const costo_total = Number(producto.costo_mcm);
+  const utilidad    = Number(producto.precio_publico) - costo_total - Number(producto.bono || 0);
 
   return (
     <div>

@@ -11,7 +11,7 @@ router.put('/:id', authMiddleware, checkPermission('editar', 'cotizaciones'), ct
 router.post('/:id/emitir',         authMiddleware, checkPermission('emitir', 'cotizaciones'), ctrl.emitirCotizacion);
 router.post('/:id/aprobar',        authMiddleware, checkPermission('aprobar', 'cotizaciones'), ctrl.aprobarCotizacion);
 router.post('/:id/rechazar',       authMiddleware, checkPermission('rechazar', 'cotizaciones'), ctrl.rechazarCotizacion);
-router.post('/:id/convertir-venta', authMiddleware, checkPermission('convertir', 'cotizaciones'), ctrl.convertirVenta);
+router.post('/:id/convertir-venta', authMiddleware, checkPermission('convertir_venta', 'cotizaciones'), ctrl.convertirVenta);
 router.get('/:id/pdf',             authMiddleware, checkPermission('ver', 'cotizaciones'), ctrl.getPDF);
 
 module.exports = router;

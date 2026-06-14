@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlus, FaSpinner, FaBoxOpen, FaEye, FaTrash, FaFileExcel, FaDownload, FaQrcode } from 'react-icons/fa';
+import {
+  HiPlus, HiArrowPath, HiArchiveBox, HiEye, HiTrash, HiQrCode,
+} from 'react-icons/hi2';
 import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
@@ -19,24 +21,9 @@ const EMPTY = {
   stock_minimo: 0, stock_maximo: 0, notas: '',
 };
 
-// Descarga template Excel con las columnas esperadas
-function descargarTemplate() {
-  const cols = ['MARCA','PRODUCTO','DETALLE','CAP.','CARACTERISTICAS','MODELO','COLOR',
-                'REAL BS.','LOG','MCM','PRECIO PUBLICO','BONO','PRECIO MAYOR',
-                'PROVEEDOR','CODIGO','CODIGO BARRAS','CATEGORIA','UNIDAD','MONEDA','STOCK MIN'];
-  const csv = cols.join(',') + '\n' +
-    'SAMSUNG,COCINA DE PISO,4H MESA VIDRIO,60CM,GRILL ELÉCTRICO,COC-60,PLATA,850,50,20,1100,30,950,SAMSUNG BOLIVIA,SAM-COC001,,Electrodomésticos,UND,Bs,2\n';
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'template_productos.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function Productos() {
   const navigate    = useNavigate();
   const { puede }   = usePermission();
-  const fileRef     = useRef();
 
   const [lista,      setLista]      = useState([]);
   const [cargando,   setCargando]   = useState(true);
@@ -50,14 +37,12 @@ export default function Productos() {
   const [guardando,  setGuardando]  = useState(false);
   const [error,      setError]      = useState(null);
 
-  // Catálogos para selects
   const [marcas,     setMarcas]     = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [unidades,   setUnidades]   = useState([]);
   const [monedas,    setMonedas]    = useState([]);
   const [proveedores,setProveedores]= useState([]);
 
-  // Selección para etiquetas QR
   const [seleccionados, setSeleccionados] = useState(new Set());
 
   const toggleSeleccion = (id) =>
@@ -80,11 +65,6 @@ export default function Productos() {
       .map(p => ({ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }));
     navigate('/productos/etiquetas', { state: { etiquetas } });
   };
-
-  // Importación
-  const [importando, setImportando] = useState(false);
-  const [importResult, setImportResult] = useState(null);
-  const [modalImport, setModalImport]   = useState(false);
 
   const cargar = () => {
     setCargando(true);
@@ -111,7 +91,7 @@ export default function Productos() {
     });
   }, []);
 
-  const marcasUnicas    = [...new Set(lista.map(p => p.marca_nombre))].filter(Boolean).sort();
+  const marcasUnicas     = [...new Set(lista.map(p => p.marca_nombre))].filter(Boolean).sort();
   const categoriasUnicas = [...new Set(lista.map(p => p.categoria_nombre))].filter(Boolean).sort();
 
   const visibles = lista.filter(p => {
@@ -122,8 +102,8 @@ export default function Productos() {
       (p.modelo || '').toLowerCase().includes(q) ||
       (p.detalle || '').toLowerCase().includes(q) ||
       p.marca_nombre.toLowerCase().includes(q);
-    const marcaOk   = !filtroMarca || p.marca_nombre === filtroMarca;
-    const categOk   = !filtroCateg || p.categoria_nombre === filtroCateg;
+    const marcaOk = !filtroMarca || p.marca_nombre === filtroMarca;
+    const categOk = !filtroCateg || p.categoria_nombre === filtroCateg;
     return coincide && marcaOk && categOk;
   });
 
@@ -161,28 +141,8 @@ export default function Productos() {
     }
   };
 
-  const handleImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    setImportando(true);
-    setImportResult(null);
-    try {
-      const { data } = await productosService.importarExcel(file);
-      setImportResult(data);
-      setModalImport(true);
-      cargar();
-    } catch (err) {
-      setImportResult({ creados: 0, omitidos: 0, errores: [{ fila: '-', error: err.response?.data?.error || 'Error al importar' }] });
-      setModalImport(true);
-    } finally {
-      setImportando(false);
-    }
-  };
-
   const puedeCrear    = puede('crear',    'productos');
   const puedeEliminar = puede('eliminar', 'productos');
-  const puedeImportar = puede('importar', 'productos');
 
   const bs = (v) => `Bs ${Number(v ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}`;
 
@@ -192,32 +152,20 @@ export default function Productos() {
         title="Productos"
         description="Catálogo de productos con precios y stock"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {seleccionados.size > 0 && (
               <button onClick={imprimirEtiquetas}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white shadow-md shadow-violet-500/20 transition-all">
-                <FaQrcode className="h-3.5 w-3.5" />
-                Imprimir QR ({seleccionados.size})
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white shadow-sm transition-all">
+                <HiQrCode className="h-4 w-4" />
+                <span className="hidden sm:inline">Imprimir QR</span>
+                <span>({seleccionados.size})</span>
               </button>
-            )}
-            {puedeImportar && (
-              <>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
-                <button onClick={descargarTemplate}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-all">
-                  <FaDownload className="h-3.5 w-3.5" /> Template
-                </button>
-                <button onClick={() => fileRef.current?.click()} disabled={importando}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-emerald-500 hover:bg-emerald-400 text-white shadow-md shadow-emerald-500/20 disabled:opacity-50 transition-all">
-                  {importando ? <FaSpinner className="animate-spin h-3.5 w-3.5" /> : <FaFileExcel className="h-3.5 w-3.5" />}
-                  Importar Excel
-                </button>
-              </>
             )}
             {puedeCrear && (
               <button onClick={abrirCrear}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
-                <FaPlus className="h-3.5 w-3.5" /> Nuevo producto
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-sm transition-all">
+                <HiPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Nuevo producto</span>
               </button>
             )}
           </div>
@@ -229,18 +177,18 @@ export default function Productos() {
       )}
 
       {/* Filtros */}
-      <div className="mb-4 flex flex-col sm:flex-row gap-3">
+      <div className="mb-4 flex flex-col sm:flex-row gap-2">
         <input
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          placeholder="Buscar por código, nombre, modelo, detalle o marca..."
+          placeholder="Buscar por código, nombre, modelo o marca..."
           className={inputCls + ' flex-1'}
         />
-        <select value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)} className={selectCls + ' sm:w-44'}>
+        <select value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)} className={selectCls + ' sm:w-40'}>
           <option value="">Todas las marcas</option>
           {marcasUnicas.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={filtroCateg} onChange={e => setFiltroCateg(e.target.value)} className={selectCls + ' sm:w-44'}>
+        <select value={filtroCateg} onChange={e => setFiltroCateg(e.target.value)} className={selectCls + ' sm:w-40'}>
           <option value="">Todas las categorías</option>
           {categoriasUnicas.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -248,20 +196,21 @@ export default function Productos() {
 
       {cargando ? (
         <div className="flex items-center justify-center h-48 text-gray-400">
-          <FaSpinner className="animate-spin h-6 w-6" />
+          <HiArrowPath className="animate-spin h-6 w-6" />
+        </div>
+      ) : visibles.length === 0 ? (
+        <div className="text-center py-16 text-gray-400 dark:text-zinc-500 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl">
+          <HiArchiveBox className="h-10 w-10 mx-auto mb-3 opacity-25" />
+          <p className="text-sm">{busqueda || filtroMarca || filtroCateg ? 'Sin resultados para los filtros aplicados' : 'No hay productos registrados'}</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-          {visibles.length === 0 ? (
-            <div className="text-center py-16 text-gray-400 dark:text-zinc-500">
-              <FaBoxOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">{busqueda || filtroMarca || filtroCateg ? 'Sin resultados' : 'No hay productos registrados'}</p>
-            </div>
-          ) : (
+        <>
+          {/* Vista tabla — md en adelante */}
+          <div className="hidden md:block bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 dark:border-zinc-800">
+                  <tr className="border-b border-gray-100 dark:border-zinc-800 bg-gray-50/60 dark:bg-zinc-800/40">
                     <th className="px-4 py-3 w-8">
                       <input
                         type="checkbox"
@@ -270,7 +219,7 @@ export default function Productos() {
                         className="rounded border-gray-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-400"
                       />
                     </th>
-                    {['Código','Producto','Marca / Cat.','Modelo','Precios','Stock','Estado',''].map(h => (
+                    {['Código', 'Producto', 'Marca / Cat.', 'Modelo', 'Precios', 'Stock', 'Estado', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -290,7 +239,7 @@ export default function Productos() {
                         <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{p.codigo_interno}</span>
                         {p.codigo_barras && <p className="text-xs text-gray-400 dark:text-zinc-600 font-mono">{p.codigo_barras}</p>}
                       </td>
-                      <td className="px-4 py-3 max-w-[240px]">
+                      <td className="px-4 py-3 max-w-[220px]">
                         <p className="font-semibold text-gray-900 dark:text-white truncate">{p.producto}</p>
                         {p.detalle && <p className="text-xs text-gray-400 dark:text-zinc-500 truncate">{p.detalle}</p>}
                         {p.capacidad && <p className="text-xs text-gray-400 dark:text-zinc-500">{p.capacidad}</p>}
@@ -314,9 +263,7 @@ export default function Productos() {
                             {Number(p.stock_total).toLocaleString('es-BO')}
                           </span>
                         ) : (
-                          <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400">
-                            0
-                          </span>
+                          <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400">0</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -330,18 +277,18 @@ export default function Productos() {
                             onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }] } })}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
                             title="Imprimir etiqueta QR">
-                            <FaQrcode className="h-3.5 w-3.5" />
+                            <HiQrCode className="h-4 w-4" />
                           </button>
                           <button onClick={() => navigate(`/productos/${p.id_producto}`)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
                             title="Ver detalle">
-                            <FaEye className="h-3.5 w-3.5" />
+                            <HiEye className="h-4 w-4" />
                           </button>
                           {puedeEliminar && p.activo && (
                             <button onClick={() => setConfirm(p)}
                               className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                               title="Desactivar">
-                              <FaTrash className="h-3.5 w-3.5" />
+                              <HiTrash className="h-4 w-4" />
                             </button>
                           )}
                         </div>
@@ -351,8 +298,94 @@ export default function Productos() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          </div>
+
+          {/* Vista cards — móvil */}
+          <div className="md:hidden space-y-2">
+            {/* Seleccionar todos */}
+            <label className="flex items-center gap-2 px-1 py-1 text-xs text-gray-500 dark:text-zinc-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={visibles.length > 0 && seleccionados.size === visibles.length}
+                onChange={toggleTodos}
+                className="rounded border-gray-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-400"
+              />
+              Seleccionar todos ({visibles.length})
+            </label>
+
+            {visibles.map(p => (
+              <div key={p.id_producto}
+                className={`bg-white dark:bg-zinc-900 border rounded-xl p-3 transition-colors ${seleccionados.has(p.id_producto) ? 'border-amber-300 dark:border-amber-500/50 bg-amber-50/40 dark:bg-amber-500/5' : 'border-gray-200 dark:border-zinc-800'}`}>
+                {/* Fila superior: checkbox + código + estado */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={seleccionados.has(p.id_producto)}
+                      onChange={() => toggleSeleccion(p.id_producto)}
+                      className="rounded border-gray-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-400 mt-0.5"
+                    />
+                    <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{p.codigo_interno}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${p.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
+                      {p.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                    {Number(p.stock_total) > 0 ? (
+                      <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                        {Number(p.stock_total).toLocaleString('es-BO')} uds
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2 py-0.5 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400">Sin stock</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Nombre + detalle */}
+                <p className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">{p.producto}</p>
+                {p.detalle && <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{p.detalle}{p.capacidad ? ` · ${p.capacidad}` : ''}</p>}
+
+                {/* Marca / Categoría / Modelo */}
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-500 dark:text-zinc-400">
+                  <span>{p.marca_nombre}</span>
+                  {p.categoria_nombre && <span className="text-gray-300 dark:text-zinc-600">·</span>}
+                  {p.categoria_nombre && <span>{p.categoria_nombre}</span>}
+                  {p.modelo && <span className="text-gray-300 dark:text-zinc-600">·</span>}
+                  {p.modelo && <span>{p.modelo}</span>}
+                </div>
+
+                {/* Precios + acciones */}
+                <div className="flex items-end justify-between mt-2.5 pt-2.5 border-t border-gray-100 dark:border-zinc-800">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{bs(p.precio_publico)}</p>
+                    <p className="text-xs text-gray-400 dark:text-zinc-500">Costo: {bs(p.costo_total)}</p>
+                    {p.bono > 0 && <p className="text-xs text-emerald-600 dark:text-emerald-400">Bono: {bs(p.bono)}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }] } })}
+                      className="p-2 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
+                      title="Imprimir etiqueta QR">
+                      <HiQrCode className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => navigate(`/productos/${p.id_producto}`)}
+                      className="p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
+                      title="Ver detalle">
+                      <HiEye className="h-4 w-4" />
+                    </button>
+                    {puedeEliminar && p.activo && (
+                      <button onClick={() => setConfirm(p)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                        title="Desactivar">
+                        <HiTrash className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Modal crear producto */}
@@ -361,8 +394,7 @@ export default function Productos() {
           <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Catálogos */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Marca *</label>
               <select name="id_marca" value={form.id_marca} onChange={handleChange} required className={selectCls}>
@@ -378,7 +410,7 @@ export default function Productos() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Unidad de medida *</label>
               <select name="id_unidad" value={form.id_unidad} onChange={handleChange} required className={selectCls}>
@@ -402,13 +434,12 @@ export default function Productos() {
             </div>
           </div>
 
-          {/* Descripción */}
           <div>
             <label className={labelCls}>Nombre del producto *</label>
             <input name="producto" value={form.producto} onChange={handleChange} required
               className={inputCls} placeholder="Ej: COCINA DE PISO" style={{ textTransform: 'uppercase' }} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Detalle</label>
               <input name="detalle" value={form.detalle} onChange={handleChange}
@@ -420,7 +451,7 @@ export default function Productos() {
                 className={inputCls} placeholder="Ej: 60 CM, 2 Lts" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Modelo</label>
               <input name="modelo" value={form.modelo} onChange={handleChange} className={inputCls} />
@@ -438,7 +469,7 @@ export default function Productos() {
           {/* Precios */}
           <div className="pt-2 border-t border-gray-100 dark:border-zinc-800">
             <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider mb-3">Precios y costos</p>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <label className={labelCls}>Real (costo) *</label>
                 <input name="precio_real" type="number" step="0.01" min="0" value={form.precio_real} onChange={handleChange} required
@@ -461,11 +492,11 @@ export default function Productos() {
               </div>
             </div>
 
-            {/* Resumen calculado en tiempo real */}
+            {/* Resumen en tiempo real */}
             {(() => {
-              const costoTotal = Number(form.precio_real || 0) + Number(form.costo_logistica || 0) + Number(form.costo_mcm || 0);
-              const utilidad   = Number(form.precio_publico || 0) - costoTotal;
-              const margen     = Number(form.precio_publico || 0) > 0 ? (utilidad / Number(form.precio_publico)) * 100 : 0;
+              const costoTotal = Number(form.costo_mcm || 0);
+              const utilidad   = Number(form.precio_publico || 0) - costoTotal - Number(form.bono || 0);
+              const margen     = costoTotal > 0 ? (utilidad / costoTotal) * 100 : 0;
               const fmt = v => `Bs ${Number(v).toLocaleString('es-BO', { minimumFractionDigits: 2 })}`;
               return (
                 <div className="grid grid-cols-3 gap-3 mt-3 p-3 bg-amber-50 dark:bg-amber-500/5 rounded-xl border border-amber-100 dark:border-amber-500/20">
@@ -488,7 +519,8 @@ export default function Productos() {
                 </div>
               );
             })()}
-            <div className="grid grid-cols-3 gap-4 mt-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
               <div>
                 <label className={labelCls}>Precio mayorista</label>
                 <input name="precio_mayor" type="number" step="0.01" min="0" value={form.precio_mayor} onChange={handleChange}
@@ -519,7 +551,7 @@ export default function Productos() {
             </button>
             <button type="submit" disabled={guardando}
               className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 disabled:opacity-50 transition-all">
-              {guardando && <FaSpinner className="animate-spin h-4 w-4" />}
+              {guardando && <HiArrowPath className="animate-spin h-4 w-4" />}
               Crear producto
             </button>
           </div>
@@ -543,42 +575,6 @@ export default function Productos() {
         </div>
       </Modal>
 
-      {/* Modal resultado importación */}
-      <Modal open={modalImport} onClose={() => setModalImport(false)} title="Resultado de Importación" maxWidth="max-w-lg">
-        {importResult && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{importResult.creados}</p>
-                <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium mt-1">Productos creados</p>
-              </div>
-              <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-4 text-center">
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{importResult.omitidos}</p>
-                <p className="text-xs text-amber-700 dark:text-amber-300 font-medium mt-1">Filas omitidas</p>
-              </div>
-            </div>
-            {importResult.errores?.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-600 dark:text-zinc-400 mb-2">Detalle de errores:</p>
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {importResult.errores.map((e, i) => (
-                    <div key={i} className="flex gap-2 text-xs px-3 py-1.5 bg-red-50 dark:bg-red-500/10 rounded-lg text-red-600 dark:text-red-400">
-                      <span className="font-mono shrink-0">Fila {e.fila}:</span>
-                      <span>{e.error}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="flex justify-end">
-              <button onClick={() => setModalImport(false)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 transition-all">
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
