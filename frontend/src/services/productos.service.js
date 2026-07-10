@@ -1,8 +1,9 @@
 import api from '../api/axios';
 
 export const productosService = {
-  getAll:   ()          => api.get('/productos'),
-  getOne:   (id)        => api.get(`/productos/${id}`),
+  getFormData: ()          => api.get('/productos/form-data'),
+  getAll:      ()          => api.get('/productos'),
+  getOne:      (id)        => api.get(`/productos/${id}`),
   create:   (data)      => api.post('/productos', data),
   update:   (id, data)  => api.put(`/productos/${id}`, data),
   remove:   (id)        => api.delete(`/productos/${id}`),

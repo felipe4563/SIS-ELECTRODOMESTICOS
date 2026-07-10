@@ -37,7 +37,7 @@ const getPermisos = async (req, res) => {
   }
 };
 
-// GET /api/roles/:id/permisos
+// GET /api/roles/:id/permisos  (retorna solo IDs — para modal de edición)
 const getRolPermisos = async (req, res) => {
   try {
     const [rows] = await db.promise().query(
@@ -47,6 +47,25 @@ const getRolPermisos = async (req, res) => {
     res.json({ permisos: rows.map(r => r.id_permiso) });
   } catch (err) {
     console.error('[getRolPermisos]', err);
+    res.status(500).json({ error: 'Error al obtener permisos del rol' });
+  }
+};
+
+// GET /api/roles/:id/permisos-detalle  (retorna objetos completos — para vista de solo lectura)
+const getRolPermisosDetalle = async (req, res) => {
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT p.id_permiso, p.nombre, p.descripcion, m.nombre AS modulo_nombre
+       FROM rol_permiso rp
+       JOIN permisos p ON p.id_permiso = rp.id_permiso
+       JOIN modulos m ON m.id_modulo = p.id_modulo
+       WHERE rp.id_rol = ?
+       ORDER BY m.orden, p.nombre`,
+      [req.params.id]
+    );
+    res.json({ permisos: rows });
+  } catch (err) {
+    console.error('[getRolPermisosDetalle]', err);
     res.status(500).json({ error: 'Error al obtener permisos del rol' });
   }
 };
@@ -183,4 +202,4 @@ const asignarPermisos = async (req, res) => {
   }
 };
 
-module.exports = { getRoles, getPermisos, getRolPermisos, createRol, updateRol, deleteRol, asignarPermisos };
+module.exports = { getRoles, getPermisos, getRolPermisos, getRolPermisosDetalle, createRol, updateRol, deleteRol, asignarPermisos };

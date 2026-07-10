@@ -7,7 +7,8 @@ export const clientesService = {
   update:  (id, data)   => api.put(`/clientes/${id}`, data),
   remove:  (id)         => api.delete(`/clientes/${id}`),
 
-  updateCredito: (id, data) => api.patch(`/clientes/${id}/credito`, data),
+  updateCredito:  (id, data) => api.patch(`/clientes/${id}/credito`, data),
+  getHistorial:   (id)       => api.get(`/clientes/${id}/historial`),
 
   getDirecciones:   (idC)            => api.get(`/clientes/${idC}/direcciones`),
   createDireccion:  (idC, data)      => api.post(`/clientes/${idC}/direcciones`, data),

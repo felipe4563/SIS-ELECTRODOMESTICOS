@@ -14,6 +14,5 @@ router.get('/arqueos',                     authMiddleware, checkPermission('ver_
 router.get('/arqueos/:id',                 authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueo);
 router.post('/:id_caja/abrir',             authMiddleware, checkPermission('abrir',             'caja'), ctrl.abrirCaja);
 router.post('/arqueos/:id/cerrar',         authMiddleware, checkPermission('cerrar',            'caja'), ctrl.cerrarCaja);
-router.post('/arqueos/:id/forzar-cierre',  authMiddleware, checkPermission('forzar_cierre',    'caja'), ctrl.forzarCierre);
 
 module.exports = router;

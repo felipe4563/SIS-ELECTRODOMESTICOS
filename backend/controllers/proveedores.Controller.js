@@ -152,6 +152,67 @@ const deleteProveedor = async (req, res) => {
   }
 };
 
+// ── SALDO / CUENTA POR PAGAR ─────────────────────────────────────────────
+
+const getSaldo = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [[provRows], [comprasPendientes], [ultimosPagos]] = await Promise.all([
+      db.promise().query(
+        `SELECT saldo_actual FROM proveedores WHERE id_proveedor = ?`, [id]
+      ),
+      db.promise().query(
+        `SELECT c.id_compra, c.numero, c.numero_factura, c.fecha_pedido, c.fecha_recepcion,
+                c.total, c.saldo_pendiente, c.condicion_pago, c.dias_credito, c.estado,
+                m.simbolo AS moneda_simbolo, m.codigo AS moneda_codigo
+         FROM compras c
+         LEFT JOIN monedas m ON c.id_moneda = m.id_moneda
+         WHERE c.id_proveedor = ? AND c.saldo_pendiente > 0
+               AND c.estado NOT IN ('ANULADO', 'PRE_PEDIDO')
+         ORDER BY c.fecha_pedido DESC
+         LIMIT 100`, [id]
+      ),
+      db.promise().query(
+        `SELECT p.id_pago, p.numero, p.fecha, p.metodo_pago, p.monto,
+                p.numero_referencia,
+                m.simbolo AS moneda_simbolo,
+                c.numero AS compra_numero
+         FROM pagos_compra p
+         LEFT JOIN monedas m ON p.id_moneda = m.id_moneda
+         LEFT JOIN compras c ON p.id_compra = c.id_compra
+         WHERE p.id_proveedor = ?
+         ORDER BY p.fecha DESC
+         LIMIT 20`, [id]
+      ),
+    ]);
+
+    if (!provRows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+
+    return res.json({
+      saldo_actual: provRows[0].saldo_actual ?? 0,
+      compras_pendientes: comprasPendientes,
+      ultimos_pagos: ultimosPagos,
+    });
+  } catch (err) {
+    console.error('[getSaldo]', err);
+    return res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
+// ── FORM DATA (catálogos para formularios) ────────────────────────────────
+const getFormData = async (req, res) => {
+  try {
+    const [[bancos], [monedas]] = await Promise.all([
+      db.promise().query(`SELECT id_banco, nombre, sigla FROM bancos WHERE activo = 1 ORDER BY nombre ASC`),
+      db.promise().query(`SELECT id_moneda, nombre, simbolo, codigo FROM monedas WHERE activo = 1 ORDER BY nombre ASC`),
+    ]);
+    return res.json({ bancos, monedas });
+  } catch (err) {
+    console.error('[getFormData]', err);
+    return res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
 // ── CONTACTOS ─────────────────────────────────────────────────────────────
 
 const getContactos = async (req, res) => {
@@ -347,6 +408,8 @@ const deleteCuenta = async (req, res) => {
 
 module.exports = {
   getProveedores, getProveedor, createProveedor, updateProveedor, deleteProveedor,
+  getSaldo,
+  getFormData,
   getContactos, createContacto, updateContacto, deleteContacto,
   getCuentas, createCuenta, updateCuenta, deleteCuenta,
 };

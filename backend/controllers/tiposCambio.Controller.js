@@ -1,4 +1,60 @@
-const db = require('../config/db');
+const db    = require('../config/db');
+const https = require('https');
+
+// Scrapea el BCB y devuelve tasas oficial y referencial del día
+const scrapearBCB = () => new Promise((resolve, reject) => {
+  const req = https.get(
+    'https://www.bcb.gob.bo/',
+    { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } },
+    (res) => {
+      // Ignorar redirecciones menores (el BCB puede redirigir HTTP→HTTPS pero ya usamos HTTPS)
+      if (res.statusCode >= 400)
+        return reject(new Error(`BCB respondió con HTTP ${res.statusCode}`));
+      let html = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { html += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(parsearTasas(html));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
+  );
+  req.on('error', reject);
+  req.setTimeout(12000, () => { req.destroy(); reject(new Error('Timeout al conectar con el BCB')); });
+});
+
+function parsearTasas(html) {
+  // 1. Quitar tags HTML y normalizar espacios para trabajar con texto plano
+  const texto = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ');
+
+  // 2. Buscar todas las ocurrencias de "Compra" seguidas de un número decimal (punto o coma)
+  //    Ejemplo en BCB: "Compra 6,86" o "Compra\n6,86"
+  const compras = [...texto.matchAll(/Compra\s+([\d]+[,.][\d]+)/gi)]
+    .map(m => parseFloat(m[1].replace(',', '.')));
+
+  // 3. Igual para "Venta"
+  const ventas = [...texto.matchAll(/Venta\s+([\d]+[,.][\d]+)/gi)]
+    .map(m => parseFloat(m[1].replace(',', '.')));
+
+  // 4. El BCB muestra dos bloques en orden: oficial primero, referencial después
+  //    compras[0]/ventas[0] = oficial,  compras[1]/ventas[1] = referencial
+  const oficial     = (compras[0] != null && ventas[0] != null)
+    ? { compra: +compras[0].toFixed(4), venta: +ventas[0].toFixed(4) } : null;
+  const referencial = (compras[1] != null && ventas[1] != null)
+    ? { compra: +compras[1].toFixed(4), venta: +ventas[1].toFixed(4) } : null;
+
+  if (!oficial && !referencial)
+    throw new Error('No se encontraron tasas en la página del BCB. El sitio puede haber cambiado su estructura.');
+
+  return { oficial, referencial };
+}
 
 // GET /api/tipos-cambio
 const getTiposCambio = async (req, res) => {
@@ -154,4 +210,16 @@ const updateTipoCambio = async (req, res) => {
   }
 };
 
-module.exports = { getTiposCambio, getTipoCambioHoy, createTipoCambio, updateTipoCambio, deleteTipoCambio };
+// GET /api/tipos-cambio/bcb  — tasas del Banco Central de Bolivia
+const getTasaBCB = async (req, res) => {
+  try {
+    const { oficial, referencial } = await scrapearBCB();
+    const fecha = new Date().toISOString().split('T')[0];
+    return res.json({ fecha, oficial, referencial });
+  } catch (err) {
+    console.error('[getTasaBCB]', err.message);
+    return res.status(502).json({ error: `No se pudo obtener la tasa del BCB: ${err.message}` });
+  }
+};
+
+module.exports = { getTiposCambio, getTipoCambioHoy, getTasaBCB, createTipoCambio, updateTipoCambio, deleteTipoCambio };

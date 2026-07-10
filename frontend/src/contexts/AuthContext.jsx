@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import authService from '../services/auth.service';
 
 const AuthContext = createContext(null);
@@ -66,6 +66,15 @@ export function AuthProvider({ children }) {
       return actualizado;
     });
   }, []);
+
+  // ── Heartbeat: verifica sesión cada 30s, el interceptor maneja el 401 ──
+  useEffect(() => {
+    if (!usuario) return;
+    const id = setInterval(() => {
+      authService.me().catch(() => {}); // el interceptor de axios redirige si recibe 401
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [usuario]);
 
   // ── Seleccionar sucursal ───────────────────────────────────────────────
   const seleccionarSucursal = useCallback(async (id_sucursal) => {

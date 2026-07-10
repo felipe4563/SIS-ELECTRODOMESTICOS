@@ -3,7 +3,7 @@ const router  = express.Router();
 const path    = require('path');
 const fs      = require('fs');
 const multer  = require('multer');
-const { authMiddleware, checkPermission } = require('../middlewares/authMiddleware');
+const { authMiddleware, checkPermission, checkAnyPermission } = require('../middlewares/authMiddleware');
 const { validateMagic, IMAGES_ONLY } = require('../middlewares/validateMagic');
 const C = require('../controllers/combosPromos.Controller');
 
@@ -28,13 +28,15 @@ const uploadImg = multer({
 
 router.use(authMiddleware);
 
-router.get('/',               checkPermission('ver',      'combos'), C.getCombos);
-router.get('/:id',            checkPermission('ver',      'combos'), C.getCombo);
+router.get('/exportar/pdf',         checkPermission('exportar', 'combos'), C.exportarCombos);
+router.get('/productos-para-combo', checkPermission('ver',      'combos'), C.getProductosParaCombo);
+router.get('/',                     checkPermission('ver',      'combos'), C.getCombos);
+router.get('/:id',                  checkPermission('ver',      'combos'), C.getCombo);
 router.post('/',              checkPermission('crear',    'combos'), C.createCombo);
 router.put('/:id',            checkPermission('editar',   'combos'), C.updateCombo);
 router.delete('/:id',         checkPermission('eliminar', 'combos'), C.deleteCombo);
 router.get('/:id/productos',  checkPermission('ver',      'combos'), C.getComboDetalle);
 router.post('/:id/productos', checkPermission('editar',   'combos'), C.upsertComboDetalle);
-router.post('/:id/imagen',    checkPermission('editar',   'combos'), uploadImg.single('imagen'), validateMagic(IMAGES_ONLY), C.uploadImagenCombo);
+router.post('/:id/imagen',    checkAnyPermission([['crear','combos'],['editar','combos']]), uploadImg.single('imagen'), validateMagic(IMAGES_ONLY), C.uploadImagenCombo);
 
 module.exports = router;

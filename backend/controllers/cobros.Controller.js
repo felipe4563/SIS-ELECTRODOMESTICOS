@@ -18,6 +18,12 @@ const getCobros = async (req, res) => {
     const where  = ['1=1'];
     const params = [];
 
+    // Filtrar por sucursal si el usuario NO tiene acceso global
+    if (!req.ability.can('ver_todos', 'cobros')) {
+      where.push('pv.id_sucursal = ?');
+      params.push(req.user.id_sucursal);
+    }
+
     if (tipo === 'CONTADO') { where.push(`v.condicion_pago = 'CONTADO'`); }
     else if (tipo === 'CREDITO') { where.push(`v.condicion_pago = 'CREDITO'`); }
 
@@ -79,6 +85,12 @@ const getCuentasPorCobrar = async (req, res) => {
     const { busqueda } = req.query;
     const where  = [`v.estado IN ('EMITIDA','PARCIAL') AND v.saldo_pendiente > 0`];
     const params = [];
+
+    // Filtrar por sucursal si el usuario NO tiene acceso global
+    if (!req.ability.can('ver_todos', 'cobros')) {
+      where.push('v.id_sucursal = ?');
+      params.push(req.user.id_sucursal);
+    }
 
     if (busqueda) {
       const b = `%${busqueda}%`;
@@ -175,18 +187,18 @@ const getRecibo = async (req, res) => {
 // POST /api/cobros
 const registrarCobro = async (req, res) => {
   const {
-    id_venta, id_cuota, id_cliente, id_sucursal,
+    id_venta, id_cuota, id_cliente,
     metodo_pago, id_moneda, tipo_cambio = 1,
     monto, numero_referencia, observaciones,
   } = req.body;
 
-  if (!id_venta || !id_cliente || !id_sucursal || !metodo_pago || !id_moneda || !monto) {
+  if (!id_venta || !id_cliente || !metodo_pago || !id_moneda || !monto) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
   try {
     const [[venta]] = await db.promise().query(
-      `SELECT id_venta, saldo_pendiente, total, estado, condicion_pago FROM ventas WHERE id_venta = ?`,
+      `SELECT id_venta, id_sucursal, saldo_pendiente, total, estado, condicion_pago FROM ventas WHERE id_venta = ?`,
       [id_venta]
     );
     if (!venta)                      return res.status(404).json({ error: 'Venta no encontrada' });
@@ -195,6 +207,9 @@ const registrarCobro = async (req, res) => {
     if (Number(monto) > Number(venta.saldo_pendiente)) {
       return res.status(400).json({ error: `El monto (${monto}) excede el saldo pendiente (${venta.saldo_pendiente})` });
     }
+
+    // Usar la sucursal de la venta (fuente autoritativa) en vez de confiar en el cliente
+    const id_sucursal = venta.id_sucursal;
 
     const numero = await generarNumeroCobro();
 

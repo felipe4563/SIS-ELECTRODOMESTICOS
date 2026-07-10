@@ -71,6 +71,7 @@ import Auditoria from './pages/auditoria/Auditoria';
 // ── Herramientas ───────────────────────────────────────────────────────────────
 import Herramientas from './pages/herramientas/Herramientas';
 import Backup       from './pages/herramientas/Backup';
+import ExcelImport  from './pages/herramientas/ExcelImport';
 import CatalogoPDF  from './pages/herramientas/CatalogoPDF';
 
 // ── Combos y Promociones ──────────────────────────────────────────────────────
@@ -94,8 +95,6 @@ import VentaDetalle  from './pages/ventas/VentaDetalle';
 import VentaImprimir from './pages/ventas/VentaImprimir';
 
 // ── Configuración base ───────────────────────────────────────────────────
-import ConfiguracionIndex  from './pages/configuracion/ConfiguracionIndex';
-import WizardConfiguracion from './pages/configuracion/WizardConfiguracion';
 import Empresa      from './pages/configuracion/Empresa';
 import Sucursales   from './pages/configuracion/Sucursales';
 import Depositos    from './pages/configuracion/Depositos';
@@ -118,9 +117,9 @@ function AppLayout({ children }) {
   );
 }
 
-function PageRoute({ action, subject, children }) {
+function PageRoute({ action, subject, orAction, anyOf, children }) {
   return (
-    <ProtectedRoute action={action} subject={subject}>
+    <ProtectedRoute action={action} subject={subject} orAction={orAction} anyOf={anyOf}>
       <AppLayout>{children}</AppLayout>
     </ProtectedRoute>
   );
@@ -155,24 +154,14 @@ export default function App() {
 
               {/* Dashboard */}
               <Route path="/dashboard" element={
-                <PageRoute action="ver" subject="dashboard">
+                <PageRoute action="ver" subject="dashboard" orAction="ver_todas_sucursales">
                   <Dashboard />
                 </PageRoute>
               } />
 
               {/* ── Configuración base ─────────────────────────────────── */}
-              <Route path="/configuracion" element={
-                <PageRoute action="ver" subject="configuracion">
-                  <ConfiguracionIndex />
-                </PageRoute>
-              } />
-              <Route path="/configuracion/wizard" element={
-                <ProtectedRoute action="ver" subject="configuracion">
-                  <WizardConfiguracion />
-                </ProtectedRoute>
-              } />
               <Route path="/configuracion/empresa" element={
-                <PageRoute action="ver" subject="configuracion">
+                <PageRoute action="ver" subject="empresa">
                   <Empresa />
                 </PageRoute>
               } />
@@ -373,13 +362,13 @@ export default function App() {
 
               {/* ── Ventas ────────────────────────────────────────────── */}
               <Route path="/ventas" element={
-                <PageRoute action="ver_sucursal" subject="ventas"><Ventas /></PageRoute>
+                <PageRoute anyOf={[['ver_propias','ventas'],['ver_sucursal','ventas'],['ver_todas','ventas']]}><Ventas /></PageRoute>
               } />
               <Route path="/ventas/nueva" element={
-                <PageRoute action="crear_menor" subject="ventas"><VentaForm /></PageRoute>
+                <PageRoute anyOf={[['crear_menor','ventas'],['crear_mayor','ventas']]}><VentaForm /></PageRoute>
               } />
               <Route path="/ventas/:id" element={
-                <PageRoute action="ver_sucursal" subject="ventas"><VentaDetalle /></PageRoute>
+                <PageRoute anyOf={[['ver_propias','ventas'],['ver_sucursal','ventas'],['ver_todas','ventas']]}><VentaDetalle /></PageRoute>
               } />
               <Route path="/ventas/:id/editar" element={
                 <PageRoute action="editar_borrador" subject="ventas"><VentaForm /></PageRoute>
@@ -417,6 +406,9 @@ export default function App() {
               } />
               <Route path="/herramientas/backup" element={
                 <PageRoute action="ver" subject="herramientas"><Backup /></PageRoute>
+              } />
+              <Route path="/herramientas/excel" element={
+                <PageRoute action="importar_productos" subject="excel"><ExcelImport /></PageRoute>
               } />
               <Route path="/herramientas/catalogo-pdf" element={
                 <PageRoute action="ver" subject="herramientas"><CatalogoPDF /></PageRoute>

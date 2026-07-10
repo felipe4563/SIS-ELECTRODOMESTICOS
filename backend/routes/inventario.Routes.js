@@ -1,14 +1,39 @@
 const express = require('express');
 const router  = express.Router();
-const { authMiddleware, checkPermission } = require('../middlewares/authMiddleware');
+const { authMiddleware, checkPermission, checkAnyPermission } = require('../middlewares/authMiddleware');
 const ctrl    = require('../controllers/inventario.Controller');
 const opsCtrl = require('../controllers/inventarioOps.Controller');
 
-// Stock consolidado
+// Form-data para Kardex y otros filtros — cualquier permiso de inventario habilita el acceso
+const puedeVerInventario = checkAnyPermission([
+  ['ver',                 'inventario'],
+  ['ver_todos_depositos', 'inventario'],
+  ['ver_kardex',          'inventario'],
+  ['alertas_ver',         'inventario'],
+  ['transferir_solicitar','inventario'],
+  ['transferir_enviar',   'inventario'],
+  ['transferir_recibir',  'inventario'],
+  ['transferir_anular',   'inventario'],
+  ['ajuste_crear',        'inventario'],
+  ['ajuste_aprobar',      'inventario'],
+  ['ajuste_anular',       'inventario'],
+]);
+
+router.get('/form-data', authMiddleware, puedeVerInventario, ctrl.getKardexFormData);
+router.get('/stock-deposito/:id', authMiddleware, puedeVerInventario, ctrl.getStockDeposito);
+
+// Stock consolidado: acepta ver O ver_todos_depositos
 router.get('/stock',
   authMiddleware,
-  checkPermission('ver', 'inventario'),
+  checkAnyPermission([['ver', 'inventario'], ['ver_todos_depositos', 'inventario']]),
   ctrl.getStockConsolidado
+);
+
+// Editar stock mínimo de un producto
+router.put('/stock-minimo/:id',
+  authMiddleware,
+  checkPermission('stock_minimo_editar', 'inventario'),
+  ctrl.editarStockMinimo
 );
 
 // Kardex
@@ -32,12 +57,19 @@ router.patch('/alertas/:id/atender',
 );
 
 // ── Transferencias ────────────────────────────────────────────────────────────
+const puedeVerTransferencias = checkAnyPermission([
+  ['transferir_solicitar', 'inventario'],
+  ['transferir_enviar',    'inventario'],
+  ['transferir_recibir',   'inventario'],
+  ['transferir_anular',    'inventario'],
+]);
+
 router.get('/transferencias',
-  authMiddleware, checkPermission('ver', 'inventario'), opsCtrl.getTransferencias);
+  authMiddleware, puedeVerTransferencias, opsCtrl.getTransferencias);
 router.post('/transferencias',
   authMiddleware, checkPermission('transferir_solicitar', 'inventario'), opsCtrl.createTransferencia);
 router.get('/transferencias/:id',
-  authMiddleware, checkPermission('ver', 'inventario'), opsCtrl.getTransferencia);
+  authMiddleware, puedeVerTransferencias, opsCtrl.getTransferencia);
 router.post('/transferencias/:id/enviar',
   authMiddleware, checkPermission('transferir_enviar', 'inventario'), opsCtrl.enviarTransferencia);
 router.post('/transferencias/:id/recibir',
@@ -46,12 +78,18 @@ router.post('/transferencias/:id/anular',
   authMiddleware, checkPermission('transferir_anular', 'inventario'), opsCtrl.anularTransferencia);
 
 // ── Ajustes de inventario ─────────────────────────────────────────────────────
+const puedeVerAjustes = checkAnyPermission([
+  ['ajuste_crear',   'inventario'],
+  ['ajuste_aprobar', 'inventario'],
+  ['ajuste_anular',  'inventario'],
+]);
+
 router.get('/ajustes',
-  authMiddleware, checkPermission('ver', 'inventario'), opsCtrl.getAjustes);
+  authMiddleware, puedeVerAjustes, opsCtrl.getAjustes);
 router.post('/ajustes',
   authMiddleware, checkPermission('ajuste_crear', 'inventario'), opsCtrl.createAjuste);
 router.get('/ajustes/:id',
-  authMiddleware, checkPermission('ver', 'inventario'), opsCtrl.getAjuste);
+  authMiddleware, puedeVerAjustes, opsCtrl.getAjuste);
 router.put('/ajustes/:id',
   authMiddleware, checkPermission('ajuste_crear', 'inventario'), opsCtrl.updateAjuste);
 router.post('/ajustes/:id/aprobar',

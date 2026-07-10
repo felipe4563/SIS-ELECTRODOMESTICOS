@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { cajaService } from '../../services/caja.service';
-import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
+import { useAuth } from '../../contexts/AuthContext';
 
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -72,9 +72,8 @@ function ModalAbrirCaja({ caja, onClose, onSuccess }) {
 }
 
 // ── Modal: Crear/Editar caja ──────────────────────────────────────────────
-function ModalCaja({ caja, onClose, onSuccess }) {
+function ModalCaja({ caja, sucursales, onClose, onSuccess }) {
   const editando = Boolean(caja?.id_caja);
-  const [sucursales, setSucursales] = useState([]);
   const [form, setForm] = useState({
     id_sucursal: caja?.id_sucursal ?? '',
     nombre:      caja?.nombre      ?? '',
@@ -82,10 +81,6 @@ function ModalCaja({ caja, onClose, onSuccess }) {
   });
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState('');
-
-  useEffect(() => {
-    sucursalesService.getAll().then(r => setSucursales(r.data.sucursales ?? [])).catch(() => {});
-  }, []);
 
   const handleGuardar = async () => {
     setError('');
@@ -251,12 +246,14 @@ function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, onAbrir, onEditar }) {
 // ── Página principal ──────────────────────────────────────────────────────
 export default function Caja() {
   const { puede } = usePermission();
+  const { usuario } = useAuth();
   const puedoAbrir           = puede('abrir', 'caja');
   const puedoGestionar       = puede('gestionar', 'caja');
   const puedoVerTodosArqueos = puede('ver_arqueo_todos', 'caja');
 
-  const [cajas,   setCajas]   = useState([]);
-  const [arqueos, setArqueos] = useState([]);
+  const [cajas,        setCajas]        = useState([]);
+  const [arqueos,      setArqueos]      = useState([]);
+  const [turnoActual,  setTurnoActual]  = useState(null);
   const [cargandoCajas,   setCargandoCajas]   = useState(true);
   const [cargandoArqueos, setCargandoArqueos] = useState(true);
   const [modalAbrir, setModalAbrir] = useState(null);
@@ -268,6 +265,13 @@ export default function Caja() {
     fecha_desde: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
     fecha_hasta: new Date().toISOString().slice(0, 10),
   });
+
+  const cargarTurnoActual = () => {
+    if (!puede('abrir', 'caja') && !puede('cerrar', 'caja')) return;
+    cajaService.getArqueoActual()
+      .then(r => setTurnoActual(r.data.arqueo ?? null))
+      .catch(() => setTurnoActual(null));
+  };
 
   const cargarCajas = () => {
     setCargandoCajas(true);
@@ -285,7 +289,7 @@ export default function Caja() {
       .finally(() => setCargandoArqueos(false));
   };
 
-  useEffect(() => { cargarCajas(); }, []);
+  useEffect(() => { cargarCajas(); cargarTurnoActual(); }, []); // eslint-disable-line
   useEffect(() => { cargarArqueos(); }, [filtros]);
 
   const handleSuccess = () => {
@@ -293,6 +297,7 @@ export default function Caja() {
     setModalCaja(null);
     cargarCajas();
     cargarArqueos();
+    cargarTurnoActual();
   };
 
   const estadoBadge = (estado) => {
@@ -326,6 +331,29 @@ export default function Caja() {
           </button>
         )}
       </div>
+
+      {/* Banner turno activo */}
+      {turnoActual && (
+        <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700">
+          <div className="flex items-center gap-3">
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-800 dark:text-green-300">
+                Tenés un turno abierto — {turnoActual.caja}
+              </p>
+              <p className="text-xs text-green-600 dark:text-green-400">
+                {turnoActual.sucursal} · Apertura: {fmtFecha(turnoActual.fecha_apertura)} · Bs {fmt(turnoActual.monto_apertura)}
+              </p>
+            </div>
+          </div>
+          <Link
+            to={`/caja/arqueos/${turnoActual.id_arqueo}`}
+            className="shrink-0 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors"
+          >
+            Ver mi turno
+          </Link>
+        </div>
+      )}
 
       {/* Estado de cajas */}
       <div>
@@ -477,6 +505,7 @@ export default function Caja() {
       {modalCaja !== null && (
         <ModalCaja
           caja={modalCaja?.id_caja ? modalCaja : null}
+          sucursales={[...new Map(cajas.map(c => [c.id_sucursal, { id_sucursal: c.id_sucursal, nombre: c.sucursal }])).values()]}
           onClose={() => setModalCaja(null)}
           onSuccess={handleSuccess}
         />

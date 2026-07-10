@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ventasService }    from '../../services/ventas.service';
-import { clientesService }  from '../../services/clientes.service';
-import { productosService } from '../../services/productos.service';
-import { promocionesService } from '../../services/combosPromos.service';
-import { categoriasService, unidadesService } from '../../services/catalogo.service';
-import { sucursalesService, depositosService, monedasService, impuestosService } from '../../services/configuracion.service';
+import { ventasService } from '../../services/ventas.service';
 import api from '../../api/axios';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
 
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+
+// Resuelve el precio según tipo de venta con fallback: mayor→publico→real | publico→real
+function resolverPrecio(prod, tipoVenta) {
+  if (!prod) return 0;
+  if (tipoVenta === 'MAYOR') {
+    return Number(prod.precio_mayor) || Number(prod.precio_publico) || Number(prod.precio_real) || 0;
+  }
+  return Number(prod.precio_publico) || Number(prod.precio_real) || 0;
+}
 
 // Devuelve el % de descuento de la primera promo vigente que aplica al producto
 function resolverPromo(prod, promociones) {
@@ -43,9 +47,7 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
   );
 
   const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
-  const precioBase = tipoVenta === 'MAYOR'
-    ? (prod?.precio_mayor ?? 0)
-    : (prod?.precio_publico ?? 0);
+  const precioBase = resolverPrecio(prod, tipoVenta);
 
   const disponible = fila.id_producto ? (stockMap[fila.id_producto] ?? 0) : null;
 
@@ -54,24 +56,23 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
   const imp      = (base - desc) * (Number(fila.impuesto_porc ?? 0) / 100);
   const subtotal = +(base - desc + imp).toFixed(2);
 
-  // Promo badge
   const promoPorc = prod ? resolverPromo(prod, promociones) : 0;
 
   return (
-    <tr className="border-b border-zinc-100 dark:border-zinc-800 align-top">
+    <tr className="border-b border-zinc-100 dark:border-zinc-800/80 align-top hover:bg-zinc-50/40 dark:hover:bg-zinc-800/20 transition-colors">
       {/* Producto */}
-      <td className="px-3 py-2 min-w-[200px]">
+      <td className="px-4 py-2.5 min-w-[220px]">
         <input
-          type="text" placeholder="Buscar producto…" value={busqueda}
+          type="text" placeholder="Filtrar…" value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full mb-1 px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+          className="w-full mb-1 px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 focus:bg-white dark:focus:bg-zinc-800"
         />
         <select
           value={fila.id_producto}
           onChange={e => {
             const id  = e.target.value;
             const p   = productos.find(x => String(x.id_producto) === id);
-            const precio = tipoVenta === 'MAYOR' ? (p?.precio_mayor ?? 0) : (p?.precio_publico ?? 0);
+            const precio = resolverPrecio(p, tipoVenta);
             const descPromo = resolverPromo(p, promociones);
             const impDef = p?.id_impuesto_default
               ? impuestos.find(i => String(i.id_impuesto) === String(p.id_impuesto_default))
@@ -91,44 +92,56 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
             </option>
           ))}
         </select>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {disponible !== null && (
-            <p className={`text-[10px] ${disponible <= 0 ? 'text-red-500' : 'text-zinc-400'}`}>
+            <span className={`text-[10px] font-medium ${disponible <= 0 ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
               Stock: {fmtMonto(disponible)}
-            </p>
+            </span>
           )}
           {promoPorc > 0 && fila.id_producto && (
             <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
-              Promo -{promoPorc}%
+              Promo −{promoPorc}%
             </span>
           )}
         </div>
       </td>
+
       {/* Cantidad */}
-      <td className="px-3 py-2 w-24">
+      <td className="px-3 py-2.5 w-24">
         <input
           type="number" min={1} step="1" value={fila.cantidad}
           onChange={e => onChange({ cantidad: Math.max(1, parseInt(e.target.value) || 1) })}
-          className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right"
+          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
         />
       </td>
+
       {/* Precio */}
-      <td className="px-3 py-2 w-28">
+      <td className="px-3 py-2.5 w-32">
         <input
           type="number" min={0} step="0.01" value={fila.precio_unitario}
           onChange={e => onChange({ precio_unitario: e.target.value })}
-          className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right"
+          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
         />
-        {precioBase > 0 && (
-          <p className="text-[10px] text-zinc-400 text-right mt-0.5">Base: {fmtMonto(precioBase)}</p>
-        )}
+        <div className="flex items-center justify-between mt-1">
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+            tipoVenta === 'MAYOR'
+              ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
+          }`}>
+            {tipoVenta === 'MAYOR' ? 'MAYOR' : 'PVP'}
+          </span>
+          {precioBase > 0 && (
+            <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
+          )}
+        </div>
       </td>
+
       {/* Descuento % */}
-      <td className="px-3 py-2 w-20">
+      <td className="px-3 py-2.5 w-20">
         <input
           type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
           onChange={e => onChange({ descuento_porc: e.target.value })}
-          className={`w-full px-2 py-1 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right ${
+          className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
             Number(fila.descuento_porc) > 0
               ? 'border-green-400 focus:ring-green-400 text-green-700 dark:text-green-400 font-semibold'
               : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
@@ -138,15 +151,16 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
           <p className="text-[10px] text-green-600 dark:text-green-400 text-center mt-0.5">auto</p>
         )}
       </td>
+
       {/* Impuesto */}
-      <td className="px-3 py-2 w-36">
+      <td className="px-3 py-2.5 w-36">
         <select
           value={fila.id_impuesto ?? ''}
           onChange={e => {
             const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
             onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
           }}
-          className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
         >
           <option value="">Sin imp.</option>
           {impuestos.map(i => (
@@ -156,13 +170,20 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
           ))}
         </select>
       </td>
+
       {/* Subtotal */}
-      <td className="px-3 py-2 w-28 text-right font-mono text-sm font-semibold text-zinc-900 dark:text-white">
-        {fmtMonto(subtotal)}
+      <td className="px-3 py-2.5 w-32 text-right font-mono text-sm font-semibold text-zinc-900 dark:text-white align-middle">
+        Bs {fmtMonto(subtotal)}
       </td>
+
       {/* Eliminar */}
-      <td className="px-3 py-2 w-10 text-center">
-        <button onClick={onRemove} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+      <td className="px-3 py-2.5 w-10 text-center align-middle">
+        <button
+          onClick={onRemove}
+          className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-base leading-none"
+        >
+          ×
+        </button>
       </td>
     </tr>
   );
@@ -172,13 +193,39 @@ function Modal({ titulo, onClose, children, maxW = 'max-w-md' }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className={`bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full ${maxW} shadow-2xl`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-white">{titulo}</h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xl leading-none">×</button>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-lg leading-none">×</button>
         </div>
         <div className="p-5">{children}</div>
       </div>
     </div>
+  );
+}
+
+// Componente de sección con acento izquierdo
+function SectionCard({ title, badge, actions, children }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <div className="w-0.5 h-5 rounded-full bg-yellow-400 flex-shrink-0" />
+          <span className="text-sm font-semibold text-zinc-900 dark:text-white">{title}</span>
+          {badge}
+        </div>
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Label estándar
+function FieldLabel({ children }) {
+  return (
+    <label className="block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5 uppercase tracking-wide">
+      {children}
+    </label>
   );
 }
 
@@ -188,6 +235,13 @@ export default function VentaForm() {
   const esEdicion    = Boolean(id);
   const { puede }    = usePermission();
   const { usuario }  = useAuth();
+
+  const puedeCrearMenor = puede('crear_menor', 'ventas');
+  const puedeCrearMayor = puede('crear_mayor', 'ventas');
+  const tiposPermitidos = [
+    puedeCrearMenor && 'MENOR',
+    puedeCrearMayor && 'MAYOR',
+  ].filter(Boolean);
 
   const [sucursales,  setSucursales]  = useState([]);
   const [depositos,   setDepositos]   = useState([]);
@@ -201,7 +255,7 @@ export default function VentaForm() {
   const [impuestos,   setImpuestos]   = useState([]);
 
   const [form, setForm] = useState({
-    tipo_venta: 'MENOR', id_sucursal: usuario?.id_sucursal ? String(usuario.id_sucursal) : '', id_deposito: '', id_cliente: '',
+    tipo_venta: 'MENOR', id_sucursal: '', id_deposito: '', id_cliente: '',
     id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0,
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
@@ -212,60 +266,52 @@ export default function VentaForm() {
   const [cargando,   setCargando]   = useState(esEdicion);
   const [error,      setError]      = useState('');
 
-  // Escáner QR
   const [qrInput, setQrInput] = useState('');
   const [qrError, setQrError] = useState('');
   const qrTimerRef = useRef(null);
 
-  // Modal producto rápido
   const [modalRapido, setModalRapido] = useState(false);
   const [rpForm, setRpForm]   = useState({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
   const [rpError, setRpError] = useState('');
   const [rpGuardando, setRpGuardando] = useState(false);
 
-  // Load catalogs
   useEffect(() => {
-    Promise.allSettled([
-      sucursalesService.getAll(),
-      depositosService.getAll(),
-      clientesService.getAll(),
-      productosService.getAll(),
-      monedasService.getAll(),
-      promocionesService.getVigentes(),
-      categoriasService.getAll(),
-      unidadesService.getAll(),
-      impuestosService.getAll(),
-    ]).then(([rs, rd, rc, rp, rm, rprom, rcat, run, ri]) => {
-      if (rs.status === 'fulfilled') {
-        const todas = rs.value.data.sucursales ?? rs.value.data ?? [];
-        const asignadas = usuario?.sucursales;
-        if (asignadas?.length) {
-          const ids = new Set(asignadas.map(s => s.id_sucursal));
-          setSucursales(todas.filter(s => ids.has(s.id_sucursal)));
-        } else {
-          setSucursales(todas);
-        }
+    ventasService.formData().then(r => {
+      const { sucursales: suc, depositos: deps, productos: prods,
+              monedas: mons, impuestos: imps, categorias: cats,
+              unidades: uns, promociones: promos, clientes: clis } = r.data;
+
+      setSucursales(suc ?? []);
+      setDepositos(deps ?? []);
+      setProductos(prods ?? []);
+      setClientes(clis ?? []);
+      setMonedas(mons ?? []);
+      setImpuestos(imps ?? []);
+      setCategorias(cats ?? []);
+      setUnidades(uns ?? []);
+      setPromociones(promos ?? []);
+
+      if (!esEdicion) {
+        const idSuc = usuario?.id_sucursal_default ?? usuario?.id_sucursal;
+        const sucursal = idSuc ? (suc ?? []).find(s => String(s.id_sucursal) === String(idSuc)) : null;
+        const sucId = sucursal ? String(sucursal.id_sucursal) : (suc?.length === 1 ? String(suc[0].id_sucursal) : '');
+
+        const depsSuc = (deps ?? []).filter(d => String(d.id_sucursal) === sucId);
+        const depId = depsSuc.length === 1 ? String(depsSuc[0].id_deposito) : '';
+
+        const base = (mons ?? []).find(m => m.es_moneda_base);
+
+        const tipoVentaDefault = puedeCrearMenor ? 'MENOR' : puedeCrearMayor ? 'MAYOR' : 'MENOR';
+
+        setForm(p => ({
+          ...p,
+          tipo_venta: tipoVentaDefault,
+          id_sucursal: sucId,
+          id_deposito: depId,
+          id_moneda: base ? String(base.id_moneda) : '',
+        }));
       }
-      if (rd.status === 'fulfilled') {
-        const deps = rd.value.data.depositos ?? rd.value.data ?? [];
-        setDepositos(deps.filter(d => d.permite_venta && d.activo));
-      }
-      if (rc.status === 'fulfilled')    setClientes(rc.value.data.clientes ?? rc.value.data ?? []);
-      if (rp.status === 'fulfilled')    setProductos((rp.value.data.productos ?? rp.value.data ?? []).filter(p => p.activo));
-      if (rm.status === 'fulfilled') {
-        const mons = rm.value.data.monedas ?? rm.value.data ?? [];
-        setMonedas(mons);
-        const base = mons.find(m => m.es_moneda_base);
-        if (base && !esEdicion) setForm(p => ({ ...p, id_moneda: String(base.id_moneda) }));
-      }
-      if (rprom.status === 'fulfilled') setPromociones(rprom.value.data.promociones ?? []);
-      if (rcat.status === 'fulfilled')  setCategorias((rcat.value.data.categorias ?? rcat.value.data ?? []).filter(c => c.activo));
-      if (run.status === 'fulfilled')   setUnidades(run.value.data.unidades ?? run.value.data ?? []);
-      if (ri.status === 'fulfilled') {
-        const todos = ri.value.data.impuestos ?? ri.value.data ?? [];
-        setImpuestos(todos.filter(i => i.activo && (i.tipo === 'VENTA' || i.tipo === 'AMBOS')));
-      }
-    });
+    }).catch(() => {});
 
     if (esEdicion) {
       ventasService.getOne(id)
@@ -296,20 +342,22 @@ export default function VentaForm() {
     }
   }, []); // eslint-disable-line
 
-  // Load stock when deposit changes
+  useEffect(() => {
+    if (esEdicion || !form.id_sucursal) return;
+    const depsSuc = depositos.filter(d => String(d.id_sucursal) === String(form.id_sucursal));
+    const depActualOk = depsSuc.some(d => String(d.id_deposito) === String(form.id_deposito));
+    if (!depActualOk) {
+      setF('id_deposito', depsSuc.length === 1 ? String(depsSuc[0].id_deposito) : '');
+    }
+  }, [form.id_sucursal]); // eslint-disable-line
+
   useEffect(() => {
     if (!form.id_deposito) { setStockMap({}); return; }
-    api.get('/inventario/stock').then(r => {
-      const map = {};
-      for (const prod of r.data.productos ?? []) {
-        const s = prod.stock?.[form.id_deposito];
-        map[prod.id_producto] = Number(s?.cantidad_disponible ?? s?.cantidad ?? 0);
-      }
-      setStockMap(map);
+    ventasService.stockDeposito(form.id_deposito).then(r => {
+      setStockMap(r.data.stockMap ?? {});
     }).catch(() => {});
   }, [form.id_deposito]);
 
-  // Update prices when tipo_venta changes
   useEffect(() => {
     setItems(prev => prev.map(it => {
       if (!it.id_producto) return it;
@@ -317,12 +365,11 @@ export default function VentaForm() {
       if (!prod) return it;
       return {
         ...it,
-        precio_unitario: form.tipo_venta === 'MAYOR' ? (prod.precio_mayor ?? 0) : (prod.precio_publico ?? 0),
+        precio_unitario: resolverPrecio(prod, form.tipo_venta),
       };
     }));
   }, [form.tipo_venta]); // eslint-disable-line
 
-  // Load client info when client changes; auto-apply client's default discount
   useEffect(() => {
     if (!form.id_cliente) { setClienteInfo(null); return; }
     const cli = clientes.find(c => String(c.id_cliente) === String(form.id_cliente));
@@ -334,7 +381,6 @@ export default function VentaForm() {
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  // Auto-fill exchange rate when currency changes
   useEffect(() => {
     if (!form.id_moneda || monedas.length === 0) return;
     const selected = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
@@ -369,9 +415,7 @@ export default function VentaForm() {
         return;
       }
 
-      const precio = form.tipo_venta === 'MAYOR'
-        ? (prod.precio_mayor ?? 0)
-        : (prod.precio_publico ?? 0);
+      const precio = resolverPrecio(prod, form.tipo_venta);
 
       setItems(prev => {
         const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
@@ -402,7 +446,6 @@ export default function VentaForm() {
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const limpiarItems = () => setItems([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
 
-  // Totals
   const subtotal  = items.reduce((s, it) => {
     const base = Number(it.cantidad ?? 0) * Number(it.precio_unitario ?? 0);
     const desc = base * (Number(it.descuento_porc ?? 0) / 100);
@@ -439,7 +482,6 @@ export default function VentaForm() {
     }
   };
 
-  // Producto rápido
   const setRp = (k, v) => setRpForm(p => ({ ...p, [k]: v }));
 
   const guardarProductoRapido = useCallback(async () => {
@@ -460,7 +502,7 @@ export default function VentaForm() {
       });
       const nuevoProd = res.data.producto;
       setProductos(prev => [...prev, nuevoProd]);
-      const precio = form.tipo_venta === 'MAYOR' ? (nuevoProd.precio_mayor ?? 0) : (nuevoProd.precio_publico ?? 0);
+      const precio = resolverPrecio(nuevoProd, form.tipo_venta);
       setItems(prev => [...prev, { id_producto: String(nuevoProd.id_producto), cantidad: 1, precio_unitario: precio, descuento_porc: 0 }]);
       setModalRapido(false);
       setRpForm({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
@@ -471,215 +513,289 @@ export default function VentaForm() {
     }
   }, [rpForm, form.tipo_venta]);
 
-  const inputCls = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400';
+  const inputCls = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-shadow';
+  const monedaSel = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
 
-  if (cargando) return <div className="flex items-center justify-center py-32 text-zinc-400">Cargando…</div>;
+  if (cargando) return (
+    <div className="flex items-center justify-center py-32">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-zinc-400">Cargando…</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-5 max-w-5xl">
-      <div>
-        <button onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
-          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 mb-1">
-          ← Ventas
-        </button>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-          {esEdicion ? 'Editar venta' : 'Nueva venta'}
-        </h1>
+    <div className="pb-28 lg:pb-8 max-w-5xl space-y-4">
+
+      {/* ── Cabecera de página ── */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <button
+            onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
+            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 mb-1.5 transition-colors"
+          >
+            ← Ventas
+          </button>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">
+            {esEdicion ? 'Editar venta' : 'Nueva venta'}
+          </h1>
+        </div>
+
+        {/* Acciones desktop */}
+        <div className="hidden lg:flex items-center gap-2.5">
+          <button
+            onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
+            className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm font-medium transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={guardar} disabled={guardando}
+            className="inline-flex items-center gap-2.5 px-5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
+          >
+            {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear venta'}
+            {!guardando && (
+              <span className="font-mono text-xs bg-zinc-900/10 px-2 py-0.5 rounded-lg font-bold">
+                Bs {fmtMonto(total)}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
-          {error}
+        <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400 flex items-start gap-2">
+          <span className="mt-0.5 flex-shrink-0">⚠</span>
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Cabecera */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4">
-        <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Datos de la venta</p>
+      {/* ── SECCIÓN 1: Datos de la venta ── */}
+      <SectionCard title="Datos de la venta">
+        <div className="p-5 space-y-5">
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Tipo venta */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Tipo de venta *</label>
-            <div className="flex gap-2">
-              {['MENOR', 'MAYOR'].map(t => (
-                <button
-                  key={t} onClick={() => setF('tipo_venta', t)} disabled={esEdicion}
-                  className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                    form.tipo_venta === t
-                      ? 'bg-yellow-400 border-yellow-400 text-zinc-900'
-                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
-                  } disabled:opacity-60`}
-                >
-                  {t === 'MENOR' ? 'Por menor' : 'Por mayor'}
-                </button>
-              ))}
+          {/* Fila 1: Tipo venta + Sucursal + Depósito */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <FieldLabel>Tipo de venta</FieldLabel>
+              {tiposPermitidos.length > 1 ? (
+                <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl gap-1">
+                  {tiposPermitidos.map(t => (
+                    <button
+                      key={t} onClick={() => setF('tipo_venta', t)} disabled={esEdicion}
+                      className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                        form.tipo_venta === t
+                          ? 'bg-yellow-400 text-zinc-900 shadow-sm'
+                          : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                      } disabled:opacity-60`}
+                    >
+                      {t === 'MENOR' ? 'Por menor' : 'Por mayor'}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${form.tipo_venta === 'MAYOR' ? 'bg-blue-400' : 'bg-yellow-400'}`} />
+                  <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                    {form.tipo_venta === 'MENOR' ? 'Por menor' : 'Por mayor'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <FieldLabel>Sucursal *</FieldLabel>
+              <select
+                value={form.id_sucursal} onChange={e => setF('id_sucursal', e.target.value)}
+                disabled={esEdicion || sucursales.length <= 1} className={inputCls}
+              >
+                <option value="">— seleccionar —</option>
+                {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <FieldLabel>Depósito / Punto de venta *</FieldLabel>
+              <select
+                value={form.id_deposito} onChange={e => setF('id_deposito', e.target.value)}
+                disabled={esEdicion} className={inputCls}
+              >
+                <option value="">— seleccionar —</option>
+                {depositos
+                  .filter(d => !form.id_sucursal || String(d.id_sucursal) === String(form.id_sucursal))
+                  .map(d => <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>)}
+              </select>
             </div>
           </div>
 
-          {/* Sucursal */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Sucursal *</label>
-            <select value={form.id_sucursal} onChange={e => setF('id_sucursal', e.target.value)}
-              disabled={esEdicion || sucursales.length <= 1} className={inputCls}>
-              <option value="">— seleccionar —</option>
-              {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
-            </select>
-          </div>
+          <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
-          {/* Depósito */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Depósito / Punto de venta *</label>
-            <select value={form.id_deposito} onChange={e => setF('id_deposito', e.target.value)}
-              disabled={esEdicion} className={inputCls}>
-              <option value="">— seleccionar —</option>
-              {depositos.map(d => <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>)}
-            </select>
-          </div>
-
-          {/* Cliente */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Cliente *</label>
-            <select value={form.id_cliente} onChange={e => setF('id_cliente', e.target.value)} className={inputCls}>
-              <option value="">— seleccionar —</option>
-              {clientes.filter(c => c.activo).map(c => (
-                <option key={c.id_cliente} value={c.id_cliente}>
-                  [{c.codigo}] {c.razon_social || `${c.nombres} ${c.apellidos}`}
-                </option>
-              ))}
-            </select>
-            {clienteInfo && (
-              <div className="mt-1 text-xs flex flex-wrap gap-x-2 gap-y-0.5">
-                <span className={clienteInfo.permite_credito ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}>
-                  {clienteInfo.permite_credito
-                    ? `Crédito: Bs ${fmtMonto(clienteInfo.limite_credito)} | Saldo: Bs ${fmtMonto(clienteInfo.saldo_actual)}`
-                    : 'Sin crédito habilitado'}
-                </span>
-                {clienteInfo.descuento_default > 0 && (
-                  <span className="inline-flex items-center gap-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
-                    Dto. aplicado: {clienteInfo.descuento_default}%
+          {/* Fila 2: Cliente + Condición pago + Moneda + Tipo cambio */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2 lg:col-span-2">
+              <FieldLabel>Cliente *</FieldLabel>
+              <select value={form.id_cliente} onChange={e => setF('id_cliente', e.target.value)} className={inputCls}>
+                <option value="">— seleccionar cliente —</option>
+                {clientes.map(c => (
+                  <option key={c.id_cliente} value={c.id_cliente}>
+                    [{c.codigo}] {c.razon_social || `${c.nombres} ${c.apellidos}`}
+                  </option>
+                ))}
+              </select>
+              {clienteInfo && (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                  <span className={`text-xs ${clienteInfo.permite_credito ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>
+                    {clienteInfo.permite_credito
+                      ? `Crédito: Bs ${fmtMonto(clienteInfo.limite_credito)} · Saldo: Bs ${fmtMonto(clienteInfo.saldo_actual)}`
+                      : 'Sin crédito habilitado'}
                   </span>
-                )}
+                  {clienteInfo.descuento_default > 0 && (
+                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
+                      Dto. {clienteInfo.descuento_default}% aplicado
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <FieldLabel>Condición de pago *</FieldLabel>
+              <select value={form.condicion_pago} onChange={e => setF('condicion_pago', e.target.value)} className={inputCls}>
+                <option value="CONTADO">Contado</option>
+                {puede('vender_credito', 'ventas') && <option value="CREDITO">Crédito</option>}
+              </select>
+              {form.condicion_pago === 'CREDITO' && (
+                <div className="mt-2">
+                  <label className="block text-[10px] text-zinc-400 mb-1">Días de crédito</label>
+                  <input
+                    type="number" min={0} value={form.dias_credito}
+                    onChange={e => setF('dias_credito', e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <FieldLabel>Moneda</FieldLabel>
+              <select value={form.id_moneda} onChange={e => setF('id_moneda', e.target.value)} className={inputCls}>
+                <option value="">— seleccionar —</option>
+                {monedas.map(m => (
+                  <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>
+                ))}
+              </select>
+              {monedaSel && !monedaSel.es_moneda_base && (
+                <div className="mt-2">
+                  <label className="block text-[10px] text-zinc-400 mb-1">Tipo de cambio</label>
+                  <input
+                    type="number" min="0.000001" step="0.000001" value={form.tipo_cambio}
+                    onChange={e => setF('tipo_cambio', e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+          {/* Fila 3: Entrega + Observaciones */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group">
+              <input
+                type="checkbox" id="entrega" checked={form.requiere_entrega}
+                onChange={e => setF('requiere_entrega', e.target.checked)}
+                className="w-4 h-4 rounded accent-yellow-400"
+              />
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+                Requiere entrega a domicilio
+              </span>
+            </label>
+
+            {form.requiere_entrega && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-yellow-400/30 ml-1.5">
+                <div>
+                  <FieldLabel>Dirección de entrega</FieldLabel>
+                  <input type="text" value={form.direccion_entrega} onChange={e => setF('direccion_entrega', e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <FieldLabel>Fecha de entrega</FieldLabel>
+                  <input type="datetime-local" value={form.fecha_entrega} onChange={e => setF('fecha_entrega', e.target.value)} className={inputCls} />
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Condición de pago */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Condición de pago *</label>
-            <select value={form.condicion_pago} onChange={e => setF('condicion_pago', e.target.value)} className={inputCls}>
-              <option value="CONTADO">Contado</option>
-              {puede('vender_credito', 'ventas') && <option value="CREDITO">Crédito</option>}
-            </select>
-          </div>
-
-          {/* Días crédito */}
-          {form.condicion_pago === 'CREDITO' && (
             <div>
-              <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Días de crédito</label>
-              <input type="number" min={0} value={form.dias_credito}
-                onChange={e => setF('dias_credito', e.target.value)} className={inputCls} />
-            </div>
-          )}
-
-          {/* Moneda */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Moneda</label>
-            <select value={form.id_moneda} onChange={e => setF('id_moneda', e.target.value)} className={inputCls}>
-              <option value="">— seleccionar —</option>
-              {monedas.filter(m => m.activo).map(m => (
-                <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Tipo de cambio */}
-          {(() => {
-            const sel = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
-            return sel && !sel.es_moneda_base ? (
-              <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Tipo de cambio *</label>
-                <input type="number" min="0.000001" step="0.000001" value={form.tipo_cambio}
-                  onChange={e => setF('tipo_cambio', e.target.value)} className={inputCls} />
-              </div>
-            ) : null;
-          })()}
-        </div>
-
-        {/* Entrega */}
-        <div className="flex items-center gap-2">
-          <input type="checkbox" id="entrega" checked={form.requiere_entrega}
-            onChange={e => setF('requiere_entrega', e.target.checked)}
-            className="w-4 h-4 rounded accent-yellow-400" />
-          <label htmlFor="entrega" className="text-sm text-zinc-700 dark:text-zinc-300">Requiere entrega a domicilio</label>
-        </div>
-        {form.requiere_entrega && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Dirección de entrega</label>
-              <input type="text" value={form.direccion_entrega} onChange={e => setF('direccion_entrega', e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Fecha de entrega</label>
-              <input type="datetime-local" value={form.fecha_entrega} onChange={e => setF('fecha_entrega', e.target.value)} className={inputCls} />
+              <FieldLabel>Observaciones</FieldLabel>
+              <textarea
+                value={form.observaciones} onChange={e => setF('observaciones', e.target.value)}
+                rows={2} className={inputCls} placeholder="Notas adicionales…"
+              />
             </div>
           </div>
-        )}
-
-        <div>
-          <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Observaciones</label>
-          <textarea value={form.observaciones} onChange={e => setF('observaciones', e.target.value)}
-            rows={2} className={inputCls} placeholder="Notas adicionales…" />
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Productos */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center gap-2">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white flex-1">Productos</p>
-          {promociones.length > 0 && (
-            <span className="text-[11px] text-green-600 dark:text-green-400 font-semibold">
-              {promociones.length} promo(s) activa(s)
+      {/* ── SECCIÓN 2: Productos ── */}
+      <SectionCard
+        title="Productos"
+        badge={
+          promociones.length > 0 && (
+            <span className="text-[11px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-semibold">
+              {promociones.length} promo{promociones.length > 1 ? 's' : ''} activa{promociones.length > 1 ? 's' : ''}
             </span>
-          )}
-          <button onClick={() => setModalRapido(true)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold transition-colors">
-            + Producto rápido
-          </button>
-          <button onClick={limpiarItems}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-            Limpiar
-          </button>
-          <button onClick={addItem}
-            className="text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors">
-            + Agregar fila
-          </button>
-        </div>
+          )
+        }
+        actions={
+          <>
+            <button
+              onClick={() => setModalRapido(true)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
+            >
+              + Producto rápido
+            </button>
+            <button
+              onClick={limpiarItems}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Limpiar
+            </button>
+            <button
+              onClick={addItem}
+              className="text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors"
+            >
+              + Agregar fila
+            </button>
+          </>
+        }
+      >
         {/* Escáner QR */}
-        <div className="px-5 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/20 flex items-center gap-3">
-          <span className="text-xs text-zinc-400 flex-shrink-0 select-none">🔍 QR</span>
+        <div className="px-5 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 flex items-center gap-3">
+          <span className="text-[10px] font-mono font-bold text-zinc-400 flex-shrink-0 tracking-widest select-none uppercase">QR</span>
           <input
             type="text"
             value={qrInput}
             onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
             onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-            placeholder="Escanee un código QR con la pistola…"
+            placeholder="Escanee un código de barras o QR…"
             className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
           />
-          {qrError && (
-            <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>
-          )}
+          {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
         </div>
+
+        {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Producto</th>
-                <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Cantidad</th>
-                <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Precio unit.</th>
-                <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Desc %</th>
-                <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Impuesto</th>
-                <th className="text-right px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Subtotal</th>
+              <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Producto</th>
+                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-24">Cantidad</th>
+                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-32">Precio unit.</th>
+                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-20">Desc %</th>
+                <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-36">Impuesto</th>
+                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-32">Subtotal</th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -700,77 +816,107 @@ export default function VentaForm() {
         </div>
 
         {/* Totales */}
-        <div className="px-5 py-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col items-end gap-2">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm min-w-[280px]">
-            <span className="text-zinc-500 dark:text-zinc-400">Subtotal:</span>
-            <span className="text-right font-mono font-semibold text-zinc-900 dark:text-white">Bs {fmtMonto(subtotal)}</span>
+        <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800">
+          <div className="flex justify-end">
+            <div className="w-full sm:w-72 space-y-2.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Subtotal</span>
+                <span className="font-mono font-semibold text-zinc-900 dark:text-white">Bs {fmtMonto(subtotal)}</span>
+              </div>
 
-            <div className="flex items-center gap-1">
-              <span className="text-zinc-500 dark:text-zinc-400">Desc. global:</span>
-            </div>
-            <div className="flex items-center gap-1 justify-end">
-              <input
-                type="number" min={0} max={100} step="0.01" value={form.descuento_porc}
-                onChange={e => setF('descuento_porc', e.target.value)}
-                className="w-16 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400"
-              />
-              <span className="text-xs text-zinc-400">%</span>
-              <span className="font-mono text-zinc-600 dark:text-zinc-400 ml-1">-{fmtMonto(descMonto)}</span>
-            </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Descuento global</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number" min={0} max={100} step="0.01" value={form.descuento_porc}
+                    onChange={e => setF('descuento_porc', e.target.value)}
+                    className="w-14 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+                  />
+                  <span className="text-xs text-zinc-400">%</span>
+                  <span className="font-mono text-sm text-zinc-500 w-20 text-right">−{fmtMonto(descMonto)}</span>
+                </div>
+              </div>
 
-            <span className="text-zinc-500 dark:text-zinc-400">Impuesto (Bs):</span>
-            <div className="flex justify-end">
-              <input
-                type="number" min={0} step="0.01" value={form.impuesto}
-                onChange={e => setF('impuesto', e.target.value)}
-                className="w-24 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400"
-              />
-            </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-500 dark:text-zinc-400">Impuesto (Bs)</span>
+                <input
+                  type="number" min={0} step="0.01" value={form.impuesto}
+                  onChange={e => setF('impuesto', e.target.value)}
+                  className="w-28 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+                />
+              </div>
 
-            <span className="text-base font-bold text-zinc-900 dark:text-white">Total:</span>
-            <span className="text-right text-base font-bold font-mono text-zinc-900 dark:text-white">Bs {fmtMonto(total)}</span>
+              <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
+                <span className="text-base font-bold text-zinc-900 dark:text-white">Total</span>
+                <span className="text-xl font-bold font-mono text-zinc-900 dark:text-white">Bs {fmtMonto(total)}</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Acciones */}
-      <div className="flex flex-wrap gap-3">
-        <button onClick={guardar} disabled={guardando}
-          className="px-6 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
+      {/* ── Acciones desktop (duplicado al pie) ── */}
+      <div className="hidden lg:flex items-center gap-3">
+        <button
+          onClick={guardar} disabled={guardando}
+          className="px-6 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
+        >
           {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear venta'}
         </button>
-        <button onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
-          className="px-6 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm font-medium transition-colors">
+        <button
+          onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
+          className="px-6 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm font-medium transition-colors"
+        >
           Cancelar
         </button>
       </div>
 
-      {/* Modal producto rápido */}
+      {/* ── Barra sticky mobile ── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center gap-3 shadow-xl">
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">Total</p>
+          <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white leading-tight">Bs {fmtMonto(total)}</p>
+        </div>
+        <button
+          onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
+          className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={guardar} disabled={guardando}
+          className="px-5 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
+        >
+          {guardando ? 'Guardando…' : esEdicion ? 'Guardar' : 'Crear venta'}
+        </button>
+      </div>
+
+      {/* ── Modal producto rápido ── */}
       {modalRapido && (
         <Modal titulo="Agregar producto rápido" onClose={() => { setModalRapido(false); setRpError(''); }}>
           <div className="space-y-3">
             <p className="text-xs text-zinc-400">El producto se creará en el catálogo y se agregará al carrito.</p>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Nombre del producto *</label>
-              <input type="text" value={rpForm.nombre} onChange={e => setRp('nombre', e.target.value)}
+              <FieldLabel>Nombre del producto *</FieldLabel>
+              <input
+                type="text" value={rpForm.nombre} onChange={e => setRp('nombre', e.target.value)}
                 placeholder="Ej: Ventilador 16 pulgadas"
-                className={`w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400`} />
+                className={inputCls}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Categoría *</label>
-                <select value={rpForm.id_categoria} onChange={e => setRp('id_categoria', e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400`}>
+                <FieldLabel>Categoría *</FieldLabel>
+                <select value={rpForm.id_categoria} onChange={e => setRp('id_categoria', e.target.value)} className={inputCls}>
                   <option value="">— seleccionar —</option>
                   {categorias.map(c => <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Unidad *</label>
-                <select value={rpForm.id_unidad} onChange={e => setRp('id_unidad', e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400`}>
+                <FieldLabel>Unidad *</FieldLabel>
+                <select value={rpForm.id_unidad} onChange={e => setRp('id_unidad', e.target.value)} className={inputCls}>
                   <option value="">— seleccionar —</option>
                   {unidades.map(u => <option key={u.id_unidad} value={u.id_unidad}>{u.nombre}</option>)}
                 </select>
@@ -779,32 +925,40 @@ export default function VentaForm() {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Costo (Bs) *</label>
-                <input type="number" min={0} step="0.01" value={rpForm.precio_real} onChange={e => setRp('precio_real', e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400`} />
+                <FieldLabel>Costo (Bs) *</FieldLabel>
+                <input type="number" min={0} step="0.01" value={rpForm.precio_real}
+                  onChange={e => setRp('precio_real', e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">P. venta (Bs) *</label>
-                <input type="number" min={0} step="0.01" value={rpForm.precio_publico} onChange={e => setRp('precio_publico', e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400`} />
+                <FieldLabel>P. venta (Bs) *</FieldLabel>
+                <input type="number" min={0} step="0.01" value={rpForm.precio_publico}
+                  onChange={e => setRp('precio_publico', e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">P. mayor (Bs)</label>
-                <input type="number" min={0} step="0.01" value={rpForm.precio_mayor} onChange={e => setRp('precio_mayor', e.target.value)}
-                  placeholder="Opcional"
-                  className={`w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400`} />
+                <FieldLabel>P. mayor (Bs)</FieldLabel>
+                <input type="number" min={0} step="0.01" value={rpForm.precio_mayor}
+                  onChange={e => setRp('precio_mayor', e.target.value)}
+                  placeholder="Opcional" className={inputCls} />
               </div>
             </div>
 
-            {rpError && <p className="text-sm text-red-500">{rpError}</p>}
+            {rpError && (
+              <p className="text-sm text-red-500 flex items-center gap-1.5">
+                <span>⚠</span> {rpError}
+              </p>
+            )}
 
             <div className="flex gap-2 pt-1">
-              <button onClick={guardarProductoRapido} disabled={rpGuardando}
-                className="flex-1 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
+              <button
+                onClick={guardarProductoRapido} disabled={rpGuardando}
+                className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
+              >
                 {rpGuardando ? 'Creando…' : 'Crear y agregar'}
               </button>
-              <button onClick={() => { setModalRapido(false); setRpError(''); }}
-                className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              <button
+                onClick={() => { setModalRapido(false); setRpError(''); }}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
                 Cancelar
               </button>
             </div>

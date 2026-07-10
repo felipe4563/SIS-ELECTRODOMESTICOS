@@ -7,7 +7,7 @@ import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
-import api from '../../api/axios';
+
 
 const inputCls  = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls  = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
@@ -76,19 +76,15 @@ export default function Productos() {
 
   useEffect(() => {
     cargar();
-    Promise.all([
-      api.get('/marcas'),
-      api.get('/categorias'),
-      api.get('/unidades'),
-      api.get('/monedas'),
-      api.get('/proveedores'),
-    ]).then(([m, c, u, mo, p]) => {
-      setMarcas(m.data.marcas?.filter(x => x.activo) ?? []);
-      setCategorias(c.data.categorias?.filter(x => x.activo) ?? []);
-      setUnidades(u.data.unidades?.filter(x => x.activo) ?? []);
-      setMonedas(mo.data.monedas?.filter(x => x.activo) ?? []);
-      setProveedores(p.data.proveedores?.filter(x => x.activo) ?? []);
-    });
+    productosService.getFormData()
+      .then(({ data }) => {
+        setMarcas(data.marcas ?? []);
+        setCategorias(data.categorias ?? []);
+        setUnidades(data.unidades ?? []);
+        setMonedas(data.monedas ?? []);
+        setProveedores(data.proveedores ?? []);
+      })
+      .catch(() => {});
   }, []);
 
   const marcasUnicas     = [...new Set(lista.map(p => p.marca_nombre))].filter(Boolean).sort();

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gastosService } from '../../services/gastos.service';
-import { sucursalesService, monedasService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -14,22 +13,77 @@ const BADGE = {
   ANULADO:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 };
 
-const fmt = (n) => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
-const fmtFecha = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-BO') : '-';
+const CARD_BORDER = {
+  REGISTRADO: 'border-l-blue-400',
+  APROBADO:   'border-l-yellow-400',
+  PAGADO:     'border-l-green-400',
+  ANULADO:    'border-l-red-400',
+};
+
+const fmt      = (n) => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+const fmtFecha = (d) => {
+  if (!d) return '-';
+  const date = new Date(String(d).length <= 10 ? d + 'T00:00:00' : d);
+  return isNaN(date.getTime()) ? '-' : date.toLocaleDateString('es-BO');
+};
+
+const INPUT = 'w-full border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-colors';
+const LABEL = 'block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5';
+
+function Spinner() {
+  return <div className="w-5 h-5 border-2 border-zinc-200 dark:border-zinc-700 border-t-yellow-400 rounded-full animate-spin" />;
+}
+
+function ErrorBox({ msg }) {
+  return (
+    <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2.5">
+      <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+      </svg>
+      {msg}
+    </div>
+  );
+}
+
+function ModalShell({ onClose, title, children, maxW = 'sm:max-w-md' }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+      <div className={`bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full ${maxW} max-h-[92vh] overflow-y-auto`}>
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+        </div>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 bg-white dark:bg-zinc-900 z-10">
+          <div className="flex items-center gap-2.5">
+            <span className="w-0.5 h-5 rounded-full bg-yellow-400 flex-shrink-0" />
+            <h2 className="text-base font-bold text-zinc-900 dark:text-white">{title}</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 // ── Modal Categoría ───────────────────────────────────────────────────────────
 function ModalCategoria({ item, onClose, onSave }) {
-  const [form, setForm]   = useState({ nombre: item?.nombre || '', descripcion: item?.descripcion || '', activo: item?.activo ?? 1 });
-  const [error, setError] = useState('');
+  const [form, setForm]     = useState({ nombre: item?.nombre || '', descripcion: item?.descripcion || '', activo: item?.activo ?? 1 });
+  const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
+
+  const esEdicion = !!item?.id_categoria_gasto;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.nombre.trim()) { setError('Nombre requerido'); return; }
     setLoading(true);
     try {
-      if (item) await gastosService.updateCategoria(item.id_categoria_gasto, form);
-      else      await gastosService.crearCategoria(form);
+      if (esEdicion) await gastosService.updateCategoria(item.id_categoria_gasto, form);
+      else           await gastosService.crearCategoria(form);
       onSave();
     } catch (e) {
       setError(e.response?.data?.mensaje || 'Error al guardar');
@@ -37,54 +91,59 @@ function ModalCategoria({ item, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-            {item ? 'Editar categoría' : 'Nueva categoría'}
-          </h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xl leading-none">✕</button>
+    <ModalShell onClose={onClose} title={esEdicion ? 'Editar categoría' : 'Nueva categoría'}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {error && <ErrorBox msg={error} />}
+        <div>
+          <label className={LABEL}>Nombre *</label>
+          <input
+            value={form.nombre}
+            onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+            placeholder="Ej. Servicios básicos"
+            className={INPUT}
+            autoFocus
+          />
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre *</label>
-            <input
-              value={form.nombre}
-              onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-              className="w-full border border-zinc-300 dark:border-zinc-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Descripción</label>
-            <textarea
-              value={form.descripcion}
-              onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
-              rows={2}
-              className="w-full border border-zinc-300 dark:border-zinc-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 resize-none"
-            />
-          </div>
-          {item && (
-            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-              <input type="checkbox" checked={!!form.activo} onChange={e => setForm(f => ({ ...f, activo: e.target.checked ? 1 : 0 }))} className="rounded" />
-              Activo
-            </label>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors">
-              {loading ? 'Guardando...' : 'Guardar'}
+        <div>
+          <label className={LABEL}>Descripción</label>
+          <textarea
+            value={form.descripcion}
+            onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
+            rows={2}
+            placeholder="Descripción opcional..."
+            className={`${INPUT} resize-none`}
+          />
+        </div>
+        {esEdicion && (
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!form.activo}
+              onClick={() => setForm(f => ({ ...f, activo: form.activo ? 0 : 1 }))}
+              className={`relative w-10 h-5 rounded-full transition-colors ${form.activo ? 'bg-yellow-400' : 'bg-zinc-300 dark:bg-zinc-600'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.activo ? 'translate-x-5' : ''}`} />
             </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">Activo</span>
+          </label>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors">
+            {loading ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
 
 // ── Modal Gasto ───────────────────────────────────────────────────────────────
 function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) {
-  const hoy   = new Date().toISOString().slice(0, 10);
+  const hoy        = new Date().toISOString().slice(0, 10);
   const monedaBase = monedas.find(m => m.es_moneda_base) || monedas[0] || {};
 
   const [form, setForm] = useState({
@@ -100,7 +159,7 @@ function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) 
     numero_comprobante: item?.numero_comprobante || '',
     observaciones:      item?.observaciones || '',
   });
-  const [error, setError]   = useState('');
+  const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -118,105 +177,96 @@ function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) 
     } finally { setLoading(false); }
   };
 
-  const inputCls = 'w-full border border-zinc-300 dark:border-zinc-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400';
-  const labelCls = 'block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1';
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 sticky top-0 bg-white dark:bg-zinc-900 z-10">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-            {item ? `Editar gasto ${item.numero}` : 'Nuevo gasto'}
-          </h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xl leading-none">✕</button>
+    <ModalShell onClose={onClose} title={item ? `Editar · ${item.numero}` : 'Nuevo gasto'} maxW="sm:max-w-2xl">
+      <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {error && <ErrorBox msg={error} />}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={LABEL}>Categoría *</label>
+            <select value={form.id_categoria_gasto} onChange={e => set('id_categoria_gasto', e.target.value)} className={INPUT} required>
+              <option value="">Seleccionar...</option>
+              {categorias.filter(c => c.activo).map(c => (
+                <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL}>Sucursal *</label>
+            <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT} required>
+              {sucursales.map(s => (
+                <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Categoría *</label>
-              <select value={form.id_categoria_gasto} onChange={e => set('id_categoria_gasto', e.target.value)} className={inputCls} required>
-                <option value="">Seleccionar...</option>
-                {categorias.filter(c => c.activo).map(c => (
-                  <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Sucursal *</label>
-              <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={inputCls} required>
-                {sucursales.map(s => (
-                  <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+        <div>
+          <label className={LABEL}>Descripción *</label>
+          <input value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Ej. Compra de material de limpieza" className={INPUT} required />
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Descripción *</label>
-            <input value={form.descripcion} onChange={e => set('descripcion', e.target.value)} className={inputCls} required />
+            <label className={LABEL}>Fecha *</label>
+            <input type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} className={INPUT} required />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Fecha *</label>
-              <input type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} className={inputCls} required />
-            </div>
-            <div>
-              <label className={labelCls}>Método de pago *</label>
-              <select value={form.metodo_pago} onChange={e => set('metodo_pago', e.target.value)} className={inputCls}>
-                {METODOS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Moneda *</label>
-              <select value={form.id_moneda} onChange={e => set('id_moneda', e.target.value)} className={inputCls} required>
-                {monedas.map(m => (
-                  <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Monto *</label>
-              <input type="number" step="0.01" min="0" value={form.monto} onChange={e => set('monto', e.target.value)} className={inputCls} required />
-            </div>
-          </div>
-
           <div>
-            <label className={labelCls}>N° Comprobante</label>
-            <input value={form.numero_comprobante} onChange={e => set('numero_comprobante', e.target.value)} placeholder="Factura, recibo..." className={inputCls} />
+            <label className={LABEL}>Método de pago *</label>
+            <select value={form.metodo_pago} onChange={e => set('metodo_pago', e.target.value)} className={INPUT}>
+              {METODOS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Observaciones</label>
-            <textarea value={form.observaciones} onChange={e => set('observaciones', e.target.value)} rows={2} className={`${inputCls} resize-none`} />
+            <label className={LABEL}>Moneda *</label>
+            <select value={form.id_moneda} onChange={e => set('id_moneda', e.target.value)} className={INPUT} required>
+              {monedas.map(m => (
+                <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>
+              ))}
+            </select>
           </div>
+          <div>
+            <label className={LABEL}>Monto *</label>
+            <input type="number" step="0.01" min="0" value={form.monto} onChange={e => set('monto', e.target.value)} placeholder="0.00" className={INPUT} required />
+          </div>
+        </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
-            <button type="submit" disabled={loading} className="px-4 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors">
-              {loading ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div>
+          <label className={LABEL}>N° Comprobante</label>
+          <input value={form.numero_comprobante} onChange={e => set('numero_comprobante', e.target.value)} placeholder="Factura, recibo, N° de nota..." className={INPUT} />
+        </div>
+
+        <div>
+          <label className={LABEL}>Observaciones</label>
+          <textarea value={form.observaciones} onChange={e => set('observaciones', e.target.value)} rows={2} placeholder="Notas adicionales..." className={`${INPUT} resize-none`} />
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors">
+            {loading ? 'Guardando...' : 'Guardar gasto'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 }
 
 // ── Modal Detalle ─────────────────────────────────────────────────────────────
 function ModalDetalle({ id, onClose, onRefresh, puede }) {
-  const [gasto, setGasto] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [accion, setAccion]   = useState(null);
+  const [gasto, setGasto]           = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [accion, setAccion]         = useState(null);
   const [motivoAnular, setMotivoAnular] = useState('');
-  const [uploadFile, setUploadFile]     = useState(null);
-  const [uploading, setUploading]       = useState(false);
-  const [err, setErr] = useState('');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading]   = useState(false);
+  const [err, setErr]               = useState('');
   const fileRef = useRef();
 
   const cargar = useCallback(async () => {
@@ -257,137 +307,167 @@ function ModalDetalle({ id, onClose, onRefresh, puede }) {
   const backendBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 sticky top-0 bg-white dark:bg-zinc-900 z-10">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Detalle del gasto</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-xl leading-none">✕</button>
-        </div>
-        <div className="p-6">
-          {loading ? (
-            <p className="text-center text-zinc-400 py-8">Cargando...</p>
-          ) : !gasto ? (
-            <p className="text-center text-red-500 py-8">{err || 'No encontrado'}</p>
-          ) : (
-            <div className="space-y-4">
-              {err && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{err}</p>}
+    <ModalShell onClose={onClose} title="Detalle del gasto">
+      <div className="p-6">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2.5 py-12 text-zinc-400">
+            <Spinner /> <span className="text-sm">Cargando...</span>
+          </div>
+        ) : !gasto ? (
+          <div className="py-12 text-center text-sm text-zinc-400">{err || 'Gasto no encontrado'}</div>
+        ) : (
+          <div className="space-y-5">
+            {err && <ErrorBox msg={err} />}
 
-              {/* Estado */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">Estado:</span>
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${BADGE[gasto.estado]}`}>{gasto.estado}</span>
-                <span className="ml-auto text-xs text-zinc-400">{gasto.numero}</span>
+            {/* Número + estado con borde de color */}
+            <div className={`flex items-start gap-3 pl-3 border-l-4 ${CARD_BORDER[gasto.estado]} py-1`}>
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-xs text-zinc-400 dark:text-zinc-500">{gasto.numero}</p>
+                <p className="text-base font-bold text-zinc-900 dark:text-white mt-0.5 truncate">{gasto.descripcion}</p>
               </div>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${BADGE[gasto.estado]}`}>{gasto.estado}</span>
+            </div>
 
-              {/* Info principal */}
-              <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 space-y-2 text-sm">
-                <Row label="Descripción" value={gasto.descripcion} />
-                <Row label="Categoría"   value={gasto.categoria} />
-                <Row label="Sucursal"    value={gasto.sucursal} />
-                <Row label="Fecha"       value={fmtFecha(gasto.fecha)} />
-                <Row label="Monto"       value={`Bs ${fmt(gasto.monto)}`} bold />
-                <Row label="Método"      value={gasto.metodo_pago} />
-                {gasto.proveedor       && <Row label="Proveedor" value={gasto.proveedor} />}
-                {gasto.numero_comprobante && <Row label="N° Comprobante" value={gasto.numero_comprobante} />}
-                <Row label="Registrado por" value={gasto.usuario_nombre} />
-                {gasto.observaciones && <Row label="Observaciones" value={gasto.observaciones} />}
-              </div>
-
-              {/* Comprobante */}
-              <div>
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">Comprobante</p>
-                {gasto.comprobante_url ? (
-                  <div className="space-y-2">
-                    {/\.(jpg|jpeg|png|webp)$/i.test(gasto.comprobante_url) ? (
-                      <img
-                        src={`${backendBase}${gasto.comprobante_url}`}
-                        alt="comprobante"
-                        className="max-h-48 rounded-xl border border-zinc-200 dark:border-zinc-700 object-contain"
-                      />
-                    ) : (
-                      <a
-                        href={`${backendBase}${gasto.comprobante_url}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 text-sm text-yellow-600 hover:underline"
-                      >
-                        📄 Ver comprobante PDF
-                      </a>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-zinc-400">Sin comprobante adjunto</p>
-                )}
-
-                {/* Upload */}
-                {gasto.estado !== 'ANULADO' && (
-                  <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.pdf,.webp"
-                      onChange={e => setUploadFile(e.target.files[0] || null)}
-                      className="text-xs text-zinc-600 dark:text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-yellow-400 file:px-2 file:py-1 file:text-xs file:font-semibold file:cursor-pointer"
-                    />
-                    <button
-                      onClick={handleUpload}
-                      disabled={!uploadFile || uploading}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors"
-                    >
-                      {uploading ? 'Subiendo...' : 'Subir'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Acciones del flujo */}
-              {accion === 'anular' ? (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Motivo de anulación</label>
-                  <textarea
-                    value={motivoAnular}
-                    onChange={e => setMotivoAnular(e.target.value)}
-                    rows={2}
-                    className="w-full border border-zinc-300 dark:border-zinc-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={() => setAccion(null)} className="flex-1 py-2 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
-                    <button onClick={() => ejecutar('anular')} className="flex-1 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">Confirmar anulación</button>
-                  </div>
+            {/* Info grid */}
+            <div className="bg-zinc-50 dark:bg-zinc-800/60 rounded-2xl p-4">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Categoría</dt>
+                  <dd className="text-zinc-900 dark:text-white font-medium">{gasto.categoria || '—'}</dd>
                 </div>
+                <div>
+                  <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Sucursal</dt>
+                  <dd className="text-zinc-900 dark:text-white font-medium">{gasto.sucursal || '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Fecha</dt>
+                  <dd className="text-zinc-900 dark:text-white font-medium">{fmtFecha(gasto.fecha)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Método</dt>
+                  <dd className="text-zinc-900 dark:text-white font-medium">{gasto.metodo_pago || '—'}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Monto</dt>
+                  <dd className="text-xl font-bold font-mono text-zinc-900 dark:text-white">Bs {fmt(gasto.monto)}</dd>
+                </div>
+                {gasto.proveedor && (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Proveedor</dt>
+                    <dd className="text-zinc-900 dark:text-white font-medium">{gasto.proveedor}</dd>
+                  </div>
+                )}
+                {gasto.numero_comprobante && (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">N° Comprobante</dt>
+                    <dd className="font-mono text-sm text-zinc-900 dark:text-white">{gasto.numero_comprobante}</dd>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Registrado por</dt>
+                  <dd className="text-zinc-900 dark:text-white font-medium">{gasto.usuario_nombre || '—'}</dd>
+                </div>
+                {gasto.observaciones && (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">Observaciones</dt>
+                    <dd className="text-zinc-600 dark:text-zinc-300 text-sm">{gasto.observaciones}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {/* Comprobante */}
+            <div>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="w-0.5 h-4 rounded-full bg-yellow-400" />
+                <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Comprobante</p>
+              </div>
+              {gasto.comprobante_url ? (
+                /\.(jpg|jpeg|png|webp)$/i.test(gasto.comprobante_url) ? (
+                  <img
+                    src={`${backendBase}${gasto.comprobante_url}`}
+                    alt="comprobante"
+                    className="max-h-48 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 object-contain bg-zinc-50 dark:bg-zinc-800"
+                  />
+                ) : (
+                  <a
+                    href={`${backendBase}${gasto.comprobante_url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-yellow-600 hover:text-yellow-700 dark:hover:text-yellow-300 hover:underline"
+                  >
+                    📄 Ver comprobante PDF
+                  </a>
+                )
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {gasto.estado === 'REGISTRADO' && puede('aprobar', 'gastos') && (
-                    <button onClick={() => ejecutar('aprobar')} className="px-3 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors">
-                      ✓ Aprobar
-                    </button>
-                  )}
-                  {gasto.estado === 'APROBADO' && puede('pagar', 'gastos') && (
-                    <button onClick={() => ejecutar('pagar')} className="px-3 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
-                      💳 Marcar pagado
-                    </button>
-                  )}
-                  {['REGISTRADO', 'APROBADO'].includes(gasto.estado) && puede('anular', 'gastos') && (
-                    <button onClick={() => setAccion('anular')} className="px-3 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">
-                      ✕ Anular
-                    </button>
-                  )}
+                <div className="border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl py-5 text-center">
+                  <p className="text-xs text-zinc-400">Sin comprobante adjunto</p>
+                </div>
+              )}
+
+              {gasto.estado !== 'ANULADO' && puede('adjuntar_comprobante', 'gastos') && (
+                <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf,.webp"
+                    onChange={e => setUploadFile(e.target.files[0] || null)}
+                    className="flex-1 text-xs text-zinc-600 dark:text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-yellow-400 file:px-2 file:py-1 file:text-xs file:font-semibold file:cursor-pointer file:hover:bg-yellow-300 file:transition-colors"
+                  />
+                  <button
+                    onClick={handleUpload}
+                    disabled={!uploadFile || uploading}
+                    className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  >
+                    {uploading ? 'Subiendo...' : 'Subir'}
+                  </button>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function Row({ label, value, bold }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-zinc-500 dark:text-zinc-400 shrink-0">{label}</span>
-      <span className={`text-zinc-900 dark:text-white text-right ${bold ? 'font-bold' : ''}`}>{value || '-'}</span>
-    </div>
+            {/* Acciones del flujo */}
+            {accion === 'anular' ? (
+              <div className="space-y-3 border border-red-200 dark:border-red-800/40 rounded-2xl p-4 bg-red-50 dark:bg-red-900/10">
+                <label className="block text-sm font-semibold text-red-700 dark:text-red-400">Motivo de anulación</label>
+                <textarea
+                  value={motivoAnular}
+                  onChange={e => setMotivoAnular(e.target.value)}
+                  rows={2}
+                  placeholder="Describe el motivo..."
+                  className="w-full border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => setAccion(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={() => ejecutar('anular')} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">
+                    Confirmar anulación
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {gasto.estado === 'REGISTRADO' && puede('aprobar', 'gastos') && (
+                  <button onClick={() => ejecutar('aprobar')} className="flex-1 min-w-[120px] py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors">
+                    ✓ Aprobar
+                  </button>
+                )}
+                {gasto.estado === 'APROBADO' && puede('pagar', 'gastos') && (
+                  <button onClick={() => ejecutar('pagar')} className="flex-1 min-w-[140px] py-2.5 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 transition-colors">
+                    💳 Marcar pagado
+                  </button>
+                )}
+                {['REGISTRADO', 'APROBADO'].includes(gasto.estado) && puede('anular', 'gastos') && (
+                  <button onClick={() => setAccion('anular')} className="flex-1 min-w-[100px] py-2.5 rounded-xl text-sm font-semibold bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800/40 transition-colors">
+                    ✕ Anular
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </ModalShell>
   );
 }
 
@@ -417,6 +497,12 @@ function TabCategorias({ puede }) {
     } catch (e) { alert(e.response?.data?.mensaje || 'Error'); }
   };
 
+  const BadgeActivo = ({ activo }) => (
+    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${activo ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+      {activo ? 'Activo' : 'Inactivo'}
+    </span>
+  );
+
   return (
     <div className="space-y-4">
       {modalCat !== undefined && modalCat !== false && (
@@ -428,48 +514,47 @@ function TabCategorias({ puede }) {
       )}
 
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Categorías de gasto</h3>
-        {puede('gestionar_categorias', 'gastos') && (
-          <button
-            onClick={() => setModalCat({})}
-            className="px-3 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors"
-          >
+        <div className="flex items-center gap-2.5">
+          <span className="w-0.5 h-5 rounded-full bg-yellow-400" />
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Categorías de gasto</h3>
+        </div>
+        {puede('categorias_gestionar', 'gastos') && (
+          <button onClick={() => setModalCat({})} className="px-3 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors">
             + Nueva categoría
           </button>
         )}
       </div>
 
-      {err && <p className="text-red-500 text-sm">{err}</p>}
+      {err && <ErrorBox msg={err} />}
 
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Nombre</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300 hidden sm:table-cell">Descripción</th>
-                <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Estado</th>
-                {puede('gestionar_categorias', 'gastos') && (
-                  <th className="text-right px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Acciones</th>
+              <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Nombre</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Descripción</th>
+                <th className="text-center px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Estado</th>
+                {puede('categorias_gestionar', 'gastos') && (
+                  <th className="text-right px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Acciones</th>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
               {loading ? (
-                <tr><td colSpan={4} className="text-center py-8 text-zinc-400">Cargando...</td></tr>
+                <tr><td colSpan={4} className="py-10">
+                  <div className="flex items-center justify-center gap-2 text-zinc-400"><Spinner /><span className="text-sm">Cargando...</span></div>
+                </td></tr>
               ) : cats.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-8 text-zinc-400">Sin categorías registradas</td></tr>
+                <tr><td colSpan={4} className="text-center py-10 text-sm text-zinc-400">Sin categorías registradas</td></tr>
               ) : cats.map(c => (
-                <tr key={c.id_categoria_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-white">{c.nombre}</td>
-                  <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 hidden sm:table-cell">{c.descripcion || '-'}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.activo ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>
-                      {c.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  {puede('gestionar_categorias', 'gastos') && (
-                    <td className="px-4 py-3 text-right">
+                <tr key={c.id_categoria_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                  <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-white">{c.nombre}</td>
+                  <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">{c.descripcion || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</td>
+                  <td className="px-5 py-3.5 text-center"><BadgeActivo activo={c.activo} /></td>
+                  {puede('categorias_gestionar', 'gastos') && (
+                    <td className="px-5 py-3.5 text-right">
                       <div className="flex justify-end gap-1">
                         <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Editar">✏️</button>
                         <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Eliminar">🗑️</button>
@@ -481,6 +566,29 @@ function TabCategorias({ puede }) {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile cards */}
+        <div className="sm:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 text-zinc-400 py-10"><Spinner /><span className="text-sm">Cargando...</span></div>
+          ) : cats.length === 0 ? (
+            <div className="py-10 text-center text-sm text-zinc-400">Sin categorías registradas</div>
+          ) : cats.map(c => (
+            <div key={c.id_categoria_gasto} className="flex items-center gap-3 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-white">{c.nombre}</p>
+                {c.descripcion && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{c.descripcion}</p>}
+              </div>
+              <BadgeActivo activo={c.activo} />
+              {puede('categorias_gestionar', 'gastos') && (
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors">✏️</button>
+                  <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">🗑️</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -491,45 +599,32 @@ export default function Gastos() {
   const { puede } = usePermission();
   const [tab, setTab] = useState('gastos');
 
-  // datos maestros
   const [categorias, setCategorias] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [monedas, setMonedas]       = useState([]);
 
-  // lista gastos
   const [gastos, setGastos]   = useState([]);
   const [total, setTotal]     = useState(0);
   const [pages, setPages]     = useState(1);
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState('');
 
-  // filtros
   const [filtros, setFiltros] = useState({
-    id_categoria_gasto: '',
-    id_sucursal: '',
-    estado: '',
-    fecha_desde: '',
-    fecha_hasta: '',
-    busqueda: '',
-    page: 1,
-    limit: 20,
+    id_categoria_gasto: '', id_sucursal: '', estado: '',
+    fecha_desde: '', fecha_hasta: '', busqueda: '', page: 1, limit: 20,
   });
 
-  // modales
   const [modalGasto,   setModalGasto]   = useState(null);
   const [modalDetalle, setModalDetalle] = useState(null);
 
-  // cargar maestros
   useEffect(() => {
-    Promise.all([
-      gastosService.getCategorias(),
-      sucursalesService.getAll(),
-      monedasService.getAll(),
-    ]).then(([catR, sucR, monR]) => {
-      setCategorias(catR.data.categorias || []);
-      setSucursales(sucR.data?.sucursales || sucR.data || []);
-      setMonedas(monR.data?.monedas || monR.data || []);
-    }).catch(() => {});
+    gastosService.getFormData()
+      .then(r => {
+        setCategorias(r.data.categorias || []);
+        setSucursales(r.data.sucursales || []);
+        setMonedas(r.data.monedas || []);
+      })
+      .catch(() => {});
   }, []);
 
   const cargarGastos = useCallback(async () => {
@@ -550,10 +645,10 @@ export default function Gastos() {
 
   const setFiltro = (k, v) => setFiltros(f => ({ ...f, [k]: v, page: 1 }));
 
-  const inputCls = 'border border-zinc-300 dark:border-zinc-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400';
+  const FC = 'border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-colors w-full';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Modales */}
       {modalGasto !== null && (
         <ModalGasto
@@ -577,13 +672,13 @@ export default function Gastos() {
       {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Gastos</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Registro y seguimiento de gastos operativos</p>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Gastos</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Registro y seguimiento de gastos operativos</p>
         </div>
         {puede('crear', 'gastos') && tab === 'gastos' && (
           <button
             onClick={() => setModalGasto({})}
-            className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors"
+            className="self-start sm:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors shadow-sm"
           >
             + Nuevo gasto
           </button>
@@ -592,7 +687,10 @@ export default function Gastos() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl p-1 w-fit">
-        {[{ key: 'gastos', label: 'Gastos' }, { key: 'categorias', label: 'Categorías' }].map(t => (
+        {[
+          { key: 'gastos',     label: 'Gastos',     visible: true },
+          { key: 'categorias', label: 'Categorías', visible: puede('categorias_ver', 'gastos') || puede('categorias_gestionar', 'gastos') },
+        ].filter(t => t.visible).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -611,118 +709,106 @@ export default function Gastos() {
         <TabCategorias puede={puede} />
       ) : (
         <div className="space-y-4">
+
           {/* Filtros */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="px-5 py-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center gap-2.5">
+              <span className="w-0.5 h-4 rounded-full bg-yellow-400" />
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Filtros</span>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <input
-                placeholder="Buscar número, descripción..."
+                placeholder="Buscar número o descripción..."
                 value={filtros.busqueda}
                 onChange={e => setFiltro('busqueda', e.target.value)}
-                className={`${inputCls} col-span-1 sm:col-span-2 lg:col-span-1`}
+                className={`${FC} sm:col-span-2 lg:col-span-1`}
               />
-              <select value={filtros.id_categoria_gasto} onChange={e => setFiltro('id_categoria_gasto', e.target.value)} className={inputCls}>
+              <select value={filtros.id_categoria_gasto} onChange={e => setFiltro('id_categoria_gasto', e.target.value)} className={FC}>
                 <option value="">Todas las categorías</option>
                 {categorias.map(c => <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>)}
               </select>
-              <select value={filtros.id_sucursal} onChange={e => setFiltro('id_sucursal', e.target.value)} className={inputCls}>
-                <option value="">Todas las sucursales</option>
-                {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
-              </select>
-              <select value={filtros.estado} onChange={e => setFiltro('estado', e.target.value)} className={inputCls}>
+              {puede('ver_todos', 'gastos') && (
+                <select value={filtros.id_sucursal} onChange={e => setFiltro('id_sucursal', e.target.value)} className={FC}>
+                  <option value="">Todas las sucursales</option>
+                  {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
+                </select>
+              )}
+              <select value={filtros.estado} onChange={e => setFiltro('estado', e.target.value)} className={FC}>
                 <option value="">Todos los estados</option>
                 {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
-              <input type="date" value={filtros.fecha_desde} onChange={e => setFiltro('fecha_desde', e.target.value)} className={inputCls} placeholder="Desde" />
-              <input type="date" value={filtros.fecha_hasta} onChange={e => setFiltro('fecha_hasta', e.target.value)} className={inputCls} placeholder="Hasta" />
+              <input type="date" value={filtros.fecha_desde} onChange={e => setFiltro('fecha_desde', e.target.value)} className={FC} />
+              <input type="date" value={filtros.fecha_hasta} onChange={e => setFiltro('fecha_hasta', e.target.value)} className={FC} />
               <button
                 onClick={() => setFiltros({ id_categoria_gasto: '', id_sucursal: '', estado: '', fecha_desde: '', fecha_hasta: '', busqueda: '', page: 1, limit: 20 })}
-                className="px-3 py-2 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 transition-colors"
+                className="px-3 py-2 rounded-xl text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors"
               >
                 Limpiar
               </button>
             </div>
           </div>
 
-          {/* Resumen */}
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{total} gasto{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}</p>
+          {/* Conteo */}
+          <div className="px-1 flex items-center justify-between">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              <span className="font-semibold text-zinc-900 dark:text-white">{total}</span>{' '}
+              gasto{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
+            </p>
+          </div>
 
-          {err && <p className="text-red-500 text-sm">{err}</p>}
+          {err && <ErrorBox msg={err} />}
 
-          {/* Tabla */}
+          {/* Lista */}
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <div className="overflow-x-auto">
+
+            {/* Desktop tabla (md+) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
-                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">N°</th>
-                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Descripción</th>
-                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300 hidden md:table-cell">Categoría</th>
-                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300 hidden lg:table-cell">Sucursal</th>
-                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300 hidden sm:table-cell">Fecha</th>
-                    <th className="text-right px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Monto</th>
-                    <th className="text-left px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300 hidden md:table-cell">Método</th>
-                    <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Estado</th>
-                    <th className="text-center px-4 py-3 font-semibold text-zinc-600 dark:text-zinc-300">Acciones</th>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                    {['N°','Descripción','Categoría','Sucursal','Fecha','Monto','Método','Estado','Acciones'].map((h, i) => (
+                      <th key={h} className={`px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide whitespace-nowrap
+                        ${i === 0 || i >= 4 ? '' : ''}
+                        ${[2].includes(i) ? 'hidden lg:table-cell' : ''}
+                        ${[3,6].includes(i) ? 'hidden xl:table-cell' : ''}
+                        ${i === 5 || i === 8 ? 'text-right' : i === 7 || i === 8 ? 'text-center' : 'text-left'}
+                        ${i === 8 ? 'text-center' : ''}
+                      `}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
                   {loading ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-zinc-400">Cargando...</td></tr>
+                    <tr><td colSpan={9} className="py-14">
+                      <div className="flex items-center justify-center gap-2.5 text-zinc-400"><Spinner /><span className="text-sm">Cargando...</span></div>
+                    </td></tr>
                   ) : gastos.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-zinc-400">Sin gastos registrados</td></tr>
+                    <tr><td colSpan={9} className="text-center py-14 text-sm text-zinc-400">Sin gastos registrados</td></tr>
                   ) : gastos.map(g => (
-                    <tr key={g.id_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{g.numero}</td>
-                      <td className="px-4 py-3 text-zinc-900 dark:text-white max-w-[160px] truncate" title={g.descripcion}>{g.descripcion}</td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300 hidden md:table-cell">{g.categoria}</td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-300 hidden lg:table-cell">{g.sucursal}</td>
-                      <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 hidden sm:table-cell whitespace-nowrap">{fmtFecha(g.fecha)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-white whitespace-nowrap">Bs {fmt(g.monto)}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400 hidden md:table-cell">{g.metodo_pago}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${BADGE[g.estado]}`}>{g.estado}</span>
+                    <tr key={g.id_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-5 py-3.5 font-mono text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{g.numero}</td>
+                      <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-white max-w-[180px] truncate" title={g.descripcion}>{g.descripcion}</td>
+                      <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">{g.categoria}</td>
+                      <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400 hidden xl:table-cell">{g.sucursal}</td>
+                      <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{fmtFecha(g.fecha)}</td>
+                      <td className="px-5 py-3.5 text-right font-semibold font-mono text-zinc-900 dark:text-white whitespace-nowrap">Bs {fmt(g.monto)}</td>
+                      <td className="px-5 py-3.5 text-xs text-zinc-500 dark:text-zinc-400 hidden xl:table-cell">{g.metodo_pago}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${BADGE[g.estado]}`}>{g.estado}</span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => setModalDetalle(g.id_gasto)}
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
-                            title="Ver detalle"
-                          >
-                            👁
-                          </button>
+                          <button onClick={() => setModalDetalle(g.id_gasto)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Ver">👁</button>
                           {g.estado === 'REGISTRADO' && puede('editar', 'gastos') && (
-                            <button
-                              onClick={() => setModalGasto(g)}
-                              className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                              title="Editar"
-                            >
-                              ✏️
-                            </button>
+                            <button onClick={() => setModalGasto(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Editar">✏️</button>
                           )}
                           {g.estado === 'REGISTRADO' && puede('aprobar', 'gastos') && (
-                            <button
-                              onClick={async () => {
-                                try { await gastosService.aprobarGasto(g.id_gasto); cargarGastos(); }
-                                catch (e) { alert(e.response?.data?.mensaje || 'Error'); }
-                              }}
-                              className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
-                              title="Aprobar"
-                            >
-                              ✓
-                            </button>
+                            <button onClick={async () => { try { await gastosService.aprobarGasto(g.id_gasto); cargarGastos(); } catch (e) { alert(e.response?.data?.mensaje || 'Error'); }}} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Aprobar">✓</button>
                           )}
                           {g.estado === 'APROBADO' && puede('pagar', 'gastos') && (
-                            <button
-                              onClick={async () => {
-                                try { await gastosService.pagarGasto(g.id_gasto); cargarGastos(); }
-                                catch (e) { alert(e.response?.data?.mensaje || 'Error'); }
-                              }}
-                              className="p-1.5 rounded-lg text-zinc-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-                              title="Marcar pagado"
-                            >
-                              💳
-                            </button>
+                            <button onClick={async () => { try { await gastosService.pagarGasto(g.id_gasto); cargarGastos(); } catch (e) { alert(e.response?.data?.mensaje || 'Error'); }}} className="p-1.5 rounded-lg text-zinc-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="Pagar">💳</button>
                           )}
                         </div>
                       </td>
@@ -732,23 +818,59 @@ export default function Gastos() {
               </table>
             </div>
 
+            {/* Mobile cards (< md) */}
+            <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {loading ? (
+                <div className="flex items-center justify-center gap-2.5 py-12 text-zinc-400"><Spinner /><span className="text-sm">Cargando...</span></div>
+              ) : gastos.length === 0 ? (
+                <div className="py-12 text-center text-sm text-zinc-400">Sin gastos registrados</div>
+              ) : gastos.map(g => (
+                <div key={g.id_gasto} className={`flex border-l-4 ${CARD_BORDER[g.estado]} hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors`}>
+                  <div className="flex-1 px-4 py-3.5 space-y-1.5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-xs text-zinc-400 dark:text-zinc-500 pt-0.5">{g.numero}</span>
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full flex-shrink-0 ${BADGE[g.estado]}`}>{g.estado}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{g.descripcion}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{g.categoria} · {g.sucursal}</p>
+                    <div className="flex items-center justify-between pt-0.5">
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500">{fmtFecha(g.fecha)} · {g.metodo_pago}</span>
+                      <span className="font-bold font-mono text-sm text-zinc-900 dark:text-white">Bs {fmt(g.monto)}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center gap-0.5 px-2 border-l border-zinc-100 dark:border-zinc-800 flex-shrink-0">
+                    <button onClick={() => setModalDetalle(g.id_gasto)} className="p-2 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Ver">👁</button>
+                    {g.estado === 'REGISTRADO' && puede('editar', 'gastos') && (
+                      <button onClick={() => setModalGasto(g)} className="p-2 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Editar">✏️</button>
+                    )}
+                    {g.estado === 'REGISTRADO' && puede('aprobar', 'gastos') && (
+                      <button onClick={async () => { try { await gastosService.aprobarGasto(g.id_gasto); cargarGastos(); } catch(e) { alert(e.response?.data?.mensaje || 'Error'); }}} className="p-2 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Aprobar">✓</button>
+                    )}
+                    {g.estado === 'APROBADO' && puede('pagar', 'gastos') && (
+                      <button onClick={async () => { try { await gastosService.pagarGasto(g.id_gasto); cargarGastos(); } catch(e) { alert(e.response?.data?.mensaje || 'Error'); }}} className="p-2 rounded-lg text-zinc-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" title="Pagar">💳</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Paginación */}
             {pages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
+              <div className="flex items-center justify-between px-5 py-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/30">
                 <button
                   onClick={() => setFiltros(f => ({ ...f, page: f.page - 1 }))}
                   disabled={filtros.page <= 1}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors"
                 >
                   ← Anterior
                 </button>
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Página {filtros.page} de {pages}
+                  Pág. <span className="font-semibold text-zinc-900 dark:text-white">{filtros.page}</span> de <span className="font-semibold text-zinc-900 dark:text-white">{pages}</span>
                 </span>
                 <button
                   onClick={() => setFiltros(f => ({ ...f, page: f.page + 1 }))}
                   disabled={filtros.page >= pages}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors"
                 >
                   Siguiente →
                 </button>

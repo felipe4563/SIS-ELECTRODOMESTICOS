@@ -1,5 +1,5 @@
-const db   = require('../config/db');
-const XLSX = require('xlsx');
+const db       = require('../config/db');
+const ExcelJS = require('exceljs');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -43,6 +43,23 @@ const crearStockEnDepositos = async (idProducto) => {
      VALUES ?`,
     [values.map(v => [...v, 0, 0, 0])]
   );
+};
+
+// ── Datos para formulario de creación/edición ─────────────────────────────
+const getFormData = async (req, res) => {
+  try {
+    const [[marcas], [categorias], [unidades], [monedas], [proveedores]] = await Promise.all([
+      db.promise().query(`SELECT id_marca, nombre FROM marcas WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_categoria, nombre FROM categorias WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_unidad, nombre, codigo AS simbolo FROM unidades_medida WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_moneda, nombre, simbolo FROM monedas WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_proveedor, razon_social FROM proveedores WHERE activo = 1 ORDER BY razon_social`),
+    ]);
+    res.json({ marcas, categorias, unidades, monedas, proveedores });
+  } catch (err) {
+    console.error('[getFormData productos]', err);
+    res.status(500).json({ error: 'Error al obtener datos del formulario' });
+  }
 };
 
 // ── Listado ───────────────────────────────────────────────────────────────
@@ -317,10 +334,27 @@ const importarDesdeExcel = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
 
   try {
-    const workbook  = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet     = workbook.Sheets[sheetName];
-    const filas     = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+    
+    if (!worksheet) return res.status(400).json({ error: 'El archivo está vacío' });
+    
+    let headers = [];
+    const filas = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        headers = row.values.slice(1);
+      } else {
+        const obj = {};
+        row.values.forEach((val, i) => {
+          if (i > 0 && i <= headers.length) {
+            obj[headers[i - 1]] = val ?? '';
+          }
+        });
+        filas.push(obj);
+      }
+    });
 
     if (filas.length === 0) return res.status(400).json({ error: 'El archivo está vacío' });
 
@@ -466,6 +500,7 @@ const importarDesdeExcel = async (req, res) => {
 };
 
 module.exports = {
+  getFormData,
   getProductos, getProducto, createProducto, updateProducto, deleteProducto,
   getHistoricoPrecios, getStock,
   importarDesdeExcel, uploadImagen,

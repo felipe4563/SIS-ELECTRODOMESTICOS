@@ -15,7 +15,7 @@ const logoStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `empresa_${req.params.id}${ext}`);
+    cb(null, `empresa_${req.params.id}_${Date.now()}${ext}`);
   },
 });
 const uploadLogo = multer({
@@ -29,7 +29,7 @@ const uploadLogo = multer({
 
 // ── Rutas ─────────────────────────────────────────────────────────────────
 router.get('/publico',    ctrl.getEmpresaPublico);                                                                          // pública
-router.get('/',           authMiddleware, checkPermission('ver',    'configuracion'), ctrl.getEmpresa);
+router.get('/',           authMiddleware, checkPermission('ver',    'empresa'),       ctrl.getEmpresa);
 router.post('/',          authMiddleware, checkPermission('editar', 'empresa'),       ctrl.createEmpresa);
 router.put('/:id',        authMiddleware, checkPermission('editar', 'empresa'),       ctrl.updateEmpresa);
 router.post('/:id/logo',  authMiddleware, checkPermission('editar', 'empresa'),       uploadLogo.single('logo'), validateMagic(IMAGES_ONLY), ctrl.uploadLogo);

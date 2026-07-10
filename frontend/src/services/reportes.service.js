@@ -3,7 +3,7 @@ import api from '../api/axios';
 const R = '/reportes';
 
 export const reportesService = {
-  getDashboard:        ()  => api.get(`${R}/dashboard`),
+  getDashboard:        (p) => api.get(`${R}/dashboard`, { params: p }),
   getVentas:           (p) => api.get(`${R}/ventas`,            { params: p }),
   getVentasVendedor:   (p) => api.get(`${R}/ventas-vendedor`,   { params: p }),
   getVentasCliente:    (p) => api.get(`${R}/ventas-cliente`,    { params: p }),
@@ -15,11 +15,17 @@ export const reportesService = {
   getEstadoResultados: (p) => api.get(`${R}/estado-resultados`, { params: p }),
   getBonosVendedores:  (p) => api.get(`${R}/bonos-vendedores`,  { params: p }),
 
-  getStockConsolidado: (p) => api.get(`${R}/stock-consolidado`, { params: p }),
-  getKardexProducto:   (id, p) => api.get(`${R}/kardex/${id}`,  { params: p }),
-  getArqueosCaja:      (p) => api.get(`${R}/arqueos-caja`,      { params: p }),
-  getGastosCategoria:  (p) => api.get(`${R}/gastos-categoria`,  { params: p }),
-  getTopProductos:     (p) => api.get(`${R}/top-productos`,     { params: p }),
+  getStockConsolidado:  (p) => api.get(`${R}/stock-consolidado`,  { params: p }),
+  getKardexProducto:    (id, p) => api.get(`${R}/kardex/${id}`,  { params: p }),
+  getArqueosCaja:       (p) => api.get(`${R}/arqueos-caja`,       { params: p }),
+  getGastosCategoria:   (p) => api.get(`${R}/gastos-categoria`,   { params: p }),
+  getTopProductos:      (p) => api.get(`${R}/top-productos`,      { params: p }),
+  getAlertasStock:      (p) => api.get(`${R}/alertas-stock`,      { params: p }),
+  getComprasProveedor:  (p) => api.get(`${R}/compras-proveedor`,  { params: p }),
+  getTransferencias:    (p) => api.get(`${R}/transferencias`,     { params: p }),
+  getDevoluciones:      (p) => api.get(`${R}/devoluciones`,       { params: p }),
+
+  getFormDataSucursales: () => api.get(`${R}/form-data/sucursales`),
 
   exportarReporte: (tipo, formato, params = {}) =>
     api.get(`${R}/exportar`, {

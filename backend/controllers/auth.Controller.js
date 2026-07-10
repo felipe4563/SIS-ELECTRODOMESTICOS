@@ -127,9 +127,9 @@ const login = async (req, res) => {
       [usuario.id_usuario]
     );
     await db.promise().query(
-      `INSERT INTO sesiones (id_usuario, token, ip_origen, user_agent, fecha_expiracion)
-       VALUES (?, ?, ?, ?, ?)`,
-      [usuario.id_usuario, token, ip, ua, expiracion]
+      `INSERT INTO sesiones (id_usuario, jti, token, ip_origen, user_agent, fecha_expiracion)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [usuario.id_usuario, payload.jti, token, ip, ua, expiracion]
     );
 
     // 8. Registrar auditoría de LOGIN
@@ -348,11 +348,11 @@ const seleccionarSucursal = async (req, res) => {
     const expiracion = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const oldToken   = req.headers.authorization?.split(' ')[1];
 
-    await db.promise().query(`UPDATE sesiones SET cerrada = 1 WHERE token = ?`, [oldToken]);
+    await db.promise().query(`UPDATE sesiones SET cerrada = 1 WHERE id_usuario = ? AND cerrada = 0`, [id_usuario]);
     await db.promise().query(
-      `INSERT INTO sesiones (id_usuario, token, ip_origen, user_agent, fecha_expiracion)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id_usuario, token, ip, ua, expiracion]
+      `INSERT INTO sesiones (id_usuario, jti, token, ip_origen, user_agent, fecha_expiracion)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id_usuario, payload.jti, token, ip, ua, expiracion]
     );
 
     return res.json({ token, sucursal: sucRows[0] });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FaPlus, FaTrash, FaSpinner, FaExchangeAlt, FaEdit } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaSpinner, FaExchangeAlt, FaEdit, FaUniversity, FaCheckCircle } from 'react-icons/fa';
 import { tiposCambioService, monedasService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
@@ -12,15 +12,19 @@ const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-
 
 export default function TiposCambio() {
   const { puede } = usePermission();
-  const [lista,     setLista]     = useState([]);
-  const [monedas,   setMonedas]   = useState([]);
-  const [cargando,  setCargando]  = useState(true);
-  const [modal,     setModal]     = useState(false);
-  const [confirm,   setConfirm]   = useState(null);
-  const [form,      setForm]      = useState(EMPTY);
-  const [editId,    setEditId]    = useState(null);
-  const [guardando, setGuardando] = useState(false);
-  const [error,     setError]     = useState(null);
+  const [lista,        setLista]        = useState([]);
+  const [monedas,      setMonedas]      = useState([]);
+  const [cargando,     setCargando]     = useState(true);
+  const [modal,        setModal]        = useState(false);
+  const [confirm,      setConfirm]      = useState(null);
+  const [form,         setForm]         = useState(EMPTY);
+  const [editId,       setEditId]       = useState(null);
+  const [guardando,    setGuardando]    = useState(false);
+  const [error,        setError]        = useState(null);
+  const [bcbModal,     setBcbModal]     = useState(false);
+  const [bcbData,      setBcbData]      = useState(null);
+  const [bcbCargando,  setBcbCargando]  = useState(false);
+  const [bcbError,     setBcbError]     = useState(null);
 
   const cargar = () => {
     setCargando(true);
@@ -80,33 +84,44 @@ export default function TiposCambio() {
     }
   };
 
-  const handleCargarTasaHoy = async () => {
-    setError(null);
-    const usd = monedas.find(m => m.codigo === 'USD');
-    const bob = monedas.find(m => m.codigo === 'BOB' || m.es_moneda_base);
-    if (!usd || !bob) {
-      setError('No se encontraron las monedas BOB y USD activas en el sistema.');
-      return;
-    }
-    setCargando(true);
+  const abrirBCB = async () => {
+    setBcbError(null);
+    setBcbData(null);
+    setBcbModal(true);
+    setBcbCargando(true);
     try {
-      const payload = {
-        id_moneda_origen: usd.id_moneda,
-        id_moneda_destino: bob.id_moneda,
-        fecha: hoy(),
-        tasa_compra: 6.86,
-        tasa_venta: 6.96
-      };
-      await tiposCambioService.create(payload);
-      cargar();
+      const { data } = await tiposCambioService.getBCB();
+      setBcbData(data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al cargar la tasa de hoy (puede que ya esté registrada)');
+      setBcbError(err.response?.data?.error || 'No se pudo conectar con el BCB');
     } finally {
-      setCargando(false);
+      setBcbCargando(false);
     }
   };
 
-  const formatFecha = (f) => new Date(f + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
+  const usarTasaBCB = (tipo) => {
+    const usd = monedas.find(m => m.codigo === 'USD');
+    const bob = monedas.find(m => m.codigo === 'BOB' || m.es_moneda_base);
+    if (!usd || !bob) { setBcbError('No se encontraron las monedas BOB y USD activas'); return; }
+    const tasa = bcbData[tipo];
+    setForm({
+      id_moneda_origen:  usd.id_moneda,
+      id_moneda_destino: bob.id_moneda,
+      fecha: bcbData.fecha,
+      tasa_compra: tasa.compra,
+      tasa_venta:  tasa.venta,
+    });
+    setEditId(null);
+    setBcbModal(false);
+    setError(null);
+    setModal(true);
+  };
+
+  const formatFecha = (f) => {
+    if (!f) return '—';
+    const d = new Date(String(f).slice(0, 10) + 'T00:00:00');
+    return isNaN(d) ? String(f) : d.toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
 
   return (
     <div>
@@ -115,12 +130,12 @@ export default function TiposCambio() {
         description="Tasas de cambio entre monedas por fecha"
         action={puede('gestionar', 'tipos_cambio') && (
           <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={handleCargarTasaHoy}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-all border border-zinc-200 dark:border-zinc-700 cursor-pointer">
-              <FaExchangeAlt className="h-3.5 w-3.5 text-zinc-500" /> Cargar tasa de hoy
+            <button onClick={abrirBCB}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-all border border-zinc-200 dark:border-zinc-700">
+              <FaUniversity className="h-3.5 w-3.5 text-zinc-500" /> Obtener tasa BCB
             </button>
             <button onClick={() => { setForm(EMPTY); setEditId(null); setError(null); setModal(true); }}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all cursor-pointer">
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
               <FaPlus className="h-3.5 w-3.5" /> Nuevo tipo de cambio
             </button>
           </div>
@@ -225,6 +240,68 @@ export default function TiposCambio() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* ── Modal tasas BCB ───────────────────────────────────────── */}
+      <Modal open={bcbModal} onClose={() => setBcbModal(false)} title="Tasas del Banco Central de Bolivia" maxWidth="max-w-md">
+        {bcbCargando && (
+          <div className="flex flex-col items-center gap-3 py-8 text-gray-400 dark:text-zinc-500">
+            <FaSpinner className="animate-spin h-7 w-7" />
+            <p className="text-sm">Consultando el BCB…</p>
+          </div>
+        )}
+        {bcbError && (
+          <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+            {bcbError}
+          </div>
+        )}
+        {bcbData && !bcbCargando && (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
+              Datos del BCB para <strong className="text-gray-700 dark:text-zinc-300">{bcbData.fecha}</strong>. Selecciona la tasa a registrar:
+            </p>
+
+            {/* Tasa oficial */}
+            {bcbData.oficial && (
+              <button
+                onClick={() => usarTasaBCB('oficial')}
+                className="w-full flex items-center justify-between gap-4 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/5 transition-all group text-left"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400">
+                    Tasa oficial
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Tipo de cambio del BCB (USD/BOB)</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">Compra <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.oficial.compra}</span></p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">Venta <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.oficial.venta}</span></p>
+                </div>
+                <FaCheckCircle className="h-4 w-4 text-gray-300 dark:text-zinc-600 group-hover:text-amber-500 shrink-0 transition-colors" />
+              </button>
+            )}
+
+            {/* Tasa referencial */}
+            {bcbData.referencial && (
+              <button
+                onClick={() => usarTasaBCB('referencial')}
+                className="w-full flex items-center justify-between gap-4 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/5 transition-all group text-left"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-400">
+                    Tasa referencial
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Valor referencial publicado por el BCB</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">Compra <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.referencial.compra}</span></p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">Venta <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.referencial.venta}</span></p>
+                </div>
+                <FaCheckCircle className="h-4 w-4 text-gray-300 dark:text-zinc-600 group-hover:text-blue-500 shrink-0 transition-colors" />
+              </button>
+            )}
+          </div>
+        )}
       </Modal>
 
       <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Eliminar Tipo de Cambio" maxWidth="max-w-sm">

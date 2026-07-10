@@ -1,4 +1,5 @@
 import { reportesService } from '../../../services/reportes.service';
+import { usePermission } from '../../../hooks/usePermission';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 export const hoy = () => new Date().toISOString().slice(0, 10);
@@ -49,6 +50,8 @@ export function BtnConsultar({ onClick }) {
 }
 
 export function BtnPDF({ tipo, filtros }) {
+  const { puede } = usePermission();
+  if (!puede('exportar', 'reportes')) return null;
   return (
     <button onClick={() => descargarPDF(tipo, filtros)}
       className="px-3 py-2 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-700 dark:text-red-400 font-semibold text-sm rounded-xl transition-colors border border-red-200 dark:border-red-500/30 flex items-center gap-1.5">
@@ -71,39 +74,69 @@ export function Tabla({ columnas, filas, cargando, vacio }) {
   if (!filas || filas.length === 0) {
     return <p className="text-center py-16 text-zinc-400 dark:text-zinc-500 text-sm">{vacio || 'Sin resultados'}</p>;
   }
+
+  const titleCol = columnas.find(c => c.bold) || columnas[0];
+  const restCols = columnas.filter(c => c !== titleCol);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-zinc-200 dark:border-zinc-800">
-            {columnas.map(c => (
-              <th key={c.key} className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {filas.map((fila, i) => (
-            <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+    <>
+      {/* Mobile: cards */}
+      <div className="grid gap-3 md:hidden">
+        {filas.map((fila, i) => (
+          <div key={i} className="bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 p-4">
+            <div className="mb-3 pb-2.5 border-b border-zinc-100 dark:border-zinc-700">
+              <p className="font-semibold text-sm text-zinc-900 dark:text-white">
+                {titleCol.render ? titleCol.render(fila[titleCol.key], fila) : (fila[titleCol.key] ?? '—')}
+              </p>
+            </div>
+            <div className="space-y-2">
+              {restCols.map(c => (
+                <div key={c.key} className="flex items-start justify-between gap-3 text-xs">
+                  <span className="text-zinc-400 dark:text-zinc-500 shrink-0">{c.label}</span>
+                  <span className={`font-medium text-zinc-700 dark:text-zinc-300 text-right ${c.align === 'right' ? 'font-mono' : ''}`}>
+                    {c.render ? c.render(fila[c.key], fila) : (fila[c.key] ?? '—')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: tabla */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
               {columnas.map(c => (
-                <td key={c.key} className={`px-3 py-2.5 text-zinc-700 dark:text-zinc-300 ${c.align === 'right' ? 'text-right font-mono' : ''} ${c.bold ? 'font-semibold text-zinc-900 dark:text-white' : ''}`}>
-                  {c.render ? c.render(fila[c.key], fila) : (fila[c.key] ?? '—')}
-                </td>
+                <th key={c.key} className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
+                  {c.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {filas.map((fila, i) => (
+              <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                {columnas.map(c => (
+                  <td key={c.key} className={`px-3 py-2.5 text-zinc-700 dark:text-zinc-300 ${c.align === 'right' ? 'text-right font-mono' : ''} ${c.bold ? 'font-semibold text-zinc-900 dark:text-white' : ''}`}>
+                    {c.render ? c.render(fila[c.key], fila) : (fila[c.key] ?? '—')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
 export function Resumen({ items }) {
   return (
-    <div className="flex flex-wrap gap-3 px-1 pb-2">
+    <div className="flex flex-wrap gap-x-5 gap-y-2 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 rounded-xl px-4 py-3">
       {items.map((it, i) => (
-        <div key={i} className="flex items-center gap-2 text-sm">
+        <div key={i} className="flex items-center gap-1.5 text-sm">
           <span className="text-zinc-400 dark:text-zinc-500">{it.label}:</span>
           <span className={`font-semibold ${it.color || 'text-zinc-900 dark:text-white'}`}>{it.valor}</span>
         </div>

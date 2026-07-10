@@ -1,11 +1,14 @@
 import api from '../api/axios';
 
 export const proveedoresService = {
-  getAll:  ()           => api.get('/proveedores'),
-  getOne:  (id)         => api.get(`/proveedores/${id}`),
+  getAll:    ()         => api.get('/proveedores'),
+  getOne:    (id)       => api.get(`/proveedores/${id}`),
+  getFormData: ()       => api.get('/proveedores/form-data'),
   create:  (data)       => api.post('/proveedores', data),
   update:  (id, data)   => api.put(`/proveedores/${id}`, data),
   remove:  (id)         => api.delete(`/proveedores/${id}`),
+
+  getSaldo:    (idP)       => api.get(`/proveedores/${idP}/saldo`),
 
   getContactos:   (idP)            => api.get(`/proveedores/${idP}/contactos`),
   createContacto: (idP, data)      => api.post(`/proveedores/${idP}/contactos`, data),

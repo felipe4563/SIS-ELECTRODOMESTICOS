@@ -8,6 +8,8 @@ export const combosService = {
   remove:          (id)          => api.delete(`/combos/${id}`),
   getDetalle:      (id)          => api.get(`/combos/${id}/productos`),
   updateDetalle:   (id, data)    => api.post(`/combos/${id}/productos`, data),
+  exportarPDF:   (params) => api.get('/combos/exportar/pdf', { params, responseType: 'blob' }),
+  getProductosParaCombo:  (q)    => api.get('/combos/productos-para-combo', { params: q ? { q } : undefined }),
   uploadImagen:    (id, file)    => {
     const form = new FormData();
     form.append('imagen', file);
@@ -24,4 +26,6 @@ export const promocionesService = {
   remove:              (id)       => api.delete(`/promociones/${id}`),
   getAplicaciones:     (id)       => api.get(`/promociones/${id}/aplicaciones`),
   updateAplicaciones:  (id, data) => api.post(`/promociones/${id}/aplicaciones`, data),
+  exportarPDF:         (params)   => api.get('/promociones/exportar/pdf', { params, responseType: 'blob' }),
+  getItemsParaPromocion: (tipo, q) => api.get('/promociones/items-para-promo', { params: { tipo, ...(q ? { q } : {}) } }),
 };

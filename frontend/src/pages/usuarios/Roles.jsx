@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaSpinner, FaShieldAlt, FaKey } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaSpinner, FaShieldAlt, FaKey, FaUsers, FaEye } from 'react-icons/fa';
 import { rolesService } from '../../services/usuariosRoles.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
@@ -9,6 +9,148 @@ const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
 
 const EMPTY_FORM = { nombre: '', descripcion: '' };
+
+// ── Botón de acción icono ────────────────────────────────────────────────────
+const COLOR_MAP = {
+  blue:  'text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10',
+  amber: 'text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10',
+  green: 'text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-500/10',
+  red:   'text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10',
+};
+function AccionBtn({ title, color, icon: Icon, onClick }) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      className={`p-1.5 rounded-lg transition-colors ${COLOR_MAP[color]}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+// ── Tarjeta de rol ───────────────────────────────────────────────────────────
+function RolCard({ r, puede, onEdit, onDelete, onPermisos, onVerPermisos }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 transition-shadow hover:shadow-md dark:hover:shadow-zinc-950/60">
+      {/* Cabecera */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="shrink-0 w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
+            <FaShieldAlt className="h-4 w-4 text-amber-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-gray-900 dark:text-white truncate leading-tight">{r.nombre}</p>
+            {r.descripcion && (
+              <p className="text-xs text-gray-400 dark:text-zinc-500 truncate leading-tight mt-0.5">{r.descripcion}</p>
+            )}
+          </div>
+        </div>
+        {r.es_sistema ? (
+          <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">Sistema</span>
+        ) : (
+          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${r.activo ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
+            {r.activo ? 'Activo' : 'Inactivo'}
+          </span>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 flex items-center gap-1.5 bg-gray-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
+          <FaKey className="h-3 w-3 text-amber-500 shrink-0" />
+          <span className="text-xs text-gray-500 dark:text-zinc-400">Permisos</span>
+          <span className="ml-auto font-mono font-semibold text-sm text-gray-900 dark:text-white">{r.total_permisos ?? 0}</span>
+        </div>
+        <div className="flex-1 flex items-center gap-1.5 bg-gray-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
+          <FaUsers className="h-3 w-3 text-blue-500 shrink-0" />
+          <span className="text-xs text-gray-500 dark:text-zinc-400">Usuarios</span>
+          <span className="ml-auto font-mono font-semibold text-sm text-gray-900 dark:text-white">{r.total_usuarios ?? 0}</span>
+        </div>
+      </div>
+
+      {/* Acciones */}
+      <div className="flex items-center gap-1 pt-1 border-t border-gray-100 dark:border-zinc-800">
+        {puede('ver_permisos', 'roles') && !puede('asignar_permisos', 'roles') && (
+          <AccionBtn title="Ver permisos" color="blue" icon={FaEye} onClick={() => onVerPermisos(r)} />
+        )}
+        {puede('asignar_permisos', 'roles') && (
+          <AccionBtn title="Asignar permisos" color="amber" icon={FaKey} onClick={() => onPermisos(r)} />
+        )}
+        {puede('editar', 'roles') && (
+          <AccionBtn title="Editar" color="green" icon={FaEdit} onClick={() => onEdit(r)} />
+        )}
+        {puede('eliminar', 'roles') && !r.es_sistema && (
+          <AccionBtn title="Eliminar" color="red" icon={FaTrash} onClick={() => onDelete(r)} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Modal de vista de permisos (solo lectura) ────────────────────────────────
+function VerPermisosModal({ open, onClose, rol }) {
+  const [permisos,  setPermisos]  = useState([]);
+  const [cargando,  setCargando]  = useState(true);
+  const [error,     setError]     = useState(null);
+
+  useEffect(() => {
+    if (!open || !rol) return;
+    setCargando(true);
+    setError(null);
+    rolesService.getRolPermisosDetalle(rol.id_rol)
+      .then(({ data }) => setPermisos(data.permisos))
+      .catch(() => setError('Error al cargar permisos'))
+      .finally(() => setCargando(false));
+  }, [open, rol]);
+
+  const grupos = permisos.reduce((acc, p) => {
+    if (!acc[p.modulo_nombre]) acc[p.modulo_nombre] = [];
+    acc[p.modulo_nombre].push(p);
+    return acc;
+  }, {});
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Permisos de ${rol?.nombre}`} maxWidth="max-w-lg">
+      {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>}
+      {cargando ? (
+        <div className="flex items-center justify-center h-40 text-gray-400"><FaSpinner className="animate-spin h-6 w-6" /></div>
+      ) : permisos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-gray-400 dark:text-zinc-500">
+          <FaKey className="h-8 w-8 mb-2 opacity-30" />
+          <p className="text-sm">Este rol no tiene permisos asignados</p>
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          {Object.entries(grupos).map(([modulo, items]) => (
+            <div key={modulo} className="border border-gray-100 dark:border-zinc-800 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/60">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-zinc-400">{modulo}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                  {items.length}
+                </span>
+              </div>
+              <div className="p-3 flex flex-wrap gap-1.5">
+                {items.map(p => (
+                  <span key={p.id_permiso}
+                    title={p.descripcion || ''}
+                    className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 border border-gray-200 dark:border-zinc-700">
+                    <FaKey className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+                    {p.nombre}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-zinc-800 mt-4">
+        <span className="text-xs text-gray-400 dark:text-zinc-500">{permisos.length} permiso(s) asignado(s)</span>
+        <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">Cerrar</button>
+      </div>
+    </Modal>
+  );
+}
 
 // ── Modal de asignación de permisos ──────────────────────────────────────────
 function PermisosModal({ open, onClose, rol, onSaved }) {
@@ -61,7 +203,6 @@ function PermisosModal({ open, onClose, rol, onSaved }) {
     }
   };
 
-  // Agrupar por módulo
   const grupos = todosPermisos.reduce((acc, p) => {
     const key = p.modulo_nombre;
     if (!acc[key]) acc[key] = [];
@@ -135,7 +276,8 @@ export default function Roles() {
   const [error,    setError]    = useState(null);
   const [modal,    setModal]    = useState(false);
   const [confirm,  setConfirm]  = useState(null);
-  const [permModal,setPermModal] = useState(null);
+  const [permModal,    setPermModal]     = useState(null);
+  const [verPermModal, setVerPermModal]  = useState(null);
   const [editando, setEditando] = useState(null);
   const [form,     setForm]     = useState(EMPTY_FORM);
   const [guardando,setGuardando]= useState(false);
@@ -200,72 +342,27 @@ export default function Roles() {
       )}
 
       {cargando ? (
-        <div className="flex items-center justify-center h-48 text-gray-400"><FaSpinner className="animate-spin h-6 w-6" /></div>
+        <div className="flex items-center justify-center h-48 text-gray-400">
+          <FaSpinner className="animate-spin h-6 w-6" />
+        </div>
+      ) : lista.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-zinc-500">
+          <FaShieldAlt className="h-10 w-10 mb-3 opacity-30" />
+          <p className="text-sm">No hay roles registrados</p>
+        </div>
       ) : (
-        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-          {lista.length === 0 ? (
-            <div className="text-center py-16 text-gray-400 dark:text-zinc-500">
-              <FaShieldAlt className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay roles registrados</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-zinc-800">
-                    {['Rol', 'Descripción', 'Permisos', 'Usuarios', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-                  {lista.map(r => (
-                    <tr key={r.id_rol} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-white">{r.nombre}</span>
-                          {r.es_sistema ? (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-medium">Sistema</span>
-                          ) : (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400">{r.activo ? 'Activo' : 'Inactivo'}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-zinc-400 text-xs max-w-xs truncate">{r.descripcion ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-gray-900 dark:text-white">{r.total_permisos}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-gray-900 dark:text-white">{r.total_usuarios}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end">
-                          {puede('asignar_permisos', 'roles') && (
-                            <button onClick={() => setPermModal(r)} title="Asignar permisos"
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
-                              <FaKey className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                          {puede('editar', 'roles') && (
-                            <button onClick={() => abrirEditar(r)} title="Editar"
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors">
-                              <FaEdit className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                          {puede('eliminar', 'roles') && !r.es_sistema && (
-                            <button onClick={() => setConfirm(r)} title="Eliminar"
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                              <FaTrash className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {lista.map(r => (
+            <RolCard
+              key={r.id_rol}
+              r={r}
+              puede={puede}
+              onEdit={abrirEditar}
+              onDelete={setConfirm}
+              onPermisos={setPermModal}
+              onVerPermisos={setVerPermModal}
+            />
+          ))}
         </div>
       )}
 
@@ -306,7 +403,14 @@ export default function Roles() {
         </div>
       </Modal>
 
-      {/* Modal permisos */}
+      {/* Modal ver permisos (solo lectura) */}
+      <VerPermisosModal
+        open={!!verPermModal}
+        onClose={() => setVerPermModal(null)}
+        rol={verPermModal}
+      />
+
+      {/* Modal asignar permisos (edición) */}
       <PermisosModal
         open={!!permModal}
         onClose={() => setPermModal(null)}

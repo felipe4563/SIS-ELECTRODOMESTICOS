@@ -7,16 +7,29 @@ const auditLog = (userId, tabla, id, accion, ip) =>
   );
 
 // ── Stock Consolidado ────────────────────────────────────────────────────────
-// Devuelve { depositos, productos } donde cada producto tiene un map
-// stock[id_deposito] = { cantidad, cantidad_reservada, cantidad_disponible, costo_promedio }
+// Con ver_todos_depositos devuelve todos los depósitos; con solo ver filtra al id_sucursal del usuario.
 
 const getStockConsolidado = async (req, res) => {
   try {
+    const verTodos   = req.ability.can('ver_todos_depositos', 'inventario');
+    const idSucursal = req.user.id_sucursal;
+
+    if (!verTodos && !idSucursal) {
+      return res.status(400).json({ mensaje: 'El usuario no tiene una sucursal asignada. Contacta al administrador.' });
+    }
+
     const [depositos] = await db.promise().query(
       `SELECT id_deposito, codigo, nombre
        FROM depositos WHERE activo = 1
-       ORDER BY nombre`
+       ${!verTodos ? 'AND id_sucursal = ?' : ''}
+       ORDER BY nombre`,
+      verTodos ? [] : [idSucursal]
     );
+
+    const depositoIds = depositos.map(d => d.id_deposito);
+    if (depositoIds.length === 0) return res.json({ depositos: [], productos: [] });
+
+    const placeholders = depositoIds.map(() => '?').join(',');
 
     const [rows] = await db.promise().query(
       `SELECT
@@ -36,8 +49,10 @@ const getStockConsolidado = async (req, res) => {
        JOIN categorias c      ON c.id_categoria = p.id_categoria
        JOIN unidades_medida u ON u.id_unidad    = p.id_unidad
        LEFT JOIN stock s      ON s.id_producto  = p.id_producto
+                             AND s.id_deposito  IN (${placeholders})
        WHERE p.activo = 1
-       ORDER BY m.nombre ASC, p.producto ASC`
+       ORDER BY m.nombre ASC, p.producto ASC`,
+      depositoIds
     );
 
     // Pivotar filas por producto
@@ -184,4 +199,84 @@ const atenderAlerta = async (req, res) => {
   }
 };
 
-module.exports = { getStockConsolidado, getKardex, getAlertas, atenderAlerta };
+// ── Editar stock mínimo ───────────────────────────────────────────────────────
+
+const editarStockMinimo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stock_minimo } = req.body;
+
+    if (stock_minimo === undefined || stock_minimo === null ||
+        isNaN(Number(stock_minimo)) || Number(stock_minimo) < 0) {
+      return res.status(400).json({ mensaje: 'stock_minimo debe ser un número >= 0' });
+    }
+
+    const [[producto]] = await db.promise().query(
+      `SELECT id_producto FROM productos WHERE id_producto = ? AND activo = 1`, [id]
+    );
+    if (!producto) return res.status(404).json({ mensaje: 'Producto no encontrado' });
+
+    await db.promise().query(
+      `UPDATE productos SET stock_minimo = ? WHERE id_producto = ?`,
+      [Number(stock_minimo), id]
+    );
+
+    await auditLog(req.user.id_usuario, 'productos', id, 'UPDATE', getIp(req));
+    res.json({ ok: true, stock_minimo: Number(stock_minimo) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensaje: 'Error al actualizar stock mínimo' });
+  }
+};
+
+// ── Stock por depósito específico (para formulario de transferencia) ──────────
+
+const getStockDeposito = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await db.promise().query(`
+      SELECT p.id_producto, p.codigo_interno, p.producto,
+             COALESCE(s.cantidad, 0)            AS cantidad,
+             COALESCE(s.cantidad_reservada, 0)  AS cantidad_reservada,
+             COALESCE(s.cantidad_disponible, 0) AS cantidad_disponible
+      FROM productos p
+      LEFT JOIN stock s ON s.id_producto = p.id_producto AND s.id_deposito = ?
+      WHERE p.activo = 1
+      ORDER BY p.producto ASC
+    `, [id]);
+    res.json({ stock: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensaje: 'Error al obtener stock del depósito' });
+  }
+};
+
+// ── Form-data para Kardex (productos + depósitos visibles por el usuario) ──────
+
+const getKardexFormData = async (req, res) => {
+  try {
+    const verTodos   = req.ability.can('ver_todos_depositos', 'inventario');
+    const idSucursal = req.user.id_sucursal;
+
+    const [depositos] = await db.promise().query(
+      `SELECT id_deposito, codigo, nombre
+       FROM depositos WHERE activo = 1
+       ${!verTodos ? 'AND id_sucursal = ?' : ''}
+       ORDER BY nombre`,
+      verTodos ? [] : (idSucursal ? [idSucursal] : [0])
+    );
+
+    const [productos] = await db.promise().query(
+      `SELECT p.id_producto, p.codigo_interno, p.producto
+       FROM productos p WHERE p.activo = 1
+       ORDER BY p.producto ASC`
+    );
+
+    res.json({ productos, depositos });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensaje: 'Error al obtener datos del formulario' });
+  }
+};
+
+module.exports = { getStockConsolidado, getKardex, getAlertas, atenderAlerta, editarStockMinimo, getKardexFormData, getStockDeposito };

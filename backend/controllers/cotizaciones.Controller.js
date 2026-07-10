@@ -476,7 +476,66 @@ const getPDF = async (req, res) => {
   }
 };
 
+// ── Anular ────────────────────────────────────────────────────────────────────
+
+const anularCotizacion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+    const [[cot]] = await db.promise().query(
+      `SELECT estado FROM cotizaciones WHERE id_cotizacion = ?`, [id]
+    );
+    if (!cot) return res.status(404).json({ mensaje: 'Cotización no encontrada' });
+    if (['CONVERTIDA', 'ANULADA'].includes(cot.estado))
+      return res.status(400).json({ mensaje: 'No se puede anular una cotización convertida o ya anulada' });
+
+    await db.promise().query(
+      `UPDATE cotizaciones SET estado='ANULADA', observaciones=CONCAT(IFNULL(observaciones,''),' | ANULADA: ',?) WHERE id_cotizacion = ?`,
+      [motivo || 'Sin motivo', id]
+    );
+    await auditLog(req.user.id_usuario, 'cotizaciones', id, 'UPDATE', getIp(req));
+    res.json({ mensaje: 'Cotización anulada' });
+  } catch (err) {
+    console.error('[anularCotizacion]', err);
+    res.status(500).json({ error: 'Error al anular cotización' });
+  }
+};
+
+// ── Form data ─────────────────────────────────────────────────────────────────
+
+const getFormData = async (req, res) => {
+  try {
+    const [sucursales] = await db.promise().query(
+      `SELECT id_sucursal, nombre FROM sucursales WHERE activo = 1 ORDER BY nombre`
+    );
+    const [clientes] = await db.promise().query(
+      `SELECT id_cliente, codigo, nombres, apellidos, razon_social, tipo_cliente, tipo_documento, documento, telefono, email
+       FROM clientes WHERE activo = 1 ORDER BY razon_social, nombres`
+    );
+    const [monedas] = await db.promise().query(
+      `SELECT id_moneda, nombre, simbolo, codigo, es_moneda_base FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, nombre`
+    );
+    const [depositos] = await db.promise().query(
+      `SELECT d.id_deposito, d.nombre, d.id_sucursal, d.permite_venta, s.nombre AS sucursal_nombre
+       FROM depositos d JOIN sucursales s ON s.id_sucursal = d.id_sucursal
+       WHERE d.activo = 1 ORDER BY s.nombre, d.nombre`
+    );
+    const [productos] = await db.promise().query(
+      `SELECT p.id_producto, p.codigo_interno, p.producto, p.precio_publico, p.precio_mayor,
+              p.bono, um.nombre AS unidad_nombre, p.imagen_url
+       FROM productos p
+       JOIN unidades_medida um ON um.id_unidad = p.id_unidad
+       WHERE p.activo = 1 ORDER BY p.producto`
+    );
+    res.json({ sucursales, clientes, monedas, depositos, productos });
+  } catch (err) {
+    console.error('[getFormData]', err);
+    res.status(500).json({ error: 'Error al obtener datos del formulario' });
+  }
+};
+
 module.exports = {
   getCotizaciones, getCotizacion, createCotizacion, updateCotizacion,
-  emitirCotizacion, aprobarCotizacion, rechazarCotizacion, convertirVenta, getPDF,
+  emitirCotizacion, aprobarCotizacion, rechazarCotizacion, convertirVenta,
+  anularCotizacion, getPDF, getFormData,
 };

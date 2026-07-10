@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { isValidEmail } = require('../utils/validators');
+const { tiene_permiso } = require('../middlewares/authMiddleware');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -158,10 +159,20 @@ const updateCredito = async (req, res) => {
     );
     if (!exists) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    await db.promise().query(
-      `UPDATE clientes SET permite_credito = ?, limite_credito = ?, dias_credito = ? WHERE id_cliente = ?`,
-      [permite_credito ? 1 : 0, limite_credito ?? 0, dias_credito ?? 0, id]
-    );
+    const puedeOtorgar = tiene_permiso(req, 'clientes', 'dar_credito');
+
+    if (puedeOtorgar) {
+      await db.promise().query(
+        `UPDATE clientes SET permite_credito = ?, limite_credito = ?, dias_credito = ? WHERE id_cliente = ?`,
+        [permite_credito ? 1 : 0, limite_credito ?? 0, dias_credito ?? 0, id]
+      );
+    } else {
+      // Solo modificar_limite: no puede cambiar permite_credito
+      await db.promise().query(
+        `UPDATE clientes SET limite_credito = ?, dias_credito = ? WHERE id_cliente = ?`,
+        [limite_credito ?? 0, dias_credito ?? 0, id]
+      );
+    }
 
     await auditLog(req.user.id_usuario, 'clientes', id, 'UPDATE_CREDITO', getIp(req));
     const [[updated]] = await db.promise().query(
@@ -264,8 +275,41 @@ const deleteDireccion = async (req, res) => {
   }
 };
 
+// ── Historial de ventas ───────────────────────────────────────────────────
+
+const getHistorial = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [[exists]] = await db.promise().query(
+      `SELECT id_cliente FROM clientes WHERE id_cliente = ?`, [id]
+    );
+    if (!exists) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    const [ventas] = await db.promise().query(
+      `SELECT v.id_venta, v.numero, v.numero_factura, v.tipo_venta,
+              v.fecha, v.condicion_pago, v.dias_credito, v.fecha_vencimiento,
+              v.total, v.saldo_pendiente, v.estado,
+              m.simbolo AS moneda_simbolo, m.codigo AS moneda_codigo,
+              CONCAT(u.nombres, ' ', u.apellidos) AS vendedor
+       FROM ventas v
+       LEFT JOIN monedas m ON m.id_moneda = v.id_moneda
+       LEFT JOIN usuarios u ON u.id_usuario = v.id_vendedor
+       WHERE v.id_cliente = ?
+       ORDER BY v.fecha DESC
+       LIMIT 100`,
+      [id]
+    );
+
+    return res.json({ ventas });
+  } catch (err) {
+    console.error('[getHistorial]', err);
+    return res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
 module.exports = {
   getClientes, getCliente, createCliente, updateCliente, deleteCliente,
   updateCredito,
   getDirecciones, createDireccion, updateDireccion, deleteDireccion,
+  getHistorial,
 };

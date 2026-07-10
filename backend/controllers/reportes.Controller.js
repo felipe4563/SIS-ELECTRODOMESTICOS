@@ -3,6 +3,7 @@ const path = require('path');
 const fs   = require('fs');
 const PDFDocument = require('pdfkit');
 const { isValidDate } = require('../utils/validators');
+const { tiene_permiso } = require('../middlewares/authMiddleware');
 
 const hoy = () => new Date().toISOString().slice(0, 10);
 const inicioMes = () => {
@@ -27,26 +28,57 @@ const validarFechas = (q, res) => {
 // ── Dashboard KPIs ─────────────────────────────────────────────────────────
 async function getDashboard(req, res) {
   try {
+    const puedeVerTodas = tiene_permiso(req, 'dashboard', 'ver_todas_sucursales');
+    const puedeVer      = tiene_permiso(req, 'dashboard', 'ver');
+
+    if (!puedeVer && !puedeVerTodas) {
+      return res.status(403).json({ error: 'Sin permiso para ver el dashboard' });
+    }
+
+    // Ver_todas_sucursales: usa filtro de query (null = todas).
+    // Solo ver: fuerza la sucursal propia.
+    const id_sucursal = puedeVerTodas
+      ? (req.query.id_sucursal || null)
+      : (req.user.id_sucursal || null);
+
+    const filtroV  = id_sucursal ? ' AND id_sucursal=?' : '';
+    const filtroVC = id_sucursal ? ' AND v.id_sucursal=?' : '';
+    const filtroC  = id_sucursal ? ' AND id_sucursal=?' : '';
+    const ps       = id_sucursal ? [id_sucursal] : [];
+
     const [[ventasHoy]] = await db.promise().query(`
       SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS cantidad
-      FROM ventas WHERE DATE(fecha) = CURDATE() AND estado NOT IN ('ANULADA','BORRADOR')
-    `);
+      FROM ventas WHERE DATE(fecha) = CURDATE() AND estado NOT IN ('ANULADA','BORRADOR') ${filtroV}
+    `, ps);
+
     const [[ventasMes]] = await db.promise().query(`
       SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS cantidad
       FROM ventas WHERE YEAR(fecha)=YEAR(CURDATE()) AND MONTH(fecha)=MONTH(CURDATE())
-        AND estado NOT IN ('ANULADA','BORRADOR')
-    `);
+        AND estado NOT IN ('ANULADA','BORRADOR') ${filtroV}
+    `, ps);
+
     const [[comprasMes]] = await db.promise().query(`
       SELECT COALESCE(SUM(total),0) AS total, COUNT(*) AS cantidad
       FROM compras WHERE YEAR(fecha_pedido)=YEAR(CURDATE()) AND MONTH(fecha_pedido)=MONTH(CURDATE())
-        AND estado != 'ANULADO'
-    `);
-    const [[alertas]] = await db.promise().query(`
-      SELECT COUNT(*) AS cantidad FROM alertas_stock WHERE atendida=0
-    `);
-    const [[arqueos]] = await db.promise().query(`
-      SELECT COUNT(*) AS cantidad FROM arqueos_caja WHERE estado='ABIERTA'
-    `);
+        AND estado != 'ANULADO' ${filtroC}
+    `, ps);
+
+    const [[alertas]] = id_sucursal
+      ? await db.promise().query(`
+          SELECT COUNT(*) AS cantidad FROM alertas_stock a
+          JOIN depositos d ON d.id_deposito=a.id_deposito
+          WHERE a.atendida=0 AND d.id_sucursal=?
+        `, [id_sucursal])
+      : await db.promise().query(`SELECT COUNT(*) AS cantidad FROM alertas_stock WHERE atendida=0`);
+
+    const [[arqueos]] = id_sucursal
+      ? await db.promise().query(`
+          SELECT COUNT(*) AS cantidad FROM arqueos_caja a
+          JOIN cajas c ON c.id_caja=a.id_caja
+          WHERE a.estado='ABIERTA' AND c.id_sucursal=?
+        `, [id_sucursal])
+      : await db.promise().query(`SELECT COUNT(*) AS cantidad FROM arqueos_caja WHERE estado='ABIERTA'`);
+
     const [topProductos] = await db.promise().query(`
       SELECT p.producto, p.codigo_interno,
         SUM(vd.cantidad) AS cantidad_vendida, SUM(vd.subtotal) AS monto_total
@@ -54,34 +86,63 @@ async function getDashboard(req, res) {
       JOIN ventas v ON v.id_venta=vd.id_venta
       JOIN productos p ON p.id_producto=vd.id_producto
       WHERE YEAR(v.fecha)=YEAR(CURDATE()) AND MONTH(v.fecha)=MONTH(CURDATE())
-        AND v.estado NOT IN ('ANULADA','BORRADOR')
+        AND v.estado NOT IN ('ANULADA','BORRADOR') ${filtroVC}
       GROUP BY vd.id_producto, p.producto, p.codigo_interno
       ORDER BY cantidad_vendida DESC LIMIT 5
-    `);
+    `, ps);
+
     const [ventasDiarias] = await db.promise().query(`
       SELECT DATE(fecha) AS dia, COALESCE(SUM(total),0) AS total, COUNT(*) AS cantidad
       FROM ventas
       WHERE fecha >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-        AND estado NOT IN ('ANULADA','BORRADOR')
+        AND estado NOT IN ('ANULADA','BORRADOR') ${filtroV}
       GROUP BY DATE(fecha) ORDER BY dia
-    `);
-    const [[cuentasCobrar]] = await db.promise().query(`
-      SELECT COALESCE(SUM(saldo_actual),0) AS total FROM clientes WHERE saldo_actual > 0
-    `);
-    const [[cuentasPagar]] = await db.promise().query(`
-      SELECT COALESCE(SUM(saldo_actual),0) AS total FROM proveedores WHERE saldo_actual > 0
-    `);
+    `, ps);
+
+    const [[cuentasCobrar]] = await db.promise().query(
+      `SELECT COALESCE(SUM(saldo_actual),0) AS total FROM clientes WHERE saldo_actual > 0`
+    );
+    const [[cuentasPagar]] = await db.promise().query(
+      `SELECT COALESCE(SUM(saldo_actual),0) AS total FROM proveedores WHERE saldo_actual > 0`
+    );
+
+    // Solo incluir lista de sucursales para quien puede filtrar por todas
+    let sucursales = [];
+    if (puedeVerTodas) {
+      [sucursales] = await db.promise().query(
+        `SELECT id_sucursal, nombre, tipo FROM sucursales WHERE activo = 1 ORDER BY tipo DESC, nombre ASC`
+      );
+    }
+
+    // Sucursal + punto de venta del usuario logueado
+    let sucursalUsuario = null;
+    if (req.user.id_sucursal) {
+      const [[suc]] = await db.promise().query(
+        `SELECT s.id_sucursal, s.nombre AS sucursal_nombre, s.tipo AS sucursal_tipo, s.ciudad,
+                d.id_deposito, d.nombre AS deposito_nombre, d.tipo AS deposito_tipo
+         FROM sucursales s
+         LEFT JOIN depositos d ON d.id_sucursal = s.id_sucursal AND d.activo = 1
+         WHERE s.id_sucursal = ? AND s.activo = 1
+         ORDER BY (d.tipo = 'PUNTO_VENTA') DESC
+         LIMIT 1`,
+        [req.user.id_sucursal]
+      );
+      if (suc) sucursalUsuario = suc;
+    }
 
     res.json({
       ventasHoy,
       ventasMes,
       comprasMes,
-      alertas:      alertas.cantidad,
-      arqueos:      arqueos.cantidad,
+      alertas:       alertas.cantidad,
+      arqueos:       arqueos.cantidad,
       cuentasCobrar: cuentasCobrar.total,
       cuentasPagar:  cuentasPagar.total,
       topProductos,
       ventasDiarias,
+      id_sucursal_filtro: id_sucursal,
+      sucursales,
+      sucursalUsuario,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -627,15 +688,16 @@ async function exportarStockPDF(req, res) {
        FROM empresas WHERE activo=1 LIMIT 1`
     ).catch(() => [[null]]);
 
+    const { busqueda = '', filMarca = '', filCat = '', filEstado = '', id_sucursal = '', con_stock = '' } = req.query;
+
     const [depositos] = await db.promise().query(
       `SELECT d.id_deposito, d.codigo, d.nombre AS nombre_dep, s.nombre AS sucursal
        FROM depositos d
        JOIN sucursales s ON s.id_sucursal = d.id_sucursal
-       WHERE d.activo = 1
-       ORDER BY s.nombre, d.nombre`
+       WHERE d.activo = 1${id_sucursal ? ' AND d.id_sucursal = ?' : ''}
+       ORDER BY s.nombre, d.nombre`,
+      id_sucursal ? [id_sucursal] : []
     );
-
-    const { busqueda = '', filMarca = '', filCat = '', filEstado = '' } = req.query;
 
     const where = ['p.activo = 1'];
     const params = [];
@@ -646,6 +708,8 @@ async function exportarStockPDF(req, res) {
     }
     if (filMarca) { where.push('m.nombre = ?');   params.push(filMarca); }
     if (filCat)   { where.push('cat.nombre = ?'); params.push(filCat);   }
+    if (id_sucursal) { where.push('st.id_deposito IN (SELECT id_deposito FROM depositos WHERE id_sucursal = ?)'); params.push(id_sucursal); }
+    if (con_stock === '1') { where.push('st.cantidad > 0'); }
 
     const [stockRows] = await db.promise().query(
       `SELECT p.id_producto, p.codigo_interno, p.producto,
@@ -757,7 +821,9 @@ async function exportarStockPDF(req, res) {
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a')
          .text('STOCK CONSOLIDADO POR DEPÓSITO', ML, ty, { width: PW, align: 'center', lineBreak: false });
       ty += 14;
+      const sucursalNombre = id_sucursal && depositos.length > 0 ? depositos[0].sucursal : null;
       const filtrosActivos = [
+        sucursalNombre       && `Sucursal: ${sucursalNombre}`,
         busqueda && `Búsqueda: "${busqueda}"`,
         filMarca && `Marca: ${filMarca}`,
         filCat   && `Categoría: ${filCat}`,
@@ -1077,6 +1143,147 @@ async function exportarReporte(req, res) {
   }
 }
 
+// ── Compras por proveedor ─────────────────────────────────────────────────
+async function getComprasProveedor(req, res) {
+  if (!validarFechas(req.query, res)) return;
+  try {
+    const { id_sucursal } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT pr.codigo, pr.razon_social AS proveedor,
+        pr.contacto_principal, pr.telefono,
+        COUNT(c.id_compra) AS num_compras,
+        SUM(c.total) AS total_comprado,
+        SUM(c.saldo_pendiente) AS total_pendiente,
+        MAX(c.fecha_pedido) AS ultima_compra
+      FROM compras c
+      JOIN proveedores pr ON pr.id_proveedor=c.id_proveedor
+      JOIN sucursales s ON s.id_sucursal=c.id_sucursal
+      WHERE c.fecha_pedido BETWEEN ? AND ? AND c.estado != 'ANULADO'
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND c.id_sucursal=?'; params.push(id_sucursal); }
+    sql += ' GROUP BY c.id_proveedor ORDER BY total_comprado DESC';
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Alertas de stock mínimo ───────────────────────────────────────────────
+async function getAlertasStock(req, res) {
+  try {
+    const { id_sucursal, id_deposito } = req.query;
+    let sql = `
+      SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
+        d.nombre AS deposito, s.nombre AS sucursal,
+        p.stock_minimo,
+        COALESCE(st.cantidad_disponible, 0) AS cantidad_disponible,
+        COALESCE(st.cantidad, 0) AS cantidad_total,
+        CASE
+          WHEN COALESCE(st.cantidad_disponible, 0) = 0 THEN 'SIN_STOCK'
+          ELSE 'BAJO_MINIMO'
+        END AS estado_stock
+      FROM productos p
+      JOIN marcas m ON m.id_marca=p.id_marca
+      JOIN categorias cat ON cat.id_categoria=p.id_categoria
+      JOIN stock st ON st.id_producto=p.id_producto
+      JOIN depositos d ON d.id_deposito=st.id_deposito
+      JOIN sucursales s ON s.id_sucursal=d.id_sucursal
+      WHERE p.activo=1 AND p.stock_minimo > 0
+        AND COALESCE(st.cantidad_disponible, 0) < p.stock_minimo
+    `;
+    const params = [];
+    if (id_sucursal) { sql += ' AND d.id_sucursal=?'; params.push(id_sucursal); }
+    if (id_deposito) { sql += ' AND st.id_deposito=?'; params.push(id_deposito); }
+    sql += ' ORDER BY COALESCE(st.cantidad_disponible, 0) ASC, p.producto LIMIT 500';
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Transferencias ────────────────────────────────────────────────────────
+async function getTransferencias(req, res) {
+  if (!validarFechas(req.query, res)) return;
+  try {
+    const { id_sucursal, estado } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT t.numero,
+        DATE_FORMAT(t.fecha_solicitud,'%Y-%m-%d %H:%i') AS fecha_solicitud,
+        DATE_FORMAT(t.fecha_envio,'%Y-%m-%d %H:%i') AS fecha_envio,
+        DATE_FORMAT(t.fecha_recepcion,'%Y-%m-%d %H:%i') AS fecha_recepcion,
+        dor.nombre AS deposito_origen, sor.nombre AS sucursal_origen,
+        dde.nombre AS deposito_destino, sde.nombre AS sucursal_destino,
+        t.estado,
+        COUNT(td.id_detalle) AS num_productos,
+        COALESCE(SUM(td.cantidad_enviada), 0) AS total_enviado,
+        CONCAT(us.nombres,' ',us.apellidos) AS solicitante
+      FROM transferencias t
+      JOIN depositos dor ON dor.id_deposito=t.id_deposito_origen
+      JOIN sucursales sor ON sor.id_sucursal=dor.id_sucursal
+      JOIN depositos dde ON dde.id_deposito=t.id_deposito_destino
+      JOIN sucursales sde ON sde.id_sucursal=dde.id_sucursal
+      LEFT JOIN transferencia_detalle td ON td.id_transferencia=t.id_transferencia
+      LEFT JOIN usuarios us ON us.id_usuario=t.id_usuario_solicita
+      WHERE DATE(t.fecha_solicitud) BETWEEN ? AND ?
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND (sor.id_sucursal=? OR sde.id_sucursal=?)'; params.push(id_sucursal, id_sucursal); }
+    if (estado) { sql += ' AND t.estado=?'; params.push(estado); }
+    sql += ' GROUP BY t.id_transferencia ORDER BY t.fecha_solicitud DESC LIMIT 500';
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Devoluciones ──────────────────────────────────────────────────────────
+async function getDevoluciones(req, res) {
+  if (!validarFechas(req.query, res)) return;
+  try {
+    const { id_sucursal, estado } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT dv.numero, DATE_FORMAT(dv.fecha,'%Y-%m-%d %H:%i') AS fecha,
+        v.numero AS venta_numero,
+        COALESCE(c.razon_social, CONCAT(c.nombres,' ',c.apellidos)) AS cliente,
+        s.nombre AS sucursal,
+        dv.motivo, dv.total, dv.estado,
+        CONCAT(u.nombres,' ',u.apellidos) AS usuario
+      FROM devoluciones_venta dv
+      JOIN ventas v ON v.id_venta=dv.id_venta
+      JOIN clientes c ON c.id_cliente=v.id_cliente
+      JOIN depositos d ON d.id_deposito=dv.id_deposito
+      JOIN sucursales s ON s.id_sucursal=d.id_sucursal
+      LEFT JOIN usuarios u ON u.id_usuario=dv.id_usuario
+      WHERE DATE(dv.fecha) BETWEEN ? AND ?
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND d.id_sucursal=?'; params.push(id_sucursal); }
+    if (estado) { sql += ' AND dv.estado=?'; params.push(estado); }
+    sql += ' ORDER BY dv.fecha DESC LIMIT 500';
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 module.exports = {
   getDashboard,
   getVentas,
@@ -1084,6 +1291,7 @@ module.exports = {
   getVentasCliente,
   getVentasProducto,
   getCompras,
+  getComprasProveedor,
   getCuentasCobrar,
   getCuentasPagar,
   getRentabilidad,
@@ -1094,5 +1302,20 @@ module.exports = {
   getArqueosCaja,
   getGastosCategoria,
   getTopProductos,
+  getAlertasStock,
+  getTransferencias,
+  getDevoluciones,
   exportarReporte,
+  getFormDataSucursales,
 };
+
+async function getFormDataSucursales(req, res) {
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT id_sucursal, nombre, tipo FROM sucursales WHERE activo = 1 ORDER BY tipo DESC, nombre ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { combosService } from '../../services/combosPromos.service';
-import { productosService } from '../../services/productos.service';
+import { usePermission } from '../../hooks/usePermission';
 
 const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
@@ -10,28 +10,64 @@ const EMPTY_FORM = {
   imagen_url: '', activo: true,
 };
 
-function Badge({ activo }) {
-  return activo
-    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">Activo</span>
-    : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300">Inactivo</span>;
+function StatusBadge({ activo, fecha_fin }) {
+  const isVencido = !activo && fecha_fin &&
+    new Date(typeof fecha_fin === 'string' ? fecha_fin.slice(0, 10) + 'T12:00:00' : fecha_fin) < new Date();
+  if (activo)
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Activo</span>;
+  if (isVencido)
+    return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Vencido</span>;
+  return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Inactivo</span>;
 }
 
-function fmtFecha(d) {
-  if (!d) return '—';
-  return new Date(d + 'T12:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
+const fmtFecha = (d) => {
+  if (!d) return null;
+  // Normaliza a "YYYY-MM-DD" para evitar problemas de timezone con datetime completo
+  const solo = typeof d === 'string' ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10);
+  return new Date(solo + 'T12:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
 
-function fmtPrecio(v) {
+const fmtPrecio = (v) => {
   if (v == null) return '—';
-  return `Bs. ${parseFloat(v).toFixed(2)}`;
-}
+  return parseFloat(v).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
-function vigenciaLabel(fi, ff) {
-  if (!fi && !ff) return '—';
-  return `${fmtFecha(fi)} → ${fmtFecha(ff)}`;
+const vigenciaStr = (fi, ff) => {
+  const a = fmtFecha(fi);
+  const b = fmtFecha(ff);
+  if (!a && !b) return null;
+  if (a && b)  return `${a} → ${b}`;
+  if (a)       return `desde ${a}`;
+  return `hasta ${b}`;
+};
+
+// ── Imagen del combo ──────────────────────────────────────────────────────────
+function ComboImg({ src, nombre, size = 'sm' }) {
+  const [err, setErr] = useState(false);
+  const full = src && !src.startsWith('http') ? BACKEND + src : src;
+  const dim  = size === 'lg' ? 'w-20 h-20' : 'w-10 h-10';
+  if (src && !err) {
+    return (
+      <img
+        src={full} alt={nombre}
+        onError={() => setErr(true)}
+        className={`${dim} object-cover rounded-xl shrink-0 border border-zinc-200 dark:border-zinc-700`}
+      />
+    );
+  }
+  return (
+    <div className={`${dim} rounded-xl shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center`}>
+      <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    </div>
+  );
 }
 
 export default function Combos() {
+  const { puede } = usePermission();
+
   const [combos, setCombos]           = useState([]);
   const [productos, setProductos]     = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -39,31 +75,28 @@ export default function Combos() {
   const [search, setSearch]           = useState('');
   const [filtroActivo, setFiltroActivo] = useState('todos');
 
-  // Modal principal
   const [showModal, setShowModal]     = useState(false);
   const [editando, setEditando]       = useState(null);
   const [form, setForm]               = useState(EMPTY_FORM);
-  const [detalle, setDetalle]         = useState([]); // [{id_producto, cantidad, producto_nombre, ...}]
+  const [detalle, setDetalle]         = useState([]);
   const [saving, setSaving]           = useState(false);
   const [formErr, setFormErr]         = useState('');
 
-  // Búsqueda de producto dentro del modal
   const [prodSearch, setProdSearch]   = useState('');
 
-  // Imagen
   const imgInputRef                   = useRef();
   const [imgFile, setImgFile]         = useState(null);
   const [imgPreview, setImgPreview]   = useState(null);
 
-  // Modal confirmar baja
   const [showConfirm, setShowConfirm] = useState(false);
   const [comboABajar, setComboABajar] = useState(null);
 
+  const [exportando, setExportando]   = useState(false);
+
   useEffect(() => {
     load();
-    productosService.getAll().then(r => {
-      const all = r.data.productos ?? r.data ?? [];
-      setProductos(all.filter(p => p.activo));
+    combosService.getProductosParaCombo().then(r => {
+      setProductos(r.data.productos ?? []);
     }).catch(() => {});
   }, []);
 
@@ -98,13 +131,13 @@ export default function Combos() {
     const q = prodSearch.toLowerCase();
     return productos
       .filter(p =>
-        (p.producto || '').toLowerCase().includes(q) ||
+        (p.nombre || p.producto || '').toLowerCase().includes(q) ||
         p.codigo_interno?.toLowerCase().includes(q)
       )
       .slice(0, 30);
   }, [productos, prodSearch]);
 
-  // ── Modal helpers ────────────────────────────────────────────────────────
+  // ── Modal helpers ─────────────────────────────────────────────────────────
 
   const openNuevo = () => {
     setEditando(null);
@@ -133,7 +166,6 @@ export default function Combos() {
     setProdSearch('');
     setImgFile(null);
     setImgPreview(null);
-    // Cargar detalle
     try {
       const r = await combosService.getDetalle(combo.id_combo);
       setDetalle(r.data.detalle ?? []);
@@ -160,12 +192,11 @@ export default function Combos() {
     setForm(f => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  // Agregar producto al detalle local
   const agregarProducto = (prod) => {
     if (detalle.some(d => d.id_producto === prod.id_producto)) return;
     setDetalle(prev => [...prev, {
       id_producto:      prod.id_producto,
-      producto_nombre:  prod.producto,
+      producto_nombre:  prod.nombre ?? prod.producto,
       codigo_interno:   prod.codigo_interno,
       precio_publico:   prod.precio_publico,
       cantidad:         1,
@@ -230,37 +261,89 @@ export default function Combos() {
     }
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  const exportarPDF = async () => {
+    setExportando(true);
+    try {
+      const r = await combosService.exportarPDF({ filtro: filtroActivo });
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `combos_${filtroActivo !== 'todos' ? filtroActivo + '_' : ''}${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* silently ignore */
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-5">
-      {/* Cabecera */}
+
+      {/* ── Cabecera ───────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Combos</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Packs de productos con precio especial</p>
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Combos</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            {combos.length > 0
+              ? `${combos.filter(c => c.activo).length} activos de ${combos.length} packs`
+              : 'Packs de productos con precio especial'}
+          </p>
         </div>
-        <button
-          onClick={openNuevo}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium text-sm transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nuevo Combo
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Exportar PDF — solo si tiene permiso */}
+          {puede('exportar', 'combos') && (
+            <button
+              onClick={exportarPDF}
+              disabled={exportando}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-60"
+            >
+              {exportando ? (
+                <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              )}
+              <span className="hidden sm:inline">PDF</span>
+            </button>
+          )}
+
+          {/* Nuevo Combo — solo si tiene permiso */}
+          {puede('crear', 'combos') && (
+            <button
+              onClick={openNuevo}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-zinc-900 font-semibold text-sm transition-colors active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden xs:inline sm:inline">Nuevo combo</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por nombre o código..."
-          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-        />
+      {/* ── Filtros ────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o código…"
+            className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+        </div>
         <select
           value={filtroActivo} onChange={e => setFiltroActivo(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
         >
           <option value="todos">Todos</option>
           <option value="activos">Activos</option>
@@ -268,213 +351,369 @@ export default function Combos() {
         </select>
       </div>
 
-      {/* Tabla */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-gray-400">
-            <svg className="animate-spin w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            Cargando...
-          </div>
-        ) : error ? (
-          <div className="py-12 text-center text-red-500">{error}</div>
-        ) : filtered.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 dark:text-gray-500">No se encontraron combos</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-100 dark:divide-zinc-800">
-              <thead className="bg-gray-50 dark:bg-zinc-800/60">
-                <tr>
-                  {['Código','Nombre','Precio combo','Vigencia','Productos','Estado','Acciones'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
-                {filtered.map(c => (
-                  <tr key={c.id_combo} className="hover:bg-amber-50/40 dark:hover:bg-zinc-800/40 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-lg">{c.codigo}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 dark:text-white text-sm">{c.nombre}</p>
-                      {c.descripcion && <p className="text-xs text-gray-400 truncate max-w-xs">{c.descripcion}</p>}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-amber-600 dark:text-amber-400">{fmtPrecio(c.precio_combo)}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{vigenciaLabel(c.fecha_inicio, c.fecha_fin)}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-bold">{c.total_productos ?? 0}</span>
-                    </td>
-                    <td className="px-4 py-3"><Badge activo={c.activo} /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEditar(c)} title="Editar"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                          </svg>
-                        </button>
-                        {c.activo ? (
-                          <button onClick={() => confirmarBaja(c)} title="Desactivar"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                            </svg>
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* ── Estado carga / error ──────────────────────────────────────────── */}
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-16 text-zinc-400">
+          <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Cargando combos…</span>
+        </div>
+      )}
+      {error && !loading && (
+        <div className="py-12 text-center text-red-500 text-sm">{error}</div>
+      )}
 
-      {/* ── Modal crear/editar ─────────────────────────────────────────── */}
+      {/* ── Lista / tabla ─────────────────────────────────────────────────── */}
+      {!loading && !error && (
+        <>
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                <svg className="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                {search || filtroActivo !== 'todos' ? 'Sin resultados' : 'Aún no hay combos'}
+              </p>
+              <p className="text-xs text-zinc-400">
+                {search || filtroActivo !== 'todos'
+                  ? 'Ajusta los filtros de búsqueda'
+                  : puede('crear', 'combos') ? 'Crea el primer pack de productos' : 'No se encontraron combos'}
+              </p>
+              {!search && filtroActivo === 'todos' && puede('crear', 'combos') && (
+                <button onClick={openNuevo}
+                  className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-300 text-zinc-900 font-semibold text-sm transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Nuevo combo
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* ── Mobile cards (md-) ─────────────────────────────────────── */}
+              <div className="md:hidden space-y-2">
+                {filtered.map(c => (
+                  <div key={c.id_combo}
+                    className="relative flex gap-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 p-3 overflow-hidden">
+                    {/* Acento lateral amarillo */}
+                    <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-yellow-400" />
+
+                    <div className="ml-1">
+                      <ComboImg src={c.imagen_url} nombre={c.nombre} size="sm" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {/* Fila superior: nombre + precio */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{c.nombre}</p>
+                          <span className="font-mono text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1.5 py-px rounded-md">
+                            {c.codigo}
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] text-zinc-400 leading-none">Bs.</p>
+                          <p className="font-mono font-bold text-base text-yellow-500 dark:text-yellow-400 leading-tight">
+                            {fmtPrecio(c.precio_combo)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Fila inferior: metadatos + acciones */}
+                      <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <StatusBadge activo={c.activo} fecha_fin={c.fecha_fin} />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            {c.total_productos ?? 0} ítems
+                          </span>
+                          {vigenciaStr(c.fecha_inicio, c.fecha_fin) && (
+                            <span className="text-[10px] text-zinc-400">{vigenciaStr(c.fecha_inicio, c.fecha_fin)}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {puede('editar', 'combos') && (
+                            <button onClick={() => openEditar(c)} title="Editar"
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                              </svg>
+                            </button>
+                          )}
+                          {puede('eliminar', 'combos') && c.activo && (
+                            <button onClick={() => confirmarBaja(c)} title="Desactivar"
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Desktop table (md+) ────────────────────────────────────── */}
+              <div className="hidden md:block bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-zinc-100 dark:divide-zinc-800" id="tabla-combos-print">
+                    <thead>
+                      <tr className="bg-zinc-50 dark:bg-zinc-800/60">
+                        {['', 'Código', 'Nombre', 'Precio', 'Vigencia', 'Ítems', 'Estado', 'Acciones'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider whitespace-nowrap">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {filtered.map(c => (
+                        <tr key={c.id_combo}
+                          className="hover:bg-yellow-50/30 dark:hover:bg-zinc-800/40 transition-colors group">
+                          <td className="pl-4 py-3 w-12">
+                            <ComboImg src={c.imagen_url} nombre={c.nombre} size="sm" />
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="font-mono text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-lg">
+                              {c.codigo}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-zinc-900 dark:text-white text-sm">{c.nombre}</p>
+                            {c.descripcion && (
+                              <p className="text-xs text-zinc-400 truncate max-w-xs">{c.descripcion}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-right">
+                            <span className="text-xs text-zinc-400">Bs. </span>
+                            <span className="font-mono font-bold text-base text-yellow-500 dark:text-yellow-400">
+                              {fmtPrecio(c.precio_combo)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {vigenciaStr(c.fecha_inicio, c.fecha_fin)
+                              ? <span className="text-xs text-zinc-500 dark:text-zinc-400">{vigenciaStr(c.fecha_inicio, c.fecha_fin)}</span>
+                              : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs font-bold">
+                              {c.total_productos ?? 0}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge activo={c.activo} fecha_fin={c.fecha_fin} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {puede('editar', 'combos') && (
+                                <button onClick={() => openEditar(c)} title="Editar"
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                  </svg>
+                                </button>
+                              )}
+                              {puede('eliminar', 'combos') && c.activo && (
+                                <button onClick={() => confirmarBaja(c)} title="Desactivar"
+                                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Footer con conteo */}
+                <div className="px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+                  <span>{filtered.length} combo{filtered.length !== 1 ? 's' : ''}</span>
+                  {(search || filtroActivo !== 'todos') && filtered.length !== combos.length && (
+                    <button onClick={() => { setSearch(''); setFiltroActivo('todos'); }}
+                      className="text-yellow-600 dark:text-yellow-400 hover:underline">
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── CSS de impresión ─────────────────────────────────────────────── */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #tabla-combos-print, #tabla-combos-print * { visibility: visible !important; }
+          #tabla-combos-print {
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            width: 100% !important; font-size: 11px !important;
+            background: white !important; color: #000 !important;
+          }
+          @page { size: A4 landscape; margin: 10mm; }
+        }
+      `}</style>
+
+      {/* ── Modal crear/editar ───────────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                {editando ? 'Editar Combo' : 'Nuevo Combo'}
-              </h2>
-              <button onClick={closeModal} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+              <div>
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white">
+                  {editando ? 'Editar combo' : 'Nuevo combo'}
+                </h2>
+                {editando && (
+                  <p className="text-xs text-zinc-400 mt-0.5 font-mono">{editando.codigo}</p>
+                )}
+              </div>
+              <button onClick={closeModal}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
                 </svg>
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
               {/* Datos básicos */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {editando && (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Código</label>
-                    <p className="px-3 py-2 rounded-xl text-sm font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30">{editando.codigo}</p>
-                  </div>
-                )}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Nombre *</label>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5">Nombre *</label>
                   <input name="nombre" value={form.nombre} onChange={handleChange}
                     placeholder="Pack Cocina Completa"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"/>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Precio combo (Bs.) *</label>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5">Precio combo (Bs.) *</label>
                   <input name="precio_combo" type="number" min="0" step="0.01" value={form.precio_combo} onChange={handleChange}
-                    placeholder="1500.00"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"/>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Imagen</label>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5">Imagen</label>
                   <input ref={imgInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImgSelect} />
                   <div className="flex items-center gap-3">
-                    {/* Preview */}
                     {(imgPreview || form.imagen_url) && (
                       <img
                         src={imgPreview || (form.imagen_url?.startsWith('http') ? form.imagen_url : BACKEND + form.imagen_url)}
                         alt="preview"
-                        className="w-16 h-16 object-cover rounded-xl border border-gray-200 dark:border-zinc-700 shrink-0"
+                        className="w-14 h-14 object-cover rounded-xl border border-zinc-200 dark:border-zinc-700 shrink-0"
                       />
                     )}
-                    <div className="flex-1 flex flex-col gap-1.5">
+                    <div className="flex-1 flex flex-col gap-1">
                       <button type="button" onClick={() => imgInputRef.current?.click()}
-                        className="px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors text-left">
+                        className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-left truncate">
                         {imgFile ? imgFile.name : 'Seleccionar imagen…'}
                       </button>
-                      <p className="text-[10px] text-gray-400">JPG, PNG o WebP · máx. 5 MB</p>
+                      <p className="text-[10px] text-zinc-400">JPG, PNG o WebP · máx. 5 MB</p>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Fecha inicio</label>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5">Fecha inicio</label>
                   <input name="fecha_inicio" type="date" value={form.fecha_inicio} onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"/>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Fecha fin</label>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5">Fecha fin</label>
                   <input name="fecha_fin" type="date" value={form.fecha_fin} onChange={handleChange}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"/>
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"/>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Descripción</label>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5">Descripción</label>
                   <textarea name="descripcion" value={form.descripcion} onChange={handleChange} rows={2}
-                    placeholder="Descripción opcional del combo..."
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"/>
+                    placeholder="Descripción opcional del combo…"
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 resize-none"/>
                 </div>
                 {editando && (
                   <div className="flex items-center gap-2">
                     <input type="checkbox" id="activo" name="activo" checked={form.activo} onChange={handleChange}
-                      className="w-4 h-4 rounded accent-amber-500"/>
-                    <label htmlFor="activo" className="text-sm text-gray-700 dark:text-gray-300">Activo</label>
+                      className="w-4 h-4 rounded accent-yellow-400"/>
+                    <label htmlFor="activo" className="text-sm text-zinc-700 dark:text-zinc-300">Combo activo</label>
                   </div>
                 )}
               </div>
 
               {/* Sección productos */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Productos del combo</h3>
-                  <span className="text-xs text-gray-400">{detalle.length} producto{detalle.length !== 1 ? 's' : ''}</span>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Productos del combo</h3>
+                  <span className="text-xs text-zinc-400 font-mono">
+                    {detalle.length} ítem{detalle.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
 
-                {/* Buscador de producto */}
                 <div className="relative mb-3">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
                   <input
                     value={prodSearch} onChange={e => setProdSearch(e.target.value)}
-                    placeholder="Buscar producto por nombre o código..."
-                    className="w-full px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/10 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    placeholder="Buscar producto por nombre o código…"
+                    className="w-full pl-8 pr-3 py-2 rounded-xl border border-yellow-200 dark:border-yellow-700/40 bg-yellow-50 dark:bg-yellow-900/10 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
                   {prodSearch && (
-                    <div className="absolute z-10 left-0 right-0 mt-1 bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-lg max-h-44 overflow-y-auto">
+                    <div className="absolute z-10 left-0 right-0 mt-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl max-h-44 overflow-y-auto">
                       {prodsFiltrados.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-gray-400">Sin resultados</p>
+                        <p className="px-3 py-3 text-xs text-zinc-400 text-center">Sin resultados</p>
                       ) : prodsFiltrados.map(p => (
                         <button key={p.id_producto}
                           onClick={() => agregarProducto(p)}
                           disabled={detalle.some(d => d.id_producto === p.id_producto)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-between gap-2"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-yellow-50 dark:hover:bg-yellow-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-700/50 last:border-b-0"
                         >
                           <span>
-                            <span className="font-mono text-xs text-amber-600 dark:text-amber-400 mr-2">{p.codigo_interno}</span>
-                            <span className="text-gray-800 dark:text-gray-200">{p.producto}</span>
+                            <span className="font-mono text-xs text-yellow-600 dark:text-yellow-400 mr-2">{p.codigo_interno}</span>
+                            <span className="text-zinc-800 dark:text-zinc-200">{p.nombre ?? p.producto}</span>
                           </span>
-                          <span className="text-xs text-gray-400 shrink-0">Bs. {parseFloat(p.precio_publico ?? 0).toFixed(2)}</span>
+                          <span className="text-xs text-zinc-400 shrink-0 font-mono">Bs. {parseFloat(p.precio_publico ?? 0).toFixed(2)}</span>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Lista de productos del combo */}
                 {detalle.length === 0 ? (
-                  <p className="text-center py-4 text-xs text-gray-400 dark:text-gray-500 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-xl">
-                    Busca y agrega productos al combo
-                  </p>
+                  <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700">
+                    <svg className="w-6 h-6 text-zinc-300 dark:text-zinc-600 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <p className="text-xs text-zinc-400">Busca y agrega productos al combo</p>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {detalle.map(d => (
-                      <div key={d.id_producto} className="flex items-center gap-3 bg-gray-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
+                      <div key={d.id_producto}
+                        className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{d.producto_nombre}</p>
-                          <p className="text-xs text-gray-400">{d.codigo_interno} · Bs. {parseFloat(d.precio_publico ?? 0).toFixed(2)}</p>
+                          <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{d.producto_nombre}</p>
+                          <p className="text-xs text-zinc-400 font-mono">
+                            {d.codigo_interno} · Bs. {parseFloat(d.precio_publico ?? 0).toFixed(2)}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <label className="text-xs text-gray-500 dark:text-gray-400">Cant.</label>
+                          <label className="text-xs text-zinc-400">Cant.</label>
                           <input
                             type="number" min="1" step="1"
                             value={d.cantidad}
                             onChange={e => cambiarCantidad(d.id_producto, e.target.value)}
-                            className="w-16 px-2 py-1 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-700 text-gray-900 dark:text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            className="w-14 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
                           />
                           <button onClick={() => quitarProducto(d.id_producto)}
-                            className="p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            className="p-1 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
                             </svg>
@@ -487,47 +726,52 @@ export default function Combos() {
               </div>
 
               {formErr && (
-                <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl">{formErr}</p>
+                <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-xl border border-red-100 dark:border-red-900/40">
+                  {formErr}
+                </p>
               )}
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-zinc-800">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-zinc-100 dark:border-zinc-800">
               <button onClick={closeModal}
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Cancelar
               </button>
               <button onClick={handleSave} disabled={saving}
-                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-medium text-sm transition-colors">
-                {saving ? 'Guardando...' : editando ? 'Actualizar' : 'Crear Combo'}
+                className="px-5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-300 disabled:opacity-60 disabled:cursor-not-allowed text-zinc-900 font-semibold text-sm transition-colors flex items-center gap-2">
+                {saving && <div className="w-3.5 h-3.5 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />}
+                {saving ? 'Guardando…' : editando ? 'Guardar cambios' : 'Crear combo'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Modal confirmar baja ─────────────────────────────────────────── */}
+      {/* ── Modal confirmar desactivar ───────────────────────────────────── */}
       {showConfirm && comboABajar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-start gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
                 <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
                 </svg>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Desactivar combo</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">¿Desactivar <span className="font-medium">{comboABajar.nombre}</span>?</p>
+                <h3 className="font-semibold text-zinc-900 dark:text-white">Desactivar combo</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  El combo <span className="font-medium text-zinc-700 dark:text-zinc-200">{comboABajar.nombre}</span> no aparecerá en ventas.
+                </p>
               </div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 rounded-xl border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Cancelar
               </button>
               <button onClick={ejecutarBaja}
-                className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">
+                className="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition-colors">
                 Desactivar
               </button>
             </div>

@@ -4,11 +4,16 @@ const ctrl            = require('../controllers/proveedores.Controller');
 const {authMiddleware, checkPermission}  = require('../middlewares/authMiddleware');
 
 // ── Proveedores ───────────────────────────────────────────────────────────
-router.get('/',    authMiddleware, checkPermission('ver',      'proveedores'), ctrl.getProveedores);
-router.get('/:id', authMiddleware, checkPermission('ver',      'proveedores'), ctrl.getProveedor);
+router.get('/',           authMiddleware, checkPermission('ver', 'proveedores'), ctrl.getProveedores);
+router.get('/form-data',  authMiddleware, checkPermission('ver', 'proveedores'), ctrl.getFormData);
+router.get('/:id',        authMiddleware, checkPermission('ver', 'proveedores'), ctrl.getProveedor);
 router.post('/',   authMiddleware, checkPermission('crear',    'proveedores'), ctrl.createProveedor);
 router.put('/:id', authMiddleware, checkPermission('editar',   'proveedores'), ctrl.updateProveedor);
 router.delete('/:id', authMiddleware, checkPermission('eliminar', 'proveedores'), ctrl.deleteProveedor);
+
+// ── Saldo / Cuenta por pagar ──────────────────────────────────────────────
+router.get('/:id/saldo',
+  authMiddleware, checkPermission('ver_saldo', 'proveedores'), ctrl.getSaldo);
 
 // ── Contactos ─────────────────────────────────────────────────────────────
 router.get('/:id/contactos',

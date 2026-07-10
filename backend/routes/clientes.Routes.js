@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/clientes.Controller');
-const {authMiddleware, checkPermission}  = require('../middlewares/authMiddleware');
+const { authMiddleware, checkPermission, checkAnyPermission } = require('../middlewares/authMiddleware');
 
 // ── Clientes CRUD ─────────────────────────────────────────────────────────
 router.get('/',    authMiddleware, checkPermission('ver',      'clientes'), ctrl.getClientes);
@@ -11,7 +11,13 @@ router.put('/:id', authMiddleware, checkPermission('editar',   'clientes'), ctrl
 router.delete('/:id', authMiddleware, checkPermission('eliminar', 'clientes'), ctrl.deleteCliente);
 
 // ── Crédito ───────────────────────────────────────────────────────────────
-router.patch('/:id/credito', authMiddleware, checkPermission('dar_credito', 'clientes'), ctrl.updateCredito);
+router.patch('/:id/credito', authMiddleware,
+  checkAnyPermission([['dar_credito', 'clientes'], ['modificar_limite', 'clientes']]),
+  ctrl.updateCredito);
+
+// ── Historial de ventas ───────────────────────────────────────────────────
+router.get('/:id/historial',
+  authMiddleware, checkPermission('ver_historial', 'clientes'), ctrl.getHistorial);
 
 // ── Direcciones ───────────────────────────────────────────────────────────
 router.get('/:id/direcciones',

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaPlus, FaSpinner, FaTruck, FaEye, FaTrash } from 'react-icons/fa';
+import {
+  FaPlus, FaSpinner, FaTruck, FaEye, FaTrash,
+  FaMapMarkerAlt, FaClock, FaUser, FaCreditCard,
+} from 'react-icons/fa';
 import { proveedoresService } from '../../services/proveedores.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
@@ -13,26 +16,109 @@ const EMPTY = {
   telefono: '', email: '', contacto_principal: '', plazo_credito_dias: 0,
 };
 
-const inputCls  = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
-const labelCls  = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
-const selectCls = inputCls;
+const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
+const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
 
-const TIPO_BADGE = {
-  NACIONAL:       'bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  INTERNACIONAL:  'bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400',
+const TIPO_STYLES = {
+  NACIONAL:      { cls: 'bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400',     label: 'Nacional' },
+  INTERNACIONAL: { cls: 'bg-purple-100 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400', label: 'Internacional' },
 };
 
+function ProveedorCard({ p, puedeEliminar, onVer, onEliminar }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-5 flex flex-col gap-4 hover:border-amber-300 dark:hover:border-amber-500/40 hover:shadow-md transition-all duration-200">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 rounded-lg uppercase">
+            {p.codigo}
+          </span>
+          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${TIPO_STYLES[p.tipo_proveedor]?.cls}`}>
+            {TIPO_STYLES[p.tipo_proveedor]?.label ?? p.tipo_proveedor}
+          </span>
+        </div>
+        <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+          p.activo
+            ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400'
+            : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'
+        }`}>
+          {p.activo ? 'Activo' : 'Inactivo'}
+        </span>
+      </div>
+
+      {/* Nombre */}
+      <div>
+        <p className="font-semibold text-gray-900 dark:text-white leading-tight">{p.razon_social}</p>
+        {p.nombre_comercial && (
+          <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5 truncate">{p.nombre_comercial}</p>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex flex-col gap-1.5 text-xs text-gray-500 dark:text-zinc-400">
+        {p.ciudad && (
+          <div className="flex items-center gap-1.5">
+            <FaMapMarkerAlt className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-500" />
+            <span>{p.ciudad}{p.pais && p.pais !== 'Bolivia' ? `, ${p.pais}` : ''}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <FaClock className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-500" />
+          {p.plazo_credito_dias > 0
+            ? <span className="text-amber-600 dark:text-amber-400 font-medium">{p.plazo_credito_dias} días crédito</span>
+            : <span>Contado</span>
+          }
+        </div>
+      </div>
+
+      {/* Stats + Acciones */}
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-zinc-800">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400">
+            <FaUser className="h-3 w-3" />
+            <span>{p.total_contactos ?? 0}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-400">
+            <FaCreditCard className="h-3 w-3" />
+            <span>{p.total_cuentas ?? 0}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onVer}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
+            title="Ver detalle"
+          >
+            <FaEye className="h-3.5 w-3.5" />
+          </button>
+          {puedeEliminar && p.activo && (
+            <button
+              onClick={onEliminar}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              title="Desactivar"
+            >
+              <FaTrash className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Proveedores() {
-  const navigate        = useNavigate();
-  const { puede }       = usePermission();
-  const [lista,         setLista]         = useState([]);
-  const [cargando,      setCargando]      = useState(true);
-  const [busqueda,      setBusqueda]      = useState('');
-  const [modal,         setModal]         = useState(false);
-  const [confirm,       setConfirm]       = useState(null);
-  const [form,          setForm]          = useState(EMPTY);
-  const [guardando,     setGuardando]     = useState(false);
-  const [error,         setError]         = useState(null);
+  const navigate    = useNavigate();
+  const { puede }   = usePermission();
+  const [lista,     setLista]     = useState([]);
+  const [cargando,  setCargando]  = useState(true);
+  const [busqueda,  setBusqueda]  = useState('');
+  const [modal,     setModal]     = useState(false);
+  const [confirm,   setConfirm]   = useState(null);
+  const [form,      setForm]      = useState(EMPTY);
+  const [guardando, setGuardando] = useState(false);
+  const [error,     setError]     = useState(null);
 
   const cargar = () => {
     setCargando(true);
@@ -61,9 +147,8 @@ export default function Proveedores() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (form.email?.trim() && !isValidEmail(form.email)) {
+    if (form.email?.trim() && !isValidEmail(form.email))
       return setError('El formato del email no es válido');
-    }
     setGuardando(true);
     try {
       await proveedoresService.create(form);
@@ -107,7 +192,7 @@ export default function Proveedores() {
         <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
       )}
 
-      <div className="mb-4">
+      <div className="mb-5">
         <input
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
@@ -120,87 +205,31 @@ export default function Proveedores() {
         <div className="flex items-center justify-center h-48 text-gray-400">
           <FaSpinner className="animate-spin h-6 w-6" />
         </div>
-      ) : (
-        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
-          {visibles.length === 0 ? (
-            <div className="text-center py-16 text-gray-400 dark:text-zinc-500">
-              <FaTruck className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">{busqueda ? 'Sin resultados' : 'No hay proveedores registrados'}</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-zinc-800">
-                    {['Código', 'Razón Social', 'Tipo', 'Ciudad', 'Plazo', 'Contactos', 'Cuentas', 'Estado', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-                  {visibles.map(p => (
-                    <tr key={p.id_proveedor} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs font-bold text-amber-600 dark:text-amber-400 uppercase">{p.codigo}</td>
-                      <td className="px-4 py-3">
-                        <p className="font-semibold text-gray-900 dark:text-white">{p.razon_social}</p>
-                        {p.nombre_comercial && (
-                          <p className="text-xs text-gray-400 dark:text-zinc-500 truncate">{p.nombre_comercial}</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${TIPO_BADGE[p.tipo_proveedor]}`}>
-                          {p.tipo_proveedor}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-zinc-400 text-xs">{p.ciudad || '—'}</td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-600 dark:text-zinc-400">
-                        {p.plazo_credito_dias > 0
-                          ? <span className="font-medium">{p.plazo_credito_dias}d</span>
-                          : <span className="text-gray-400 dark:text-zinc-600">Contado</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {p.total_contactos > 0
-                          ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">{p.total_contactos}</span>
-                          : <span className="text-xs text-gray-400 dark:text-zinc-600">—</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {p.total_cuentas > 0
-                          ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400">{p.total_cuentas}</span>
-                          : <span className="text-xs text-gray-400 dark:text-zinc-600">—</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${p.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
-                          {p.activo ? 'Activo' : 'Inactivo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => navigate(`/proveedores/${p.id_proveedor}`)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors"
-                            title="Ver detalle"
-                          >
-                            <FaEye className="h-3.5 w-3.5" />
-                          </button>
-                          {puedeEliminar && p.activo ? (
-                            <button onClick={() => setConfirm(p)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                              title="Desactivar">
-                              <FaTrash className="h-3.5 w-3.5" />
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      ) : visibles.length === 0 ? (
+        <div className="text-center py-20 text-gray-400 dark:text-zinc-500">
+          <FaTruck className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-medium">{busqueda ? 'Sin resultados para tu búsqueda' : 'No hay proveedores registrados'}</p>
+          {!busqueda && puedeCrear && (
+            <button onClick={abrirCrear} className="mt-3 text-amber-500 hover:text-amber-400 text-sm font-medium transition-colors">
+              Agregar el primero
+            </button>
           )}
         </div>
+      ) : (
+        <>
+          <p className="text-xs text-gray-400 dark:text-zinc-500 mb-3">{visibles.length} proveedor{visibles.length !== 1 ? 'es' : ''}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibles.map(p => (
+              <ProveedorCard
+                key={p.id_proveedor}
+                p={p}
+                puedeEliminar={puedeEliminar}
+                onVer={() => navigate(`/proveedores/${p.id_proveedor}`)}
+                onEliminar={() => setConfirm(p)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Modal crear proveedor */}
@@ -229,7 +258,7 @@ export default function Proveedores() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Tipo de proveedor</label>
-              <select name="tipo_proveedor" value={form.tipo_proveedor} onChange={handleChange} className={selectCls}>
+              <select name="tipo_proveedor" value={form.tipo_proveedor} onChange={handleChange} className={inputCls}>
                 <option value="NACIONAL">Nacional</option>
                 <option value="INTERNACIONAL">Internacional</option>
               </select>
@@ -291,7 +320,7 @@ export default function Proveedores() {
       {/* Modal confirmación desactivar */}
       <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Desactivar Proveedor" maxWidth="max-w-sm">
         <p className="text-sm text-gray-600 dark:text-zinc-400 mb-5">
-          ¿Desactivar al proveedor <strong className="text-gray-900 dark:text-white">{confirm?.razon_social}</strong> ({confirm?.codigo})?
+          ¿Desactivar al proveedor <strong className="text-gray-900 dark:text-white">{confirm?.razon_social}</strong>?
         </p>
         <div className="flex justify-end gap-3">
           <button onClick={() => setConfirm(null)}

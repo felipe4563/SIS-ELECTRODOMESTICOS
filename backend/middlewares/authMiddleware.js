@@ -46,15 +46,15 @@ const authMiddleware = async (req, res, next) => {
       return res.status(500).json({ error: 'Error de configuración del servidor' });
     }
     const decoded = jwt.verify(token, jwtSecret);
-    const { id_usuario, rol, id_sucursal, debe_cambiar_pass } = decoded;
+    const { jti, id_usuario, rol, id_sucursal, debe_cambiar_pass } = decoded;
 
     // Verificar que la sesión no fue cerrada manualmente
     const [sesiones] = await db.promise().query(
-      `SELECT cerrada FROM sesiones WHERE token = ? LIMIT 1`,
-      [token]
+      `SELECT cerrada FROM sesiones WHERE jti = ? LIMIT 1`,
+      [jti]
     );
 
-    if (sesiones.length > 0 && sesiones[0].cerrada === 1) {
+    if (sesiones.length === 0 || sesiones[0].cerrada === 1) {
       return res.status(401).json({ error: 'Sesión cerrada. Inicia sesión nuevamente.' });
     }
 
@@ -124,10 +124,21 @@ function tiene_permiso(req, subject, action) {
   return req.ability?.can(action, subject) ?? false;
 }
 
+// ── checkAnyPermission ────────────────────────────────────────────────────
+// Pasa si el usuario tiene AL MENOS UNO de los pares [action, subject].
+// Uso: checkAnyPermission([['dar_credito','clientes'],['modificar_limite','clientes']])
+const checkAnyPermission = (pairs) => (req, res, next) => {
+  if (!req.ability) return res.status(401).json({ error: 'No autenticado' });
+  const ok = pairs.some(([action, subject]) => req.ability.can(action, subject));
+  if (!ok) return res.status(403).json({ error: 'Sin permiso para esta operación' });
+  next();
+};
+
 module.exports = {
   authMiddleware,
   requireRole,
   checkPermission,
+  checkAnyPermission,
   tiene_permiso,
   invalidarCacheRol,
 };

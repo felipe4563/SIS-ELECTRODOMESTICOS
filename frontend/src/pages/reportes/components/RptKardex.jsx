@@ -56,17 +56,17 @@ export default function RptKardex() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
-        <div className="relative">
+        <div className="relative w-full sm:w-72">
           <label className="text-xs text-zinc-500 dark:text-zinc-400 font-medium block mb-1">Buscar producto</label>
           <input
             type="text"
             value={seleccionado && !busqueda ? `${seleccionado.codigo_interno} – ${seleccionado.producto}` : busqueda}
             onChange={e => { setBusqueda(e.target.value); setSelec(null); }}
             placeholder="Nombre o código..."
-            className="w-64 px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-yellow-400"
+            className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-yellow-400"
           />
           {productos.length > 0 && (
-            <div className="absolute top-full left-0 z-20 mt-1 w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
+            <div className="absolute top-full left-0 z-20 mt-1 w-full min-w-[16rem] sm:w-96 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
               {cargandoProds && <div className="px-3 py-2 text-xs text-zinc-400">Buscando...</div>}
               {productos.map(p => (
                 <button key={p.id_producto} onClick={() => consultar(p)}

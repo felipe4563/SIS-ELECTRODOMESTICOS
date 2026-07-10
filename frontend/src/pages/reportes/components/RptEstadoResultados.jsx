@@ -40,7 +40,7 @@ export default function RptEstadoResultados() {
         </div>
       )}
       {data && !cargando && (
-        <div className="max-w-xl">
+        <div className="w-full max-w-xl">
           <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
               <h3 className="font-bold text-zinc-900 dark:text-white">Estado de Resultados</h3>

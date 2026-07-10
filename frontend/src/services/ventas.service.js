@@ -11,11 +11,13 @@ export const ventasService = {
   anular:   (id)             => api.post(`/ventas/${id}/anular`),
   ticket:   (id)             => api.get(`/ventas/${id}/ticket`),
 
+  formData:       ()          => api.get('/ventas/form-data'),
+  stockDeposito:  (id)        => api.get(`/ventas/stock-deposito/${id}`),
   productoRapido: (data)     => api.post('/ventas/agregar-producto-rapido', data),
 
   crearDevolucion:    (id, data)          => api.post(`/ventas/${id}/devoluciones`, data),
   aprobarDevolucion:  (id_devolucion)     => api.post(`/ventas/devoluciones/${id_devolucion}/aprobar`),
   rechazarDevolucion: (id_devolucion)     => api.post(`/ventas/devoluciones/${id_devolucion}/rechazar`),
 
-  anularCobro: (id_pago) => api.delete(`/ventas/cobros/${id_pago}`),
+  anularCobro:     (id_pago)       => api.delete(`/ventas/cobros/${id_pago}`),
 };

@@ -3,14 +3,13 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 31-05-2026 a las 18:02:02
+-- Tiempo de generación: 10-07-2026 a las 13:43:14
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
-SET FOREIGN_KEY_CHECKS=0;
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -109,18 +108,6 @@ CREATE TABLE `auditoria` (
   `ip_origen` varchar(45) DEFAULT NULL,
   `fecha` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `auditoria`
---
-
-INSERT INTO `auditoria` (`id_auditoria`, `id_usuario`, `tabla`, `id_registro`, `accion`, `datos_antes`, `datos_despues`, `ip_origen`, `fecha`) VALUES
-(1, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:00:48'),
-(2, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:01:02'),
-(3, 1, 'usuarios', 1, 'OTRO', '{\"id_usuario\":1,\"username\":\"admin\",\"nombres\":\"Administrador\",\"apellidos\":\"del Sistema\",\"documento\":\"00000000\",\"email\":\"admin@electrohogar.bo\",\"telefono\":\"70000000\",\"id_rol\":1,\"id_sucursal_default\":1,\"debe_cambiar_pass\":1,\"activo\":1,\"accion_especifica\":\"RESET_PASSWORD\"}', NULL, '127.0.0.1', '2026-05-31 12:01:24'),
-(4, 1, 'usuarios', 1, 'LOGOUT', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:27'),
-(5, 1, 'usuarios', 1, 'LOGIN', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:36'),
-(6, 1, 'usuarios', 1, 'UPDATE', NULL, NULL, '127.0.0.1', '2026-05-31 12:01:50');
 
 -- --------------------------------------------------------
 
@@ -596,6 +583,14 @@ CREATE TABLE `monedas` (
   `activo` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Volcado de datos para la tabla `monedas`
+--
+
+INSERT INTO `monedas` (`id_moneda`, `codigo`, `nombre`, `simbolo`, `decimales`, `es_moneda_base`, `activo`) VALUES
+(1, 'BOB', 'Boliviano', 'Bs', 2, 1, 1),
+(2, 'USD', 'Dolar', '$', 2, 0, 1);
+
 -- --------------------------------------------------------
 
 --
@@ -666,7 +661,7 @@ CREATE TABLE `permisos` (
 INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripcion`) VALUES
 (1, 1, 'dashboard.ver', 'Ver Dashboard', 'Acceder al panel principal con indicadores'),
 (2, 1, 'dashboard.ver_todas_sucursales', 'Ver Dashboard de todas las sucursales', 'Consolidar indicadores de todas las sucursales'),
-(3, 2, 'configuracion.ver', 'Ver Configuración', 'Acceder al módulo de configuración'),
+(3, 2, 'empresa.ver', 'Ver Empresa', 'Acceder a los datos de la empresa'),
 (4, 2, 'empresa.editar', 'Editar datos de Empresa', 'Modificar razón social, NIT, logo'),
 (5, 2, 'sucursales.ver', 'Ver Sucursales', 'Listar sucursales'),
 (6, 2, 'sucursales.crear', 'Crear Sucursal', 'Registrar nueva sucursal'),
@@ -680,8 +675,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (14, 2, 'monedas.gestionar', 'Gestionar Monedas', 'Crear, editar y desactivar monedas'),
 (15, 2, 'tipos_cambio.ver', 'Ver Tipos de Cambio', 'Consultar tipos de cambio'),
 (16, 2, 'tipos_cambio.gestionar', 'Gestionar Tipos de Cambio', 'Registrar y actualizar tasas diarias'),
-(17, 2, 'parametros.ver', 'Ver Parámetros del Sistema', 'Consultar configuración general'),
-(18, 2, 'parametros.editar', 'Editar Parámetros del Sistema', 'Modificar IVA, prefijos, días alerta, etc.'),
 (19, 3, 'usuarios.ver', 'Ver Usuarios', 'Listar usuarios del sistema'),
 (20, 3, 'usuarios.crear', 'Crear Usuario', 'Registrar nuevo usuario'),
 (21, 3, 'usuarios.editar', 'Editar Usuario', 'Modificar datos de usuario'),
@@ -702,8 +695,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (36, 4, 'productos.editar_costos', 'Editar Costos (LOG, MCM)', 'Modificar costos de logística y MCM'),
 (37, 4, 'productos.editar_bono', 'Editar Bono Vendedor', 'Modificar bono asignado al producto'),
 (38, 4, 'productos.eliminar', 'Eliminar/Desactivar Producto', 'Dar de baja un producto'),
-(39, 4, 'productos.exportar', 'Exportar Productos', 'Exportar catálogo a Excel/PDF'),
-(40, 4, 'productos.importar', 'Importar Productos', 'Carga masiva desde Excel'),
 (41, 4, 'productos.ver_historico_precios', 'Ver Histórico de Precios', 'Consultar cambios históricos de precio'),
 (42, 4, 'marcas.ver', 'Ver Marcas', 'Listar marcas'),
 (43, 4, 'marcas.gestionar', 'Gestionar Marcas', 'Crear, editar y desactivar marcas'),
@@ -718,7 +709,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (52, 5, 'proveedores.ver_saldo', 'Ver Saldo del Proveedor', 'Consultar cuenta por pagar'),
 (53, 5, 'proveedores.gestionar_cuentas', 'Gestionar Cuentas de Pago', 'Agregar/editar cuentas (efectivo, QR, banco)'),
 (54, 5, 'proveedores.gestionar_contactos', 'Gestionar Contactos', 'Agregar y editar contactos del proveedor'),
-(55, 5, 'proveedores.exportar', 'Exportar Proveedores', 'Exportar a Excel/PDF'),
 (56, 6, 'clientes.ver', 'Ver Clientes', 'Listar y buscar clientes'),
 (57, 6, 'clientes.crear', 'Crear Cliente', 'Registrar nuevo cliente'),
 (58, 6, 'clientes.editar', 'Editar Cliente', 'Modificar datos de cliente'),
@@ -728,7 +718,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (62, 6, 'clientes.ver_saldo', 'Ver Saldo del Cliente', 'Consultar cuenta por cobrar'),
 (63, 6, 'clientes.ver_historial', 'Ver Historial de Compras', 'Ver todas las ventas del cliente'),
 (64, 6, 'clientes.gestionar_direcciones', 'Gestionar Direcciones', 'Agregar/editar direcciones de entrega'),
-(65, 6, 'clientes.exportar', 'Exportar Clientes', 'Exportar a Excel/PDF'),
 (66, 7, 'compras.ver', 'Ver Compras', 'Listar compras de su sucursal'),
 (67, 7, 'compras.ver_todas', 'Ver Compras de Todas las Sucursales', 'Acceso a compras de cualquier sucursal'),
 (68, 7, 'compras.crear_pre_pedido', 'Crear Pre-Pedido', 'Iniciar un pre-pedido a proveedor'),
@@ -743,7 +732,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (77, 7, 'compras.anular_pago', 'Anular Pago a Proveedor', 'Anular un pago registrado'),
 (78, 7, 'compras.gestionar_cuotas', 'Gestionar Cuotas de Compra', 'Modificar plan de cuotas'),
 (79, 7, 'compras.imprimir', 'Imprimir Documento de Compra', 'Generar PDF de orden de compra'),
-(80, 7, 'compras.exportar', 'Exportar Compras', 'Exportar listado a Excel/PDF'),
 (81, 8, 'inventario.ver', 'Ver Inventario', 'Consultar stock de su depósito asignado'),
 (82, 8, 'inventario.ver_todos_depositos', 'Ver Inventario de Todos los Depósitos', 'Stock consolidado multi-depósito'),
 (83, 8, 'inventario.ver_kardex', 'Ver Kardex', 'Consultar historial de movimientos'),
@@ -757,7 +745,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (91, 8, 'inventario.stock_minimo_editar', 'Editar Stock Mínimo por Producto', 'Modificar umbral de alerta'),
 (92, 8, 'inventario.alertas_ver', 'Ver Alertas de Stock Mínimo', 'Listar productos bajo stock mínimo'),
 (93, 8, 'inventario.alertas_atender', 'Atender Alertas', 'Marcar alertas como atendidas'),
-(94, 8, 'inventario.exportar', 'Exportar Inventario', 'Exportar reporte de stock a Excel'),
 (95, 9, 'ventas.ver_propias', 'Ver Ventas Propias', 'Ver sólo las ventas que el vendedor realizó'),
 (96, 9, 'ventas.ver_sucursal', 'Ver Ventas de la Sucursal', 'Ver todas las ventas de su sucursal'),
 (97, 9, 'ventas.ver_todas', 'Ver Ventas de Todas las Sucursales', 'Ver ventas a nivel global'),
@@ -774,10 +761,8 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (108, 9, 'ventas.anular', 'Anular Venta', 'Anular una venta emitida'),
 (109, 9, 'ventas.devolucion_crear', 'Crear Devolución', 'Iniciar proceso de devolución'),
 (110, 9, 'ventas.devolucion_aprobar', 'Aprobar Devolución', 'Aprobar devolución y reingresar stock'),
-(111, 9, 'ventas.cambiar_vendedor', 'Cambiar Vendedor de la Venta', 'Reasignar vendedor'),
 (112, 9, 'ventas.ver_utilidad', 'Ver Utilidad de la Venta', 'Visualizar costo y rentabilidad'),
 (113, 9, 'ventas.imprimir', 'Imprimir/Reimprimir Factura', 'Generar PDF o reimprimir comprobante'),
-(114, 9, 'ventas.exportar', 'Exportar Ventas', 'Exportar a Excel/PDF'),
 (115, 10, 'caja.ver', 'Ver Cajas', 'Listar cajas configuradas'),
 (116, 10, 'caja.gestionar', 'Gestionar Cajas', 'Crear, editar y desactivar cajas'),
 (117, 10, 'caja.abrir', 'Abrir Caja', 'Iniciar turno de caja'),
@@ -785,8 +770,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (119, 10, 'caja.ver_arqueo_propio', 'Ver Arqueo Propio', 'Ver sus propios arqueos'),
 (120, 10, 'caja.ver_arqueo_todos', 'Ver Arqueos de Todos', 'Ver arqueos de todos los cajeros'),
 (121, 10, 'caja.cuadrar_diferencia', 'Cuadrar Diferencia', 'Justificar diferencias en arqueo'),
-(122, 10, 'caja.forzar_cierre', 'Forzar Cierre de Caja', 'Cerrar caja de otro usuario en casos especiales'),
-(123, 10, 'caja.exportar', 'Exportar Arqueos', 'Exportar arqueos a Excel/PDF'),
 (124, 11, 'gastos.ver', 'Ver Gastos', 'Listar gastos de su sucursal'),
 (125, 11, 'gastos.ver_todos', 'Ver Gastos de Todas las Sucursales', 'Ver gastos a nivel global'),
 (126, 11, 'gastos.crear', 'Registrar Gasto', 'Crear nuevo gasto'),
@@ -797,7 +780,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (131, 11, 'gastos.categorias_ver', 'Ver Categorías de Gasto', 'Listar categorías'),
 (132, 11, 'gastos.categorias_gestionar', 'Gestionar Categorías de Gasto', 'Crear, editar y desactivar categorías'),
 (133, 11, 'gastos.adjuntar_comprobante', 'Adjuntar Comprobante', 'Subir comprobante de gasto'),
-(134, 11, 'gastos.exportar', 'Exportar Gastos', 'Exportar a Excel/PDF'),
 (135, 12, 'reportes.ver', 'Acceder a Reportes', 'Acceso general al módulo'),
 (136, 12, 'reportes.stock_consolidado', 'Reporte Stock Consolidado', 'Ver stock por depósito (formato Excel)'),
 (137, 12, 'reportes.ventas_periodo', 'Reporte Ventas por Período', 'Ventas filtradas por fecha'),
@@ -821,7 +803,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (155, 12, 'reportes.dashboard_financiero', 'Dashboard Financiero', 'Indicadores financieros consolidados'),
 (156, 13, 'auditoria.ver', 'Ver Auditoría', 'Acceder al log de auditoría'),
 (157, 13, 'auditoria.filtrar', 'Filtrar Auditoría', 'Filtrar por usuario, tabla, fecha'),
-(158, 13, 'auditoria.exportar', 'Exportar Auditoría', 'Exportar log a Excel/PDF'),
 (159, 13, 'sesiones.ver', 'Ver Sesiones Activas', 'Ver usuarios conectados'),
 (160, 13, 'sesiones.cerrar', 'Cerrar Sesiones Activas', 'Forzar cierre de sesión'),
 (161, 14, 'cotizaciones.ver', 'Ver Cotizaciones', 'Listar cotizaciones de su sucursal'),
@@ -834,18 +815,12 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (168, 14, 'cotizaciones.convertir_venta', 'Convertir en Venta', 'Generar venta a partir de cotización'),
 (169, 14, 'cotizaciones.anular', 'Anular Cotización', 'Anular cotización emitida'),
 (170, 14, 'cotizaciones.imprimir', 'Imprimir Cotización', 'Generar PDF de la cotización'),
-(171, 14, 'cotizaciones.exportar', 'Exportar Cotizaciones', 'Exportar listado a Excel/PDF'),
 (172, 15, 'cobros.ver', 'Ver Cobros', 'Listar cobros realizados'),
 (173, 15, 'cobros.ver_todos', 'Ver Cobros de Todas las Sucursales', 'Acceso global'),
 (174, 15, 'cobros.crear', 'Registrar Cobro', 'Registrar pago de venta a crédito'),
 (175, 15, 'cobros.editar', 'Editar Cobro', 'Modificar cobro en el mismo día'),
 (176, 15, 'cobros.anular', 'Anular Cobro', 'Anular un cobro registrado'),
-(177, 15, 'cobros.contado', 'Cobros al Contado', 'Gestionar cobros al contado'),
-(178, 15, 'cobros.credito', 'Cobros a Crédito', 'Gestionar cobros a crédito'),
-(179, 15, 'cobros.efectivo', 'Cobrar en Efectivo', 'Aceptar pagos en efectivo'),
-(180, 15, 'cobros.qr', 'Cobrar por QR', 'Aceptar pagos por QR'),
 (181, 15, 'cobros.imprimir', 'Imprimir Recibo', 'Generar recibo de cobro'),
-(182, 15, 'cobros.exportar', 'Exportar Cobros', 'Exportar a Excel/PDF'),
 (183, 16, 'combos.ver', 'Ver Combos', 'Listar combos activos'),
 (184, 16, 'combos.crear', 'Crear Combo', 'Definir nuevo pack de productos'),
 (185, 16, 'combos.editar', 'Editar Combo', 'Modificar combo'),
@@ -855,7 +830,6 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (189, 17, 'promociones.crear', 'Crear Promoción', 'Definir nueva promoción'),
 (190, 17, 'promociones.editar', 'Editar Promoción', 'Modificar promoción vigente'),
 (191, 17, 'promociones.eliminar', 'Eliminar/Desactivar Promoción', 'Dar de baja una promoción'),
-(192, 17, 'promociones.aplicar', 'Aplicar Promoción Manual', 'Aplicar promoción a una venta manualmente'),
 (193, 17, 'promociones.exportar', 'Exportar Promociones', 'Exportar a Excel/PDF'),
 (194, 18, 'bancos.ver', 'Ver Bancos', 'Listar catálogo de bancos'),
 (195, 18, 'bancos.crear', 'Crear Banco', 'Registrar nuevo banco'),
@@ -869,14 +843,9 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (203, 20, 'backup.crear', 'Crear Copia de Seguridad', 'Generar backup de la BD'),
 (204, 20, 'backup.restaurar', 'Restaurar Copia de Seguridad', 'Restaurar BD desde backup'),
 (205, 20, 'backup.descargar', 'Descargar Backups', 'Descargar archivos de backup'),
-(206, 20, 'bd.eliminar_registros', 'Eliminar Registros de BD', 'Operación crítica: borrar datos masivos'),
-(207, 20, 'excel.exportar_planilla', 'Descargar Planilla Excel', 'Descargar plantilla para carga masiva'),
 (208, 20, 'excel.importar_productos', 'Importar Productos desde Excel', 'Cargar productos masivamente'),
-(209, 20, 'excel.exportar_productos', 'Exportar Productos a Excel', 'Exportar catálogo completo'),
-(210, 20, 'codigo_barras.generar', 'Generar Código de Barras', 'Generar y/o imprimir códigos de barra'),
 (211, 20, 'catalogo.generar_pdf', 'Generar Catálogo PDF', 'Generar catálogo de productos en PDF'),
-(212, 20, 'impresora.configurar', 'Configurar Impresora', 'Definir impresora por defecto y tipo'),
-(213, 20, 'factura.editar_plantilla', 'Editar Plantilla de Factura', 'Personalizar diseño de factura');
+(214, 3, 'roles.ver_permisos', 'Ver Permisos de Rol', 'Consultar los permisos asignados a un rol sin modificarlos');
 
 -- --------------------------------------------------------
 
@@ -1085,8 +1054,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 14),
 (1, 15),
 (1, 16),
-(1, 17),
-(1, 18),
 (1, 19),
 (1, 20),
 (1, 21),
@@ -1107,8 +1074,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 36),
 (1, 37),
 (1, 38),
-(1, 39),
-(1, 40),
 (1, 41),
 (1, 42),
 (1, 43),
@@ -1123,7 +1088,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 52),
 (1, 53),
 (1, 54),
-(1, 55),
 (1, 56),
 (1, 57),
 (1, 58),
@@ -1133,7 +1097,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 62),
 (1, 63),
 (1, 64),
-(1, 65),
 (1, 66),
 (1, 67),
 (1, 68),
@@ -1148,7 +1111,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 77),
 (1, 78),
 (1, 79),
-(1, 80),
 (1, 81),
 (1, 82),
 (1, 83),
@@ -1162,7 +1124,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 91),
 (1, 92),
 (1, 93),
-(1, 94),
 (1, 95),
 (1, 96),
 (1, 97),
@@ -1179,10 +1140,8 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 108),
 (1, 109),
 (1, 110),
-(1, 111),
 (1, 112),
 (1, 113),
-(1, 114),
 (1, 115),
 (1, 116),
 (1, 117),
@@ -1190,8 +1149,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 119),
 (1, 120),
 (1, 121),
-(1, 122),
-(1, 123),
 (1, 124),
 (1, 125),
 (1, 126),
@@ -1202,7 +1159,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 131),
 (1, 132),
 (1, 133),
-(1, 134),
 (1, 135),
 (1, 136),
 (1, 137),
@@ -1226,7 +1182,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 155),
 (1, 156),
 (1, 157),
-(1, 158),
 (1, 159),
 (1, 160),
 (1, 161),
@@ -1239,18 +1194,12 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 168),
 (1, 169),
 (1, 170),
-(1, 171),
 (1, 172),
 (1, 173),
 (1, 174),
 (1, 175),
 (1, 176),
-(1, 177),
-(1, 178),
-(1, 179),
-(1, 180),
 (1, 181),
-(1, 182),
 (1, 183),
 (1, 184),
 (1, 185),
@@ -1260,7 +1209,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 189),
 (1, 190),
 (1, 191),
-(1, 192),
 (1, 193),
 (1, 194),
 (1, 195),
@@ -1274,14 +1222,9 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 203),
 (1, 204),
 (1, 205),
-(1, 206),
-(1, 207),
 (1, 208),
-(1, 209),
-(1, 210),
 (1, 211),
-(1, 212),
-(1, 213),
+(1, 214),
 (2, 1),
 (2, 32),
 (2, 42),
@@ -1294,7 +1237,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (2, 62),
 (2, 63),
 (2, 64),
-(2, 65),
 (2, 81),
 (2, 82),
 (2, 92),
@@ -1309,7 +1251,6 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (2, 106),
 (2, 109),
 (2, 113),
-(2, 114),
 (2, 115),
 (2, 117),
 (2, 118),
@@ -1329,19 +1270,11 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (2, 167),
 (2, 168),
 (2, 170),
-(2, 171),
 (2, 172),
 (2, 174),
-(2, 177),
-(2, 178),
-(2, 179),
-(2, 180),
 (2, 181),
-(2, 182),
 (2, 183),
 (2, 188),
-(2, 192),
-(2, 210),
 (3, 1),
 (3, 32),
 (3, 42),
@@ -1362,16 +1295,13 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (3, 91),
 (3, 92),
 (3, 93),
-(3, 94),
 (3, 135),
 (3, 136),
 (3, 145),
 (3, 146),
 (3, 152),
 (3, 154),
-(3, 183),
-(3, 209),
-(3, 210);
+(3, 183);
 
 -- --------------------------------------------------------
 
@@ -1382,20 +1312,14 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 CREATE TABLE `sesiones` (
   `id_sesion` bigint(20) NOT NULL,
   `id_usuario` int(11) NOT NULL,
-  `token` varchar(255) NOT NULL,
+  `jti` varchar(36) NOT NULL,
+  `token` varchar(512) NOT NULL,
   `ip_origen` varchar(45) DEFAULT NULL,
   `user_agent` varchar(255) DEFAULT NULL,
   `fecha_inicio` datetime NOT NULL DEFAULT current_timestamp(),
   `fecha_expiracion` datetime DEFAULT NULL,
   `cerrada` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `sesiones`
---
-
-INSERT INTO `sesiones` (`id_sesion`, `id_usuario`, `token`, `ip_origen`, `user_agent`, `fecha_inicio`, `fecha_expiracion`, `cerrada`) VALUES
-(1, 1, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjMDIyM2JiOS00ODkyLTQ2OGUtOGFjYy00MTY2NTY5YTdiNmUiLCJpZF91c3VhcmlvIjoxLCJyb2wiOjEsInJvbF9ub21icmUiOiJBRE1JTklTVFJBRE9SIiwiaWRfc3VjdXJzYWwiOjEsImRlYmVfY2FtYmlhcl9wYXNzIjp0cnVlLCJwZXJtaXNvcyI6WyJkYXNoYm9hcmQudm', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36', '2026-05-31 12:01:36', '2026-05-31 20:01:36', 0);
 
 -- --------------------------------------------------------
 
@@ -1449,6 +1373,13 @@ CREATE TABLE `tipos_cambio` (
   `tasa_compra` decimal(18,6) NOT NULL,
   `tasa_venta` decimal(18,6) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `tipos_cambio`
+--
+
+INSERT INTO `tipos_cambio` (`id_tipo_cambio`, `id_moneda_origen`, `id_moneda_destino`, `fecha`, `tasa_compra`, `tasa_venta`) VALUES
+(1, 2, 1, '2026-06-25', 6.860000, 6.960000);
 
 -- --------------------------------------------------------
 
@@ -1554,27 +1485,11 @@ CREATE TABLE `usuarios` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Volcado de datos para la tabla `empresas`
---
-
-INSERT INTO `empresas` (`id_empresa`, `razon_social`, `nombre_comercial`, `nit`, `direccion`, `telefono`, `email`, `logo_url`, `activo`) VALUES
-(1, 'MEGAELECTRA', 'MEGAELECTRA', NULL, NULL, NULL, NULL, NULL, 1);
-
---
--- Volcado de datos para la tabla `sucursales`
---
-
-INSERT INTO `sucursales` (`id_sucursal`, `id_empresa`, `codigo`, `nombre`, `tipo`, `direccion`, `ciudad`, `telefono`, `responsable`, `es_punto_venta`, `activo`) VALUES
-(1, 1, 'PRINCIPAL', 'Sucursal Principal', 'PRINCIPAL', NULL, NULL, NULL, NULL, 1, 1);
-
---
 -- Volcado de datos para la tabla `usuarios`
 --
 
 INSERT INTO `usuarios` (`id_usuario`, `username`, `password_hash`, `nombres`, `apellidos`, `documento`, `email`, `telefono`, `id_rol`, `id_sucursal_default`, `foto_url`, `debe_cambiar_pass`, `ultimo_login`, `activo`, `fecha_creacion`) VALUES
-(1, 'admin', '$2b$10$4Y5AuM3I2pmNRRZgzN7R8eq4ODfoYvmKjUK3awQOgGrfC4zkUYWGu', 'Administrador', 'del Sistema', '00000000', 'admin@electrohogar.bo', '70000000', 1, 1, NULL, 0, '2026-05-31 12:01:36', 1, '2026-05-25 07:48:46'),
-(2, 'vendedor1', '$2b$10$v9eKl1yIevok5lO/C8rsg.tGN/FS.QLUu6vCikf23PxBGqQPMEVjm', 'Vendedor', 'Uno', '11111111', 'vendedor1@electrohogar.bo', '71111111', 2, 1, NULL, 1, NULL, 1, '2026-05-25 07:48:46'),
-(3, 'almacen1', '$2b$10$mWN4w1jnMGRo6qLd33L7N.Dpb5mNvxDul29YHzqYJ8IKYttatelQW', 'Almacenero', 'Uno', '22222222', 'almacen1@electrohogar.bo', '72222222', 3, 1, NULL, 1, NULL, 1, '2026-05-25 07:48:46');
+(1, 'admin', '$2b$10$4Y5AuM3I2pmNRRZgzN7R8eq4ODfoYvmKjUK3awQOgGrfC4zkUYWGu', 'Administrador', 'del Sistema', '00000000', 'admin@electrohogar.bo', '70000000', 1, NULL, NULL, 1, NULL, 1, '2026-05-25 07:48:46');
 
 -- --------------------------------------------------------
 
@@ -2035,7 +1950,7 @@ ALTER TABLE `rol_permiso`
 --
 ALTER TABLE `sesiones`
   ADD PRIMARY KEY (`id_sesion`),
-  ADD UNIQUE KEY `token` (`token`),
+  ADD UNIQUE KEY `jti` (`jti`),
   ADD KEY `fk_sesion_usuario` (`id_usuario`);
 
 --
@@ -2178,7 +2093,7 @@ ALTER TABLE `arqueos_caja`
 -- AUTO_INCREMENT de la tabla `auditoria`
 --
 ALTER TABLE `auditoria`
-  MODIFY `id_auditoria` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_auditoria` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `bancos`
@@ -2322,7 +2237,7 @@ ALTER TABLE `modulos`
 -- AUTO_INCREMENT de la tabla `monedas`
 --
 ALTER TABLE `monedas`
-  MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `pagos_compra`
@@ -2340,7 +2255,7 @@ ALTER TABLE `pagos_venta`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=214;
+  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=215;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
@@ -2388,13 +2303,13 @@ ALTER TABLE `proveedor_cuentas_pago`
 -- AUTO_INCREMENT de la tabla `roles`
 --
 ALTER TABLE `roles`
-  MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `sesiones`
 --
 ALTER TABLE `sesiones`
-  MODIFY `id_sesion` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_sesion` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `stock`
@@ -2412,13 +2327,13 @@ ALTER TABLE `sucursales`
 -- AUTO_INCREMENT de la tabla `tipos_cambio`
 --
 ALTER TABLE `tipos_cambio`
-  MODIFY `id_tipo_cambio` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_tipo_cambio` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de la tabla `tipos_movimiento`
 --
 ALTER TABLE `tipos_movimiento`
-  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `transferencias`
@@ -2769,7 +2684,6 @@ ALTER TABLE `venta_detalle`
   ADD CONSTRAINT `fk_vd_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`),
   ADD CONSTRAINT `fk_vd_promocion` FOREIGN KEY (`id_promocion`) REFERENCES `promociones` (`id_promocion`),
   ADD CONSTRAINT `fk_vd_venta` FOREIGN KEY (`id_venta`) REFERENCES `ventas` (`id_venta`) ON DELETE CASCADE;
-SET FOREIGN_KEY_CHECKS=1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -22,6 +22,19 @@ async function generarNumero() {
   return `GAS-${ym}-${String(Number(row.cnt) + 1).padStart(4, '0')}`;
 }
 
+// ── Form data ────────────────────────────────────────────────────────────
+
+const getFormData = async (req, res) => {
+  try {
+    const [[categorias], [sucursales], [monedas]] = await Promise.all([
+      db.promise().query('SELECT * FROM categorias_gasto WHERE activo = 1 ORDER BY nombre'),
+      db.promise().query('SELECT id_sucursal, nombre FROM sucursales WHERE activo = 1 ORDER BY nombre'),
+      db.promise().query('SELECT id_moneda, nombre, simbolo, es_moneda_base FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, nombre'),
+    ]);
+    res.json({ categorias, sucursales, monedas });
+  } catch (e) { res.status(500).json({ mensaje: e.message }); }
+};
+
 // ── Categorías de gasto ───────────────────────────────────────────────────
 
 const getCategorias = async (req, res) => {
@@ -92,7 +105,14 @@ const getGastos = async (req, res) => {
     const params  = [];
 
     if (id_categoria_gasto) { where.push('g.id_categoria_gasto=?'); params.push(id_categoria_gasto); }
-    if (id_sucursal)        { where.push('g.id_sucursal=?');        params.push(id_sucursal); }
+    // Sin permiso ver_todos: forzar filtro a la sucursal del usuario
+    if (!req.ability.can('ver_todos', 'gastos')) {
+      where.push('g.id_sucursal=?');
+      params.push(req.user.id_sucursal);
+    } else if (id_sucursal) {
+      where.push('g.id_sucursal=?');
+      params.push(id_sucursal);
+    }
     if (estado)             { where.push('g.estado=?');             params.push(estado); }
     if (fecha_desde)        { where.push('g.fecha >= ?');           params.push(fecha_desde); }
     if (fecha_hasta)        { where.push('g.fecha <= ?');           params.push(fecha_hasta); }
@@ -277,6 +297,7 @@ const subirComprobante = async (req, res) => {
 };
 
 module.exports = {
+  getFormData,
   getCategorias, crearCategoria, updateCategoria, deleteCategoria,
   getGastos, getGasto, crearGasto, updateGasto,
   aprobarGasto, pagarGasto, anularGasto, subirComprobante,

@@ -1,7 +1,7 @@
 const db      = require('../config/db');
 const path    = require('path');
 const fs      = require('fs');
-const XLSX    = require('xlsx');
+const ExcelJS = require('exceljs');
 const PDFDoc  = require('pdfkit');
 const bwipjs  = require('bwip-js');
 
@@ -195,13 +195,13 @@ const PLANTILLA_COLS = [
 
 exports.descargarPlantilla = async (req, res) => {
   try {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([PLANTILLA_COLS]);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Productos');
+    
+    ws.columns = PLANTILLA_COLS.map(col => ({ header: col, key: col, width: 20 }));
+    ws.addRow(PLANTILLA_COLS);
 
-    ws['!cols'] = PLANTILLA_COLS.map(() => ({ wch: 20 }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
-
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Disposition', 'attachment; filename="plantilla_productos.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
@@ -231,17 +231,20 @@ exports.exportarProductos = async (req, res) => {
     `);
 
     const fmtVal = v => (typeof v === 'number' ? Math.round(v) : (v ?? ''));
-    const data = [
-      [...PLANTILLA_COLS, 'stock_total'],
-      ...rows.map(r => PLANTILLA_COLS.map(c => fmtVal(r[c])).concat(Math.round(Number(r.stock_total) || 0))),
-    ];
+    const cols = [...PLANTILLA_COLS, 'stock_total'];
+    const data = rows.map(r => {
+      const obj = {};
+      PLANTILLA_COLS.forEach(c => { obj[c] = fmtVal(r[c]); });
+      obj.stock_total = Math.round(Number(r.stock_total) || 0);
+      return obj;
+    });
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = data[0].map(() => ({ wch: 20 }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Productos');
+    ws.columns = cols.map(col => ({ header: col, key: col, width: 20 }));
+    ws.addRows(data);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Disposition', 'attachment; filename="catalogo_productos.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
@@ -303,9 +306,27 @@ exports.importarProductos = async (req, res) => {
   if (!req.file) return res.status(400).json({ mensaje: 'No se recibió archivo' });
 
   try {
-    const wb   = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const ws   = wb.Sheets[wb.SheetNames[0]];
-    const dataRaw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(req.file.buffer);
+    const ws = wb.worksheets[0];
+    
+    if (!ws) return res.status(400).json({ mensaje: 'El archivo está vacío' });
+    
+    let headers = [];
+    const dataRaw = [];
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        headers = row.values.slice(1);
+      } else {
+        const obj = {};
+        row.values.forEach((val, i) => {
+          if (i > 0 && i <= headers.length) {
+            obj[headers[i - 1]] = val ?? '';
+          }
+        });
+        dataRaw.push(obj);
+      }
+    });
 
     if (dataRaw.length === 0) return res.status(400).json({ mensaje: 'El archivo está vacío' });
 
@@ -337,6 +358,7 @@ exports.importarProductos = async (req, res) => {
       depositoMap[norm(dep.nombre)] = dep.id_deposito;
     }
     let depositosCreados = 0;
+    let sucursalesCreadas = 0;
 
     const resolverDeposito = async (colName) => {
       const norm = colName.trim().toUpperCase().replace(/[\s\-()\[\]\/]/g, '');
@@ -345,28 +367,34 @@ exports.importarProductos = async (req, res) => {
         if (key.includes(norm) || norm.includes(key)) return id;
       }
 
-      // Auto-crear: buscar sucursal principal o crear una
+      // Buscar o crear sucursal con el mismo nombre que la columna
+      const nombreSuc = colName.trim();
+      const codigoSuc = nombreSuc.toUpperCase().replace(/\s+/g, '').slice(0, 20);
+
+      const [[emp]] = await conn.query(`SELECT id_empresa FROM empresas LIMIT 1`);
+      const idEmpresa = emp?.id_empresa ?? 1;
+
       let [[suc]] = await conn.query(
-        `SELECT id_sucursal FROM sucursales WHERE activo = 1 ORDER BY (tipo = 'PRINCIPAL') DESC LIMIT 1`
+        `SELECT id_sucursal FROM sucursales WHERE nombre = ? AND activo = 1`, [nombreSuc]
       );
       if (!suc) {
-        const [[emp]] = await conn.query(`SELECT id_empresa FROM empresas LIMIT 1`);
-        const idEmpresa = emp?.id_empresa ?? 1;
+        const [[codExiste]] = await conn.query(
+          `SELECT id_sucursal FROM sucursales WHERE codigo = ?`, [codigoSuc]
+        );
+        const codigoFinal = codExiste
+          ? codigoSuc.slice(0, 17) + String(Date.now()).slice(-3)
+          : codigoSuc;
         const [insSuc] = await conn.query(
           `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, activo) VALUES (?,?,?,?,1)`,
-          [idEmpresa, 'PRINCIPAL', 'Sucursal Principal', 'PRINCIPAL']
+          [idEmpresa, codigoFinal, nombreSuc, 'SUCURSAL']
         );
         suc = { id_sucursal: insSuc.insertId };
+        sucursalesCreadas++;
       }
 
-      const codigoDep = colName.trim().toUpperCase().replace(/\s+/g, '').slice(0, 20);
-      const DEP_KEYWORDS = ['SUR', 'DEPOSITO', 'ALMACEN', 'BODEGA', 'PEMO', 'DEPOSITO_PEQUENO'];
-      const tipoDep = DEP_KEYWORDS.some(k => colName.toUpperCase().includes(k))
-        ? 'DEPOSITO_PEQUENO'
-        : 'PUNTO_VENTA';
       const [insDep] = await conn.query(
         `INSERT INTO depositos (id_sucursal, codigo, nombre, tipo, activo) VALUES (?,?,?,?,1)`,
-        [suc.id_sucursal, codigoDep, colName.trim(), tipoDep]
+        [suc.id_sucursal, codigoSuc.slice(0, 20), nombreSuc, 'PUNTO_VENTA']
       );
       const newId = insDep.insertId;
       depositoMap[norm] = newId;
@@ -573,6 +601,7 @@ exports.importarProductos = async (req, res) => {
       proveedoresCreados,
       stockActualizados,
       depositosCreados,
+      sucursalesCreadas,
     });
   } catch (e) {
     res.status(500).json({ mensaje: 'Error al procesar archivo: ' + e.message });

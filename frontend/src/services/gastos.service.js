@@ -7,6 +7,9 @@ export const gastosService = {
   updateCategoria:  (id, data)  => api.put(`/gastos/categorias/${id}`, data),
   deleteCategoria:  (id)        => api.delete(`/gastos/categorias/${id}`),
 
+  // Form data (categorias + sucursales + monedas en una sola llamada)
+  getFormData:      ()           => api.get('/gastos/form-data'),
+
   // Gastos
   getGastos:        (params)    => api.get('/gastos', { params }),
   getGasto:         (id)        => api.get(`/gastos/${id}`),

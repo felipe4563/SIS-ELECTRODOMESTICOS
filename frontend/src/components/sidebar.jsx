@@ -53,6 +53,7 @@ const ICONS = {
   tool:           <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>,
   database:       <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>,
   'file-pdf':     <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15c0 1.1.9 2 2 2h2a2 2 0 000-4h-2a2 2 0 010-4h2c1.1 0 2 .9 2 2"/><line x1="12" y1="9" x2="12" y2="17"/></>,
+  table:          <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></>,
   logout:         <><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
   profile:        <><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></>,
   sun:            <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
@@ -65,15 +66,13 @@ const MENU = [
   {
     label: 'Principal',
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: 'dashboard', action: 'ver', subject: 'dashboard' },
+      { label: 'Dashboard', path: '/dashboard', icon: 'dashboard', action: 'ver', subject: 'dashboard', orAction: 'ver_todas_sucursales' },
     ],
   },
   {
     label: 'Configuración',
-    action: 'ver', subject: 'configuracion',
     items: [
-      { label: 'Panel general',   path: '/configuracion',              icon: 'settings',  action: 'ver', subject: 'configuracion' },
-      { label: 'Empresa',         path: '/configuracion/empresa',      icon: 'building',  action: 'ver', subject: 'configuracion' },
+      { label: 'Empresa',         path: '/configuracion/empresa',      icon: 'building',  action: 'ver', subject: 'empresa' },
       { label: 'Sucursales',      path: '/configuracion/sucursales',   icon: 'store',     action: 'ver', subject: 'sucursales' },
       { label: 'Depósitos',       path: '/configuracion/depositos',    icon: 'warehouse', action: 'ver', subject: 'depositos' },
       { label: 'Monedas',         path: '/configuracion/monedas',      icon: 'currency',  action: 'ver', subject: 'monedas' },
@@ -126,17 +125,17 @@ const MENU = [
   {
     label: 'Inventario',
     items: [
-      { label: 'Stock',          path: '/inventario/stock',          icon: 'clipboard', action: 'ver',         subject: 'inventario' },
+      { label: 'Stock',          path: '/inventario/stock',          icon: 'clipboard', action: 'ver',         subject: 'inventario', orAction: 'ver_todos_depositos' },
       { label: 'Kardex',         path: '/inventario/kardex',         icon: 'scroll',    action: 'ver_kardex',  subject: 'inventario' },
       { label: 'Alertas',        path: '/inventario/alertas',        icon: 'bell',      action: 'alertas_ver', subject: 'inventario' },
-      { label: 'Transferencias', path: '/inventario/transferencias', icon: 'transfer',  action: 'ver',         subject: 'inventario' },
-      { label: 'Ajustes',        path: '/inventario/ajustes',        icon: 'wrench',    action: 'ver',         subject: 'inventario' },
+      { label: 'Transferencias', path: '/inventario/transferencias', icon: 'transfer',  anyOf: [['transferir_solicitar','inventario'],['transferir_enviar','inventario'],['transferir_recibir','inventario'],['transferir_anular','inventario']] },
+      { label: 'Ajustes',        path: '/inventario/ajustes',        icon: 'wrench',    anyOf: [['ajuste_crear','inventario'],['ajuste_aprobar','inventario'],['ajuste_anular','inventario']] },
     ],
   },
   {
     label: 'Ventas',
     items: [
-      { label: 'Ventas',       path: '/ventas',       icon: 'bag',         action: 'ver_sucursal', subject: 'ventas' },
+      { label: 'Ventas',       path: '/ventas',       icon: 'bag',         anyOf: [['ver_propias','ventas'],['ver_sucursal','ventas'],['ver_todas','ventas']] },
       { label: 'Cotizaciones', path: '/cotizaciones', icon: 'file-text',   action: 'ver',          subject: 'cotizaciones' },
       { label: 'Cobros',       path: '/cobros',       icon: 'credit-card', action: 'ver',          subject: 'cobros' },
     ],
@@ -168,9 +167,10 @@ const MENU = [
   {
     label: 'Herramientas',
     items: [
-      { label: 'Herramientas', path: '/herramientas',              icon: 'tool',     action: 'ver', subject: 'herramientas' },
-      { label: 'Backup',       path: '/herramientas/backup',       icon: 'database', action: 'ver', subject: 'herramientas' },
-      { label: 'Catálogo PDF', path: '/herramientas/catalogo-pdf', icon: 'file-pdf', action: 'ver', subject: 'herramientas' },
+      { label: 'Herramientas',    path: '/herramientas',              icon: 'tool',     action: 'ver',          subject: 'herramientas' },
+      { label: 'Backup',          path: '/herramientas/backup',       icon: 'database', action: 'descargar',    subject: 'backup' },
+      { label: 'Importar Excel',  path: '/herramientas/excel',        icon: 'table',    action: 'importar_productos', subject: 'excel' },
+      { label: 'Catálogo PDF',    path: '/herramientas/catalogo-pdf', icon: 'file-pdf', action: 'generar_pdf',  subject: 'catalogo' },
     ],
   },
 ];
@@ -264,9 +264,11 @@ function MenuGroup({ grupo, onClose }) {
   const { puede }  = usePermission();
   const location   = useLocation();
 
-  const itemsVisibles = grupo.items.filter(({ action, subject }) =>
-    !action || !subject || puede(action, subject)
-  );
+  const itemsVisibles = grupo.items.filter(({ action, subject, orAction, anyOf }) => {
+    if (anyOf) return anyOf.some(([a, s]) => puede(a, s));
+    if (!action || !subject) return true;
+    return puede(action, subject) || (orAction && puede(orAction, subject));
+  });
   if (itemsVisibles.length === 0) return null;
 
   const estaActivo = itemsVisibles.some(i => location.pathname.startsWith(i.path));
@@ -302,9 +304,11 @@ function MenuGroup({ grupo, onClose }) {
 function MenuGroupCollapsed({ grupo }) {
   const { puede } = usePermission();
 
-  const itemsVisibles = grupo.items.filter(({ action, subject }) =>
-    !action || !subject || puede(action, subject)
-  );
+  const itemsVisibles = grupo.items.filter(({ action, subject, orAction, anyOf }) => {
+    if (anyOf) return anyOf.some(([a, s]) => puede(a, s));
+    if (!action || !subject) return true;
+    return puede(action, subject) || (orAction && puede(orAction, subject));
+  });
   if (itemsVisibles.length === 0) return null;
 
   return (

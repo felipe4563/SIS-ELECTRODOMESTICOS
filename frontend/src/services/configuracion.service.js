@@ -36,11 +36,12 @@ export const monedasService = {
 };
 
 export const tiposCambioService = {
-  getAll:  ()        => api.get('/tipos-cambio'),
-  getHoy:  ()        => api.get('/tipos-cambio/hoy'),
-  create:  (data)    => api.post('/tipos-cambio', data),
-  update:  (id, data) => api.put(`/tipos-cambio/${id}`, data),
-  remove:  (id)      => api.delete(`/tipos-cambio/${id}`),
+  getAll:   ()         => api.get('/tipos-cambio'),
+  getHoy:   ()         => api.get('/tipos-cambio/hoy'),
+  getBCB:   ()         => api.get('/tipos-cambio/bcb'),
+  create:   (data)     => api.post('/tipos-cambio', data),
+  update:   (id, data) => api.put(`/tipos-cambio/${id}`, data),
+  remove:   (id)       => api.delete(`/tipos-cambio/${id}`),
 };
 
 export const bancosService = {

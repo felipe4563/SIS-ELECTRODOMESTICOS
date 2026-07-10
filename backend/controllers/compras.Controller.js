@@ -43,6 +43,27 @@ function calcTotales(items, body) {
   return { subtotal: +subtotal.toFixed(2), descuento: descGlobal, impuesto: impGlobal, flete, otros_costos: otros, total };
 }
 
+// ── Form-data (catálogos para filtros/formularios) ────────────────────────────
+
+const getFormData = async (req, res) => {
+  try {
+    const [[sucursales], [depositos], [monedas], [proveedores], [productos], [impuestos]] = await Promise.all([
+      db.promise().query(`SELECT id_sucursal, nombre, activo FROM sucursales WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_deposito, codigo, nombre, activo FROM depositos WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_moneda, nombre, codigo, simbolo, es_moneda_base, activo FROM monedas WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_proveedor, codigo, razon_social, activo FROM proveedores WHERE activo = 1 ORDER BY razon_social`),
+      db.promise().query(`SELECT id_producto, codigo_interno, codigo_barras, producto, precio_real,
+                                 id_impuesto_default FROM productos WHERE activo = 1 ORDER BY producto`),
+      db.promise().query(`SELECT id_impuesto, codigo, nombre, porcentaje, tipo, es_default, activo
+                          FROM impuestos WHERE activo = 1 ORDER BY porcentaje`),
+    ]);
+    res.json({ sucursales, depositos, monedas, proveedores, productos, impuestos });
+  } catch (err) {
+    console.error('[getFormData compras]', err);
+    res.status(500).json({ error: 'Error al obtener datos del formulario' });
+  }
+};
+
 // ── Listar compras ────────────────────────────────────────────────────────────
 
 const getCompras = async (req, res) => {
@@ -50,9 +71,20 @@ const getCompras = async (req, res) => {
     const { estado, id_proveedor, id_sucursal, fecha_desde, fecha_hasta, q } = req.query;
     const conds = [], vals = [];
 
+    const puedeVerTodas = req.ability?.can('ver_todas', 'compras') ?? false;
+
+    if (!puedeVerTodas) {
+      // Solo ve compras de su propia sucursal
+      conds.push('c.id_sucursal = ?');
+      vals.push(req.user.id_sucursal);
+    } else if (id_sucursal) {
+      // Tiene ver_todas pero eligió filtrar por una sucursal
+      conds.push('c.id_sucursal = ?');
+      vals.push(id_sucursal);
+    }
+
     if (estado)       { conds.push('c.estado = ?');                         vals.push(estado); }
     if (id_proveedor) { conds.push('c.id_proveedor = ?');                   vals.push(id_proveedor); }
-    if (id_sucursal)  { conds.push('c.id_sucursal = ?');                    vals.push(id_sucursal); }
     if (fecha_desde)  { conds.push('DATE(c.fecha_pedido) >= ?');            vals.push(fecha_desde); }
     if (fecha_hasta)  { conds.push('DATE(c.fecha_pedido) <= ?');            vals.push(fecha_hasta); }
     if (q)            { conds.push('(c.numero LIKE ? OR p.razon_social LIKE ? OR c.numero_factura LIKE ?)');
@@ -255,7 +287,33 @@ const updateCompra = async (req, res) => {
   }
 };
 
-// ── Confirmar pedido PRE_PEDIDO → POR_LLEGAR ──────────────────────────────────
+// ── Aprobar compra PRE_PEDIDO → CONFIRMADO ────────────────────────────────────
+
+const aprobarCompra = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [[compra]] = await db.promise().query(
+      `SELECT id_compra, estado FROM compras WHERE id_compra = ?`, [id]
+    );
+    if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
+    if (compra.estado !== 'PRE_PEDIDO')
+      return res.status(409).json({ error: 'Solo se pueden aprobar compras en estado PRE_PEDIDO' });
+
+    await db.promise().query(
+      `UPDATE compras SET estado='CONFIRMADO', id_usuario_aprueba=?, fecha_confirmacion=CURDATE()
+       WHERE id_compra = ?`,
+      [req.user.id_usuario, id]
+    );
+
+    await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[aprobarCompra]', err);
+    res.status(500).json({ error: 'Error al aprobar compra' });
+  }
+};
+
+// ── Confirmar pedido (CONFIRMADO|PRE_PEDIDO) → POR_LLEGAR ─────────────────────
 
 const confirmarPedido = async (req, res) => {
   try {
@@ -266,8 +324,8 @@ const confirmarPedido = async (req, res) => {
       `SELECT id_compra, estado, total, fecha_pedido FROM compras WHERE id_compra = ?`, [id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
-    if (compra.estado !== 'PRE_PEDIDO')
-      return res.status(409).json({ error: 'Solo se pueden confirmar compras en estado PRE_PEDIDO' });
+    if (!['PRE_PEDIDO', 'CONFIRMADO'].includes(compra.estado))
+      return res.status(409).json({ error: 'Solo se pueden confirmar compras en estado PRE_PEDIDO o CONFIRMADO' });
 
     await db.promise().query(
       `UPDATE compras SET
@@ -319,6 +377,9 @@ const recibirMercaderia = async (req, res) => {
     if (!['POR_LLEGAR', 'PARCIAL'].includes(comp.estado))
       return res.status(409).json({ error: 'Solo se puede recibir en estado POR_LLEGAR o PARCIAL' });
 
+    const puedeTotal   = req.ability?.can('recibir', 'compras') ?? false;
+    const puedeParcial = req.ability?.can('recibir_parcial', 'compras') ?? false;
+
     const [[tipoMov]] = await db.promise().query(
       `SELECT id_tipo_movimiento FROM tipos_movimiento WHERE codigo = 'COMPRA' LIMIT 1`
     );
@@ -328,6 +389,20 @@ const recibirMercaderia = async (req, res) => {
     const [detalles] = await db.promise().query(
       `SELECT * FROM compra_detalle WHERE id_compra = ?`, [id]
     );
+
+    // Verificar si la recepción enviada cubriría todo lo pendiente
+    const seraTotal = detalles.every(det => {
+      const rec     = recepciones.find(r => Number(r.id_detalle) === Number(det.id_detalle));
+      const cantRec = rec ? Number(rec.cantidad_recibida) : 0;
+      const pend    = +(Number(det.cantidad) - Number(det.cantidad_recibida)).toFixed(4);
+      return cantRec >= pend;
+    });
+
+    if (!seraTotal && !puedeParcial) {
+      return res.status(403).json({
+        error: 'No tiene permiso para recepción parcial. Debe indicar todas las cantidades pendientes.',
+      });
+    }
 
     for (const rec of recepciones) {
       const detalle = detalles.find(d => d.id_detalle === Number(rec.id_detalle));
@@ -503,6 +578,36 @@ const createPago = async (req, res) => {
   }
 };
 
+// ── Actualizar cuota ──────────────────────────────────────────────────────────
+
+const actualizarCuota = async (req, res) => {
+  try {
+    const { id, idCuota } = req.params;
+    const { fecha_vencimiento, monto } = req.body;
+
+    const [[cuota]] = await db.promise().query(
+      `SELECT cc.*, c.id_compra FROM compra_cuotas cc
+       JOIN compras c ON c.id_compra = cc.id_compra
+       WHERE cc.id_cuota = ? AND cc.id_compra = ?`, [idCuota, id]
+    );
+    if (!cuota) return res.status(404).json({ error: 'Cuota no encontrada' });
+    if (cuota.estado === 'PAGADA') return res.status(409).json({ error: 'No se puede modificar una cuota ya pagada' });
+
+    const fields = [], vals = [];
+    if (fecha_vencimiento) { fields.push('fecha_vencimiento = ?'); vals.push(fecha_vencimiento); }
+    if (monto !== undefined) { fields.push('monto = ?'); vals.push(Number(monto)); }
+    if (!fields.length) return res.status(400).json({ error: 'Nada que actualizar' });
+
+    vals.push(idCuota);
+    await db.promise().query(`UPDATE compra_cuotas SET ${fields.join(', ')} WHERE id_cuota = ?`, vals);
+    await auditLog(req.user.id_usuario, 'compra_cuotas', idCuota, 'UPDATE', getIp(req));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[actualizarCuota]', err);
+    res.status(500).json({ error: 'Error al actualizar cuota' });
+  }
+};
+
 // ── Anular pago ───────────────────────────────────────────────────────────────
 
 const anularPago = async (req, res) => {
@@ -540,8 +645,10 @@ const anularPago = async (req, res) => {
 };
 
 module.exports = {
+  getFormData,
   getCompras, getCompra,
   createCompra, updateCompra,
-  confirmarPedido, recibirMercaderia, anularCompra,
+  aprobarCompra, confirmarPedido, recibirMercaderia, anularCompra,
   createPago, anularPago,
+  actualizarCuota,
 };

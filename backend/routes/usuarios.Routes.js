@@ -6,8 +6,9 @@ const ctrl = require('../controllers/usuarios.Controller');
 router.put('/mi-perfil', authMiddleware, ctrl.updateMiPerfil);
 
 // CRUD usuarios
-router.get('/',    authMiddleware, checkPermission('ver',    'usuarios'), ctrl.getUsuarios);
-router.get('/:id', authMiddleware, checkPermission('ver',    'usuarios'), ctrl.getUsuario);
+router.get('/',           authMiddleware, checkPermission('ver',    'usuarios'), ctrl.getUsuarios);
+router.get('/form-data',  authMiddleware, checkPermission('ver',    'usuarios'), ctrl.getFormData);
+router.get('/:id',        authMiddleware, checkPermission('ver',    'usuarios'), ctrl.getUsuario);
 router.post('/',   authMiddleware, checkPermission('crear',  'usuarios'), ctrl.createUsuario);
 router.put('/:id', authMiddleware, checkPermission('editar', 'usuarios'), ctrl.updateUsuario);
 router.delete('/:id', authMiddleware, checkPermission('eliminar', 'usuarios'), ctrl.deleteUsuario);

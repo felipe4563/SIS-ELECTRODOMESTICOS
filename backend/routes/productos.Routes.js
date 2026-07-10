@@ -34,6 +34,9 @@ const uploadImg = multer({
   },
 });
 
+// ── Datos para formulario ─────────────────────────────────────────────────
+router.get('/form-data', authMiddleware, checkPermission('crear', 'productos'), ctrl.getFormData);
+
 // ── Productos CRUD ────────────────────────────────────────────────────────
 router.get('/',    authMiddleware, checkPermission('ver',      'productos'), ctrl.getProductos);
 router.get('/:id', authMiddleware, checkPermission('ver',      'productos'), ctrl.getProducto);

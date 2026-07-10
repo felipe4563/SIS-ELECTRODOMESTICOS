@@ -10,6 +10,10 @@ const auditLog = (userId, tabla, id, accion, ip) =>
 
 async function getCajas(req, res) {
   try {
+    const verTodos = req.ability.can('ver_arqueo_todos', 'caja') || req.ability.can('gestionar', 'caja');
+    const filtroSucursal = verTodos ? '' : 'AND c.id_sucursal = ?';
+    const params = verTodos ? [] : [req.user.id_sucursal];
+
     const [rows] = await db.promise().query(`
       SELECT c.id_caja, c.nombre, c.activo, c.id_sucursal,
         s.nombre AS sucursal,
@@ -22,9 +26,9 @@ async function getCajas(req, res) {
       JOIN sucursales s ON s.id_sucursal = c.id_sucursal
       LEFT JOIN arqueos_caja aq ON aq.id_caja = c.id_caja AND aq.estado = 'ABIERTA'
       LEFT JOIN usuarios u ON u.id_usuario = aq.id_usuario
-      WHERE c.activo = 1
+      WHERE c.activo = 1 ${filtroSucursal}
       ORDER BY s.nombre, c.nombre
-    `);
+    `, params);
     res.json({ cajas: rows });
   } catch (e) {
     console.error(e);
@@ -74,6 +78,13 @@ async function getArqueos(req, res) {
     const { id_caja, estado, fecha_desde, fecha_hasta } = req.query;
     const where  = [];
     const params = [];
+
+    // Scope: si no tiene ver_arqueo_todos → solo sus propios arqueos
+    const verTodos = req.ability.can('ver_arqueo_todos', 'caja');
+    if (!verTodos) {
+      where.push('aq.id_usuario = ?');
+      params.push(req.user.id_usuario);
+    }
 
     if (id_caja)     { where.push('aq.id_caja = ?');               params.push(id_caja); }
     if (estado)      { where.push('aq.estado = ?');                params.push(estado); }
@@ -142,46 +153,48 @@ async function getArqueo(req, res) {
 
     if (!arqueo) return res.status(404).json({ mensaje: 'Arqueo no encontrado' });
 
+    const verTodos = req.ability.can('ver_arqueo_todos', 'caja');
+    if (!verTodos && arqueo.id_usuario !== req.user.id_usuario) {
+      return res.status(403).json({ mensaje: 'No tenés acceso a este arqueo' });
+    }
+
     const fechaHasta = arqueo.fecha_cierre ?? new Date();
 
-    // Cobros en efectivo durante el turno
+    // Cobros de todos los métodos durante el turno
     const [cobros] = await db.promise().query(`
-      SELECT pv.id_pago, pv.numero, pv.fecha, pv.monto,
+      SELECT pv.id_pago, pv.numero, pv.fecha, pv.monto, pv.metodo_pago,
         v.numero AS venta_numero,
         CONCAT(cl.nombres, ' ', COALESCE(cl.apellidos, '')) AS cliente
       FROM pagos_venta pv
       JOIN ventas v  ON v.id_venta   = pv.id_venta
       JOIN clientes cl ON cl.id_cliente = pv.id_cliente
       WHERE pv.id_sucursal = ?
-        AND pv.metodo_pago = 'EFECTIVO'
         AND pv.fecha >= ?
         AND pv.fecha <= ?
       ORDER BY pv.fecha
     `, [arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
 
-    // Gastos en efectivo durante el turno
+    // Gastos de todos los métodos durante el turno
     const [gastos] = await db.promise().query(`
-      SELECT g.id_gasto, g.numero, g.fecha_creacion AS fecha, g.monto,
+      SELECT g.id_gasto, g.numero, g.fecha_creacion AS fecha, g.monto, g.metodo_pago,
         g.descripcion,
         cg.nombre AS categoria
       FROM gastos g
       LEFT JOIN categorias_gasto cg ON cg.id_categoria_gasto = g.id_categoria_gasto
       WHERE g.id_sucursal = ?
-        AND g.metodo_pago = 'EFECTIVO'
         AND g.estado != 'ANULADO'
         AND g.fecha_creacion >= ?
         AND g.fecha_creacion <= ?
       ORDER BY g.fecha_creacion
     `, [arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
 
-    // Pagos a proveedores en efectivo durante el turno
+    // Pagos a proveedores de todos los métodos durante el turno
     const [pagosCompra] = await db.promise().query(`
-      SELECT pc.id_pago, pc.numero, pc.fecha, pc.monto,
+      SELECT pc.id_pago, pc.numero, pc.fecha, pc.monto, pc.metodo_pago,
         COALESCE(p.razon_social, p.nombre_comercial) AS proveedor
       FROM pagos_compra pc
       LEFT JOIN proveedores p ON p.id_proveedor = pc.id_proveedor
       WHERE pc.id_sucursal = ?
-        AND pc.metodo_pago = 'EFECTIVO'
         AND pc.fecha >= ?
         AND pc.fecha <= ?
       ORDER BY pc.fecha
@@ -189,9 +202,10 @@ async function getArqueo(req, res) {
 
     let monto_cierre_sistema_provisional = null;
     if (arqueo.estado === 'ABIERTA') {
-      const totalCobros     = cobros.reduce((s, c) => s + Number(c.monto), 0);
-      const totalGastos     = gastos.reduce((s, g) => s + Number(g.monto), 0);
-      const totalPagosComp  = pagosCompra.reduce((s, p) => s + Number(p.monto), 0);
+      // El cuadre solo cuenta efectivo (lo que físicamente está en caja)
+      const totalCobros    = cobros.filter(c => c.metodo_pago === 'EFECTIVO').reduce((s, c) => s + Number(c.monto), 0);
+      const totalGastos    = gastos.filter(g => g.metodo_pago === 'EFECTIVO').reduce((s, g) => s + Number(g.monto), 0);
+      const totalPagosComp = pagosCompra.filter(p => p.metodo_pago === 'EFECTIVO').reduce((s, p) => s + Number(p.monto), 0);
       monto_cierre_sistema_provisional =
         Number(arqueo.monto_apertura) + totalCobros - totalGastos - totalPagosComp;
     }
@@ -299,11 +313,10 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
   }
 }
 
-async function cerrarCaja(req, res)   { return _cerrarArqueo(req, res, false); }
-async function forzarCierre(req, res) { return _cerrarArqueo(req, res, true); }
+async function cerrarCaja(req, res) { return _cerrarArqueo(req, res, false); }
 
 module.exports = {
   getCajas, crearCaja, updateCaja,
   getArqueos, getArqueoActual, getArqueo,
-  abrirCaja, cerrarCaja, forzarCierre,
+  abrirCaja, cerrarCaja,
 };

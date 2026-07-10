@@ -10,7 +10,6 @@ export const cajaService = {
   getArqueos:    (params)    => api.get('/caja/arqueos', { params }),
   getArqueoActual: ()        => api.get('/caja/arqueos/actual'),
   getArqueo:    (id)         => api.get(`/caja/arqueos/${id}`),
-  abrirCaja:    (id, data)   => api.post(`/caja/${id}/abrir`, data),
-  cerrarCaja:   (id, data)   => api.post(`/caja/arqueos/${id}/cerrar`, data),
-  forzarCierre: (id, data)   => api.post(`/caja/arqueos/${id}/forzar-cierre`, data),
+  abrirCaja:  (id, data) => api.post(`/caja/${id}/abrir`, data),
+  cerrarCaja: (id, data) => api.post(`/caja/arqueos/${id}/cerrar`, data),
 };

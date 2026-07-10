@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/axios';
-import { ajustesService }   from '../../services/ajustes.service';
-import { depositosService } from '../../services/depositos.service';
-import { productosService } from '../../services/productos.service';
+import { ajustesService }    from '../../services/ajustes.service';
+import { inventarioService } from '../../services/inventario.service';
 
 function FilaProducto({ fila, productos, stockMap, onChange, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
@@ -85,10 +84,10 @@ export default function AjusteForm() {
   const [cargando,  setCargando]  = useState(esEdicion);
 
   useEffect(() => {
-    Promise.all([depositosService.getAll(), productosService.getAll()])
-      .then(([rd, rp]) => {
-        setDepositos(rd.data.depositos ?? rd.data ?? []);
-        setProductos(rp.data.productos ?? rp.data ?? []);
+    inventarioService.getFormData()
+      .then(r => {
+        setDepositos(r.data.depositos ?? []);
+        setProductos(r.data.productos ?? []);
       })
       .catch(() => {});
 

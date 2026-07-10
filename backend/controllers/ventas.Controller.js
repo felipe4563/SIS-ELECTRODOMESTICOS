@@ -84,11 +84,26 @@ const getVentas = async (req, res) => {
     const { estado, tipo_venta, id_cliente, id_sucursal, id_vendedor, fecha_desde, fecha_hasta, q } = req.query;
     const conds = [], vals = [];
 
+    // ── Filtro por alcance del permiso ────────────────────────────────────
+    const verTodas    = req.ability.can('ver_todas',    'ventas');
+    const verSucursal = req.ability.can('ver_sucursal', 'ventas');
+    const idSucursalUser = req.user.id_sucursal;
+    const idUsuario      = req.user.id_usuario;
+
+    if (verTodas) {
+      // sin restricción — puede ver todo y filtrar libremente
+    } else if (verSucursal) {
+      if (idSucursalUser) { conds.push('v.id_sucursal = ?'); vals.push(idSucursalUser); }
+    } else {
+      // ver_propias — solo sus ventas
+      conds.push('v.id_vendedor = ?'); vals.push(idUsuario);
+    }
+
     if (estado)      { conds.push('v.estado = ?');                         vals.push(estado); }
     if (tipo_venta)  { conds.push('v.tipo_venta = ?');                     vals.push(tipo_venta); }
     if (id_cliente)  { conds.push('v.id_cliente = ?');                     vals.push(id_cliente); }
-    if (id_sucursal) { conds.push('v.id_sucursal = ?');                    vals.push(id_sucursal); }
-    if (id_vendedor) { conds.push('v.id_vendedor = ?');                    vals.push(id_vendedor); }
+    if (verTodas && id_sucursal) { conds.push('v.id_sucursal = ?');        vals.push(id_sucursal); }
+    if (verTodas && id_vendedor) { conds.push('v.id_vendedor = ?');        vals.push(id_vendedor); }
     if (fecha_desde) { conds.push('DATE(v.fecha) >= ?');                   vals.push(fecha_desde); }
     if (fecha_hasta) { conds.push('DATE(v.fecha) <= ?');                   vals.push(fecha_hasta); }
     if (q)           {
@@ -146,6 +161,16 @@ const getVenta = async (req, res) => {
     );
     if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
 
+    // Verificar alcance del permiso sobre esta venta específica
+    const verTodas    = req.ability.can('ver_todas',    'ventas');
+    const verSucursal = req.ability.can('ver_sucursal', 'ventas');
+    if (!verTodas && verSucursal && venta.id_sucursal !== req.user.id_sucursal) {
+      return res.status(403).json({ mensaje: 'No tenés acceso a esta venta' });
+    }
+    if (!verTodas && !verSucursal && venta.id_vendedor !== req.user.id_usuario) {
+      return res.status(403).json({ mensaje: 'No tenés acceso a esta venta' });
+    }
+
     const [detalle] = await db.promise().query(
       `SELECT vd.*, p.producto, p.codigo_interno, p.codigo_barras, p.imagen_url,
               um.nombre AS unidad_nombre
@@ -202,6 +227,20 @@ const createVenta = async (req, res) => {
     }
     if (!items.length) {
       return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
+    }
+
+    // Validate descuentos
+    const DESCUENTO_MAX_NORMAL = 15;
+    const descuentoMax = Math.max(Number(descuento_porc) || 0, ...items.map(it => Number(it.descuento_porc ?? 0)));
+    if (descuentoMax > 0) {
+      const puedeDesc     = req.ability.can('aplicar_descuento',      'ventas');
+      const puedeDescAlto = req.ability.can('aplicar_descuento_alto', 'ventas');
+      if (!puedeDesc && !puedeDescAlto) {
+        return res.status(403).json({ mensaje: 'No tenés permiso para aplicar descuentos' });
+      }
+      if (descuentoMax > DESCUENTO_MAX_NORMAL && !puedeDescAlto) {
+        return res.status(403).json({ mensaje: `El descuento (${descuentoMax}%) supera el límite estándar (${DESCUENTO_MAX_NORMAL}%). Requiere permiso de descuento alto` });
+      }
     }
 
     // Validate credit
@@ -311,6 +350,20 @@ const updateVenta = async (req, res) => {
 
     if (!items.length) return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
 
+    // Validate descuentos
+    const DESCUENTO_MAX_NORMAL_U = 15;
+    const descuentoMaxU = Math.max(Number(descuento_porc) || 0, ...items.map(it => Number(it.descuento_porc ?? 0)));
+    if (descuentoMaxU > 0) {
+      const puedeDesc     = req.ability.can('aplicar_descuento',      'ventas');
+      const puedeDescAlto = req.ability.can('aplicar_descuento_alto', 'ventas');
+      if (!puedeDesc && !puedeDescAlto) {
+        return res.status(403).json({ mensaje: 'No tenés permiso para aplicar descuentos' });
+      }
+      if (descuentoMaxU > DESCUENTO_MAX_NORMAL_U && !puedeDescAlto) {
+        return res.status(403).json({ mensaje: `El descuento (${descuentoMaxU}%) supera el límite estándar (${DESCUENTO_MAX_NORMAL_U}%). Requiere permiso de descuento alto` });
+      }
+    }
+
     const { subtotal, descuento_monto, total } = calcTotalesVenta(items, { descuento_porc, impuesto });
 
     const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
@@ -387,13 +440,20 @@ const emitirVenta = async (req, res) => {
 
     // Credit validation
     if (venta.condicion_pago === 'CREDITO') {
+      const puedeVenderCredito  = req.ability.can('vender_credito',  'ventas');
+      const puedeAprobarCredito = req.ability.can('aprobar_credito', 'ventas');
+      if (!puedeVenderCredito && !puedeAprobarCredito) {
+        return res.status(403).json({ mensaje: 'No tenés permiso para emitir ventas a crédito' });
+      }
       if (!venta.permite_credito) return res.status(400).json({ mensaje: 'El cliente no tiene crédito habilitado' });
       const nuevoSaldo = Number(venta.cliente_saldo) + Number(venta.total);
       if (nuevoSaldo > Number(venta.limite_credito)) {
-        return res.status(400).json({
-          mensaje: `Excede el límite de crédito del cliente. Límite: ${venta.limite_credito}, Saldo actual: ${venta.cliente_saldo}, Venta: ${venta.total}`,
-          requiere_aprobacion: true,
-        });
+        if (!puedeAprobarCredito) {
+          return res.status(403).json({
+            mensaje: `Excede el límite de crédito del cliente (Límite: ${venta.limite_credito}, Saldo: ${venta.cliente_saldo}, Venta: ${venta.total}). Requiere aprobación de crédito`,
+            requiere_aprobacion: true,
+          });
+        }
       }
     }
 
@@ -911,8 +971,134 @@ const getTicket = async (req, res) => {
   }
 };
 
+// ── Form-data para nueva venta ────────────────────────────────────────────────
+
+const getFormData = async (req, res) => {
+  try {
+    const idSucursal = req.user.id_sucursal;
+    const verTodasSucursales = req.ability.can('ver_todas', 'ventas') || req.ability.can('gestionar', 'sucursales');
+
+    // Sucursales: si tiene alcance global → todas; si no → solo la propia
+    let sucursales;
+    if (verTodasSucursales) {
+      [sucursales] = await db.promise().query(
+        `SELECT id_sucursal, nombre, tipo FROM sucursales WHERE activo = 1 ORDER BY nombre`
+      );
+    } else {
+      [sucursales] = await db.promise().query(
+        `SELECT id_sucursal, nombre, tipo FROM sucursales WHERE id_sucursal = ? AND activo = 1`,
+        [idSucursal]
+      );
+    }
+
+    // Depósitos que permiten venta, de las sucursales visibles
+    const idsSucursales = sucursales.map(s => s.id_sucursal);
+    let depositos = [];
+    if (idsSucursales.length) {
+      [depositos] = await db.promise().query(
+        `SELECT id_deposito, id_sucursal, nombre, tipo
+         FROM depositos
+         WHERE id_sucursal IN (?) AND permite_venta = 1 AND activo = 1
+         ORDER BY nombre`,
+        [idsSucursales]
+      );
+    }
+
+    // Productos activos con precios
+    const [productos] = await db.promise().query(
+      `SELECT p.id_producto, p.codigo_interno, p.codigo_barras,
+              p.producto, p.precio_publico, p.precio_mayor, p.precio_real,
+              p.id_categoria, p.id_marca, p.id_impuesto_default, p.activo
+       FROM productos p
+       WHERE p.activo = 1
+       ORDER BY p.producto`
+    );
+
+    // Monedas activas
+    const [monedas] = await db.promise().query(
+      `SELECT id_moneda, codigo, nombre, simbolo, decimales, es_moneda_base
+       FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, nombre`
+    );
+
+    // Impuestos de venta
+    const [impuestos] = await db.promise().query(
+      `SELECT id_impuesto, codigo, nombre, porcentaje, tipo, es_default
+       FROM impuestos WHERE activo = 1 AND tipo IN ('VENTA','AMBOS') ORDER BY porcentaje`
+    );
+
+    // Categorías activas (para producto rápido)
+    const [categorias] = await db.promise().query(
+      `SELECT id_categoria, nombre FROM categorias WHERE activo = 1 ORDER BY nombre`
+    );
+
+    // Unidades (para producto rápido)
+    const [unidades] = await db.promise().query(
+      `SELECT id_unidad, codigo, nombre FROM unidades_medida WHERE activo = 1 ORDER BY nombre`
+    );
+
+    // Promociones vigentes (con sus aplicaciones)
+    const today = new Date().toISOString().slice(0, 10);
+    const [promoRows] = await db.promise().query(
+      `SELECT id_promocion, nombre, tipo_descuento, valor_descuento, aplica_a, fecha_inicio, fecha_fin
+       FROM promociones
+       WHERE activo = 1 AND fecha_inicio <= ? AND fecha_fin >= ?`,
+      [today, today]
+    );
+    let promociones = promoRows;
+    if (promoRows.length) {
+      const ids = promoRows.map(p => p.id_promocion);
+      const [aplics] = await db.promise().query(
+        `SELECT id_promocion, id_producto, id_categoria, id_marca
+         FROM promocion_producto WHERE id_promocion IN (?)`,
+        [ids]
+      );
+      const aplicsMap = {};
+      for (const a of aplics) {
+        if (!aplicsMap[a.id_promocion]) aplicsMap[a.id_promocion] = [];
+        aplicsMap[a.id_promocion].push({ id_producto: a.id_producto, id_categoria: a.id_categoria, id_marca: a.id_marca });
+      }
+      promociones = promoRows.map(p => ({ ...p, aplicaciones: aplicsMap[p.id_promocion] ?? [] }));
+    }
+
+    // Clientes activos
+    const [clientes] = await db.promise().query(
+      `SELECT id_cliente, codigo, tipo_cliente, tipo_documento, documento,
+              razon_social, nombres, apellidos, permite_credito, limite_credito,
+              saldo_actual, dias_credito, descuento_default
+       FROM clientes WHERE activo = 1 ORDER BY razon_social, nombres`
+    );
+
+    res.json({ sucursales, depositos, productos, monedas, impuestos, categorias, unidades, promociones, clientes });
+  } catch (err) {
+    console.error('[getFormData]', err);
+    res.status(500).json({ error: 'Error al obtener datos del formulario' });
+  }
+};
+
+// ── Stock de un depósito específico ──────────────────────────────────────────
+
+const getStockDeposito = async (req, res) => {
+  try {
+    const { id_deposito } = req.params;
+    const [rows] = await db.promise().query(
+      `SELECT id_producto, cantidad_disponible
+       FROM stock
+       WHERE id_deposito = ?`,
+      [id_deposito]
+    );
+    const stockMap = {};
+    for (const r of rows) stockMap[r.id_producto] = Number(r.cantidad_disponible);
+    res.json({ stockMap });
+  } catch (err) {
+    console.error('[getStockDeposito]', err);
+    res.status(500).json({ error: 'Error al obtener stock' });
+  }
+};
+
+
 module.exports = {
   getVentas, getVenta, getPreview,
+  getFormData, getStockDeposito,
   createVenta, updateVenta, emitirVenta,
   registrarCobro, anularCobro,
   anularVenta,

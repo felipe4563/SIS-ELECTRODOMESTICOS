@@ -15,20 +15,23 @@ import { usePermission }  from '../hooks/usePermission';
  *     <RolesPage />
  *   </ProtectedRoute>
  */
-export default function ProtectedRoute({ children, action, subject }) {
+export default function ProtectedRoute({ children, action, subject, orAction, anyOf }) {
   const { usuario }  = useAuth();
   const { noPuede }  = usePermission();
   const location     = useLocation();
 
-  // ── 1. No autenticado → redirigir al login ────────────────────────────
-  // Guardamos la ruta actual para redirigir de vuelta tras el login
   if (!usuario) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // ── 2. Sin permiso específico → página de acceso denegado ─────────────
-  if (action && subject && noPuede(action, subject)) {
-    return <Navigate to="/sin-permiso" replace />;
+  if (anyOf) {
+    const tieneAlguno = anyOf.some(([a, s]) => !noPuede(a, s));
+    if (!tieneAlguno) return <Navigate to="/sin-permiso" replace />;
+  } else if (action && subject && noPuede(action, subject)) {
+    const tieneAlternativo = orAction ? !noPuede(orAction, subject) : false;
+    if (!tieneAlternativo) {
+      return <Navigate to="/sin-permiso" replace />;
+    }
   }
 
   return children;

@@ -245,9 +245,14 @@ const resetPassword = async (req, res) => {
 // PUT /api/usuarios/:id/sucursales
 const asignarSucursales = async (req, res) => {
   const { id } = req.params;
-  const { sucursales } = req.body;
+  const { sucursales, id_sucursal_default } = req.body;
 
   if (!Array.isArray(sucursales)) return res.status(400).json({ error: 'sucursales debe ser un array' });
+
+  // La sucursal default debe estar entre las asignadas (o ser null)
+  if (id_sucursal_default && !sucursales.includes(Number(id_sucursal_default))) {
+    return res.status(400).json({ error: 'La sucursal principal debe estar entre las sucursales asignadas' });
+  }
 
   try {
     await db.promise().query(`DELETE FROM usuario_sucursal WHERE id_usuario = ?`, [id]);
@@ -256,6 +261,13 @@ const asignarSucursales = async (req, res) => {
       const values = sucursales.map(sid => [Number(id), Number(sid)]);
       await db.promise().query(`INSERT INTO usuario_sucursal (id_usuario, id_sucursal) VALUES ?`, [values]);
     }
+
+    // Actualizar sucursal principal en la tabla usuarios
+    const nuevaDefault = id_sucursal_default ? Number(id_sucursal_default) : (sucursales[0] ?? null);
+    await db.promise().query(
+      `UPDATE usuarios SET id_sucursal_default = ? WHERE id_usuario = ?`,
+      [nuevaDefault, id]
+    );
 
     const ip = req.ip || null;
     await db.promise().query(
@@ -323,7 +335,21 @@ const updateMiPerfil = async (req, res) => {
   }
 };
 
+// GET /api/usuarios/form-data  — roles y sucursales para el formulario
+const getFormData = async (req, res) => {
+  try {
+    const [[roles], [sucursales]] = await Promise.all([
+      db.promise().query(`SELECT id_rol, nombre FROM roles WHERE activo = 1 ORDER BY nombre`),
+      db.promise().query(`SELECT id_sucursal, nombre, codigo, tipo FROM sucursales WHERE activo = 1 ORDER BY nombre`),
+    ]);
+    res.json({ roles, sucursales });
+  } catch (err) {
+    console.error('[getFormData]', err);
+    res.status(500).json({ error: 'Error al obtener datos del formulario' });
+  }
+};
+
 module.exports = {
-  getUsuarios, getUsuario, createUsuario, updateUsuario, deleteUsuario,
+  getUsuarios, getUsuario, getFormData, createUsuario, updateUsuario, deleteUsuario,
   resetPassword, asignarSucursales, cerrarSesiones, updateMiPerfil,
 };

@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { inventarioService } from '../../services/inventario.service';
-import { productosService }  from '../../services/productos.service';
-import { depositosService }  from '../../services/configuracion.service';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -40,10 +38,10 @@ export default function Kardex() {
   const [buscado,  setBuscado]  = useState(false);
 
   useEffect(() => {
-    Promise.all([productosService.getAll(), depositosService.getAll()])
-      .then(([rp, rd]) => {
-        setProductos(rp.data.productos ?? rp.data ?? []);
-        setDepositos(rd.data.depositos ?? rd.data ?? []);
+    inventarioService.getFormData()
+      .then(r => {
+        setProductos(r.data.productos ?? []);
+        setDepositos(r.data.depositos ?? []);
       })
       .catch(() => {});
   }, []);

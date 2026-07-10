@@ -18,8 +18,9 @@ export function EmpresaProvider({ children }) {
 
   const cargar = useCallback(() => {
     if (!usuario) return;
-    empresaService.get()
-      .then(({ data }) => setEmpresa(data.empresa))
+    // Usa el endpoint público para que todos los roles puedan ver el logo en el sidebar
+    empresaService.getPublico()
+      .then(({ data }) => setEmpresa(data))
       .catch(() => {});
   }, [usuario]);
 

@@ -260,7 +260,7 @@ function TabDatos({ producto, onActualizar }) {
             <div>
               <label className={labelCls}>Real (costo)</label>
               <input name="precio_real" type="number" step="0.01" min="0" value={form.precio_real}
-                onChange={handleChange} disabled={!costosEditables} className={inputCls} />
+                onChange={handleChange} disabled={!precioEditable} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Logística (LOG)</label>
@@ -362,7 +362,7 @@ function TabStock({ idProducto }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-zinc-800">
-                {['Depósito','Disponible','Reservada','Total','Costo Prom.','Últ. Movimiento'].map(h => (
+                {['Depósito','Disponible','Reservada','Total','Últ. Movimiento'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -384,9 +384,6 @@ function TabStock({ idProducto }) {
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">
                     {Number(s.cantidad).toLocaleString('es-BO')}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-zinc-400 text-xs">
-                    {bs(s.costo_promedio)}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400 dark:text-zinc-500">
                     {s.fecha_ult_movimiento
