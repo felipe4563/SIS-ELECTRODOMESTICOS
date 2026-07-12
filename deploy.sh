@@ -35,7 +35,7 @@ APP_DIR="$(cd "$(dirname "$0")" && pwd)"   # /home/ubuntu/SISTEMAS/SIS-ELECTRODO
 BACKEND_DIR="$APP_DIR/backend"
 FRONTEND_DIR="$APP_DIR/frontend"
 FRONTEND_DIST="$FRONTEND_DIR/dist"         # Nginx apunta aquí directamente
-PM2_APP_NAME="megaelectra-api"             # Nombre exacto del proceso PM2
+PM2_APP_NAME="electrodomesticos-api"             # Nombre exacto del proceso PM2
 BACKEND_PORT=3001                          # Puerto del backend (nginx proxy_pass :3001)
 BRANCH="main"
 # ─────────────────────────────────────────────────────────────────────────────
