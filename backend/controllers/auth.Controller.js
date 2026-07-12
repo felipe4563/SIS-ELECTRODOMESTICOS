@@ -203,8 +203,14 @@ const cambiarContrasena = async (req, res) => {
   const { contrasena_actual, contrasena_nueva } = req.body;
   const id_usuario = req.user.id_usuario;
 
-  if (!contrasena_nueva || contrasena_nueva.length < 6) {
-    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+  if (!contrasena_nueva || contrasena_nueva.length < 8) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+  }
+  if (!/[A-Z]/.test(contrasena_nueva)) {
+    return res.status(400).json({ error: 'La nueva contraseña debe contener al menos una letra mayúscula' });
+  }
+  if (!/[0-9]/.test(contrasena_nueva)) {
+    return res.status(400).json({ error: 'La nueva contraseña debe contener al menos un número' });
   }
 
   try {
@@ -355,7 +361,7 @@ const seleccionarSucursal = async (req, res) => {
       [id_usuario, payload.jti, token, ip, ua, expiracion]
     );
 
-    return res.json({ token, sucursal: sucRows[0] });
+    return res.json({ token, sucursal: sucRows[0], permisos: req.user.permisos ?? [] });
   } catch (err) {
     console.error('[seleccionarSucursal] Error:', err);
     return res.status(500).json({ error: 'Error en el servidor' });

@@ -9,6 +9,7 @@ import Sidebar             from './components/sidebar';
 // ── Páginas públicas ─────────────────────────────────────────────────────
 import Login              from './pages/Login';
 import SinPermiso         from './pages/SinPermiso';
+import NotFound           from './pages/NotFound';
 import CambiarContrasena  from './pages/CambiarContrasena';
 import SelectorSucursal   from './pages/SelectorSucursal';
 import ProductoPublico    from './pages/public/ProductoPublico';
@@ -421,7 +422,7 @@ export default function App() {
 
               {/* Redirecciones */}
               <Route path="/"  element={<Navigate to="/dashboard" replace />} />
-              <Route path="*"  element={<Navigate to="/dashboard" replace />} />
+              <Route path="*"  element={<NotFound />} />
 
             </Routes>
             </EmpresaProvider>

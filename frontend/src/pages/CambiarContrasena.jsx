@@ -169,7 +169,7 @@ export default function CambiarContrasena() {
             <CampoPassword
               label="Nueva contraseña"
               name="contrasena_nueva"
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número"
               value={form.contrasena_nueva}
               mostrar={ver.nueva}
               onChange={handleChange}

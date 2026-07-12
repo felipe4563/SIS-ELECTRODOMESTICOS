@@ -561,9 +561,10 @@ export default function Cobros() {
                     className={`${FIELD} w-full sm:w-32`}
                   >
                     <option value="">Estado</option>
-                    <option value="PENDIENTE">Pendiente</option>
-                    <option value="PAGADA">Pagado</option>
-                    <option value="VENCIDA">Vencido</option>
+                    <option value="EMITIDA">Emitida</option>
+                    <option value="PARCIAL">Parcial</option>
+                    <option value="PAGADA">Pagada</option>
+                    <option value="ANULADA">Anulada</option>
                   </select>
                   <input
                     type="date"

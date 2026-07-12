@@ -27,9 +27,10 @@ export default function Empresa() {
   useEffect(() => {
     empresaService.get()
       .then(({ data }) => {
-        setEmpresa(data.empresa);
-        setForm(data.empresa);
-        setLogoPreview(buildLogoUrl(data.empresa.logo_url));
+        const emp = data.empresa ?? null;
+        setEmpresa(emp);
+        setForm(emp ?? {});
+        setLogoPreview(buildLogoUrl(emp?.logo_url));
       })
       .catch(() => setError('No se pudo cargar la información de la empresa'))
       .finally(() => setCargando(false));
@@ -46,10 +47,13 @@ export default function Empresa() {
     setExito(false);
     setGuardando(true);
     try {
-      const { data } = await empresaService.update(empresa.id_empresa, form);
-      setEmpresa(data.empresa);
-      setForm(data.empresa);
+      const { data } = empresa
+        ? await empresaService.update(empresa.id_empresa, form)
+        : await empresaService.create(form);
+      setEmpresa(data.empresa ?? null);
+      setForm(data.empresa ?? {});
       setEmpresaCtx?.(data.empresa);
+      recargar?.();
       setExito(true);
       setTimeout(() => setExito(false), 3000);
     } catch (err) {
@@ -75,8 +79,8 @@ export default function Empresa() {
     setError(null);
     try {
       const { data } = await empresaService.uploadLogo(empresa.id_empresa, file);
-      setEmpresa(data.empresa);
-      setForm(data.empresa);
+      setEmpresa(data.empresa ?? null);
+      setForm(data.empresa ?? {});
       // Actualiza el contexto global (sidebar) sin tocar el preview local: sin parpadeo
       setEmpresaCtx?.(data.empresa);
       recargar?.();
@@ -116,6 +120,12 @@ export default function Empresa() {
         </div>
       )}
 
+      {!empresa && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm">
+          No hay empresa registrada aún. Completa los datos para crear el perfil de tu empresa.
+        </div>
+      )}
+
       <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 space-y-6">
 
         {/* ── Sección logo ── */}
@@ -142,7 +152,7 @@ export default function Empresa() {
           <div>
             <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Logo de la empresa</p>
             <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">Se usa en comprobantes, facturas y el menú lateral. PNG o JPG, máx. 5 MB.</p>
-            {puedeEditar && (
+            {puedeEditar && empresa && (
               <>
                 <input
                   ref={fileRef}
@@ -194,7 +204,7 @@ export default function Empresa() {
             </div>
           </div>
 
-          {puedeEditar && (
+          {(puedeEditar || !empresa) && (
             <div className="pt-2 flex justify-end">
               <button
                 type="submit"

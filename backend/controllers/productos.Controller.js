@@ -1,5 +1,5 @@
-const db       = require('../config/db');
-const ExcelJS = require('exceljs');
+const db = require('../config/db');
+const { randomBytes } = require('crypto');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -66,6 +66,19 @@ const getFormData = async (req, res) => {
 
 const getProductos = async (req, res) => {
   try {
+    const q      = req.query.q?.trim() ?? '';
+    const limit  = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 500);
+    const page   = Math.max(parseInt(req.query.page) || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const conds  = [];
+    const params = [];
+    if (q) {
+      conds.push('(p.producto LIKE ? OR p.codigo_interno LIKE ? OR p.codigo_barras LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
     const [rows] = await db.promise().query(
       `SELECT p.*,
               m.nombre  AS marca_nombre,
@@ -83,10 +96,13 @@ const getProductos = async (req, res) => {
        JOIN monedas mo        ON mo.id_moneda  = p.id_moneda_costo
        LEFT JOIN proveedores pr ON pr.id_proveedor = p.id_proveedor_default
        LEFT JOIN stock s     ON s.id_producto  = p.id_producto
+       ${where}
        GROUP BY p.id_producto
-       ORDER BY m.nombre ASC, p.producto ASC`
+       ORDER BY m.nombre ASC, p.producto ASC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
     );
-    return res.json({ productos: rows });
+    return res.json({ productos: rows, page, limit });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Error al obtener productos' });
@@ -137,11 +153,6 @@ const createProducto = async (req, res) => {
       return res.status(400).json({ error: 'Marca, categoría, unidad y moneda son requeridos' });
     if (!producto) return res.status(400).json({ error: 'El nombre del producto es requerido' });
 
-    const [[{ nextId }]] = await db.promise().query(
-      `SELECT COALESCE(MAX(id_producto), 0) + 1 AS nextId FROM productos`
-    );
-    const codigo_interno = `PROD-${String(nextId).padStart(5, '0')}`;
-
     const [result] = await db.promise().query(
       `INSERT INTO productos
          (codigo_interno, codigo_barras, id_marca, id_categoria, id_unidad, id_moneda_costo,
@@ -151,7 +162,7 @@ const createProducto = async (req, res) => {
           stock_minimo, stock_maximo, imagen_url, notas)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        codigo_interno, codigo_barras || null,
+        randomBytes(10).toString('hex'), codigo_barras || null,
         id_marca, id_categoria, id_unidad, id_moneda_costo,
         producto, detalle || null, capacidad || null, caracteristicas || null, modelo || null, color || null,
         toNum(precio_real), toNum(costo_logistica), toNum(costo_mcm), toNum(precio_publico),
@@ -163,6 +174,8 @@ const createProducto = async (req, res) => {
     );
 
     const idProducto = result.insertId;
+    const codigo_interno = `PROD-${String(idProducto).padStart(5, '0')}`;
+    await db.promise().query(`UPDATE productos SET codigo_interno = ? WHERE id_producto = ?`, [codigo_interno, idProducto]);
     await crearStockEnDepositos(idProducto);
     await auditLog(req.user.id_usuario, 'productos', idProducto, 'CREATE', getIp(req));
 
@@ -330,178 +343,9 @@ const getStock = async (req, res) => {
 
 // ── Importación masiva desde Excel ────────────────────────────────────────
 
-const importarDesdeExcel = async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
-
-  try {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
-    const worksheet = workbook.worksheets[0];
-    
-    if (!worksheet) return res.status(400).json({ error: 'El archivo está vacío' });
-    
-    let headers = [];
-    const filas = [];
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) {
-        headers = row.values.slice(1);
-      } else {
-        const obj = {};
-        row.values.forEach((val, i) => {
-          if (i > 0 && i <= headers.length) {
-            obj[headers[i - 1]] = val ?? '';
-          }
-        });
-        filas.push(obj);
-      }
-    });
-
-    if (filas.length === 0) return res.status(400).json({ error: 'El archivo está vacío' });
-
-    // Cachear catálogos para lookup
-    const [marcasDB]     = await db.promise().query(`SELECT id_marca, nombre FROM marcas WHERE activo = 1`);
-    const [categoriasDB] = await db.promise().query(`SELECT id_categoria, nombre FROM categorias WHERE activo = 1`);
-    const [unidadesDB]   = await db.promise().query(`SELECT id_unidad, nombre, simbolo FROM unidades_medida WHERE activo = 1`);
-    const [monedasDB]    = await db.promise().query(`SELECT id_moneda, nombre, simbolo FROM monedas WHERE activo = 1`);
-    const [proveedoresDB]= await db.promise().query(`SELECT id_proveedor, razon_social, codigo FROM proveedores WHERE activo = 1`);
-    const [depositosDB]  = await db.promise().query(`SELECT id_deposito FROM depositos WHERE activo = 1`);
-
-    const byNombreCI = (arr, key, val) => {
-      if (!val) return null;
-      const v = String(val).trim().toLowerCase();
-      return arr.find(r => String(r[key]).toLowerCase() === v) || null;
-    };
-
-    const resultados = { creados: 0, omitidos: 0, errores: [] };
-
-    for (let i = 0; i < filas.length; i++) {
-      const fila = filas[i];
-      const numFila = i + 2;
-
-      try {
-        // Mapeo de columnas del Excel original
-        const marcaVal     = fila['MARCA']        || fila['marca']        || '';
-        const productoVal  = fila['PRODUCTO']      || fila['producto']     || '';
-        const detalleVal   = fila['DETALLE']       || fila['detalle']      || '';
-        const capVal       = fila['CAP.']          || fila['capacidad']    || fila['CAP']    || '';
-        const caracVal     = fila['CARACTERISTICAS']|| fila['caracteristicas'] || '';
-        const modeloVal    = fila['MODELO']        || fila['modelo']       || '';
-        const colorVal     = fila['COLOR']         || fila['color']        || '';
-        const realVal      = fila['REAL BS.']      || fila['precio_real']  || fila['REAL']   || 0;
-        const logVal       = fila['LOG']           || fila['costo_logistica'] || 0;
-        const mcmVal       = fila['MCM']           || fila['costo_mcm']   || 0;
-        const ppVal        = fila['PRECIO PUBLICO'] || fila['precio_publico'] || fila['PRECIO'] || 0;
-        const bonoVal      = fila['BONO']          || fila['bono']        || 0;
-        const mayorVal     = fila['PRECIO MAYOR']  || fila['precio_mayor'] || 0;
-        const proveedorVal = fila['PROVEEDOR']     || fila['proveedor']   || '';
-        const codigoVal    = fila['CODIGO']        || fila['codigo_interno'] || fila['COD'] || '';
-        const barrasVal    = fila['CODIGO BARRAS'] || fila['codigo_barras'] || '';
-        const categoriaVal = fila['CATEGORIA']     || fila['categoria']   || '';
-        const unidadVal    = fila['UNIDAD']        || fila['unidad']      || 'UND';
-        const monedaVal    = fila['MONEDA']        || fila['moneda']      || 'Bs';
-        const stockMinVal  = fila['STOCK MIN']     || fila['stock_minimo'] || 0;
-
-        if (!productoVal) {
-          resultados.errores.push({ fila: numFila, error: 'Columna PRODUCTO vacía' });
-          resultados.omitidos++;
-          continue;
-        }
-
-        // Resolución de catálogos
-        const marca = byNombreCI(marcasDB, 'nombre', marcaVal);
-        if (!marca) {
-          resultados.errores.push({ fila: numFila, error: `Marca "${marcaVal}" no encontrada` });
-          resultados.omitidos++;
-          continue;
-        }
-
-        const categoria = byNombreCI(categoriasDB, 'nombre', categoriaVal) || categoriasDB[0];
-        if (!categoria) {
-          resultados.errores.push({ fila: numFila, error: 'No hay categorías disponibles' });
-          resultados.omitidos++;
-          continue;
-        }
-
-        const unidad = byNombreCI(unidadesDB, 'simbolo', unidadVal)
-                    || byNombreCI(unidadesDB, 'nombre', unidadVal)
-                    || unidadesDB[0];
-        if (!unidad) {
-          resultados.errores.push({ fila: numFila, error: 'No hay unidades disponibles' });
-          resultados.omitidos++;
-          continue;
-        }
-
-        const moneda = byNombreCI(monedasDB, 'simbolo', monedaVal)
-                    || byNombreCI(monedasDB, 'nombre', monedaVal)
-                    || monedasDB[0];
-        if (!moneda) {
-          resultados.errores.push({ fila: numFila, error: 'No hay monedas disponibles' });
-          resultados.omitidos++;
-          continue;
-        }
-
-        const proveedor = byNombreCI(proveedoresDB, 'razon_social', proveedorVal)
-                       || byNombreCI(proveedoresDB, 'codigo', proveedorVal);
-
-        // Generar código si no viene
-        let codigoInterno = String(codigoVal).trim().toUpperCase();
-        if (!codigoInterno) {
-          const prefix = String(marca.nombre).substring(0, 3).toUpperCase();
-          const ts     = Date.now().toString().slice(-5);
-          codigoInterno = `${prefix}-${ts}-${i}`;
-        }
-
-        // Insertar producto
-        const [result] = await db.promise().query(
-          `INSERT IGNORE INTO productos
-             (codigo_interno, codigo_barras, id_marca, id_categoria, id_unidad, id_moneda_costo,
-              producto, detalle, capacidad, caracteristicas, modelo, color,
-              precio_real, costo_logistica, costo_mcm, precio_publico,
-              bono, precio_mayor, id_proveedor_default, stock_minimo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            codigoInterno, barrasVal || null,
-            marca.id_marca, categoria.id_categoria, unidad.id_unidad, moneda.id_moneda,
-            productoVal, detalleVal || null, capVal || null, caracVal || null, modeloVal || null, colorVal || null,
-            toNum(realVal), toNum(logVal), toNum(mcmVal), toNum(ppVal),
-            toNum(bonoVal), toNum(mayorVal),
-            proveedor ? proveedor.id_proveedor : null,
-            toNum(stockMinVal),
-          ]
-        );
-
-        if (result.affectedRows > 0) {
-          const idProducto = result.insertId;
-          // Stock en cada depósito
-          if (depositosDB.length > 0) {
-            const vals = depositosDB.map(d => [idProducto, d.id_deposito, 0, 0, 0]);
-            await db.promise().query(
-              `INSERT IGNORE INTO stock (id_producto, id_deposito, cantidad, cantidad_reservada, costo_promedio) VALUES ?`,
-              [vals]
-            );
-          }
-          await auditLog(req.user.id_usuario, 'productos', idProducto, 'IMPORT', getIp(req));
-          resultados.creados++;
-        } else {
-          resultados.omitidos++;
-          resultados.errores.push({ fila: numFila, error: `Código "${codigoInterno}" ya existe (omitido)` });
-        }
-      } catch (rowErr) {
-        resultados.errores.push({ fila: numFila, error: rowErr.message });
-        resultados.omitidos++;
-      }
-    }
-
-    return res.json(resultados);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Error al procesar el archivo Excel' });
-  }
-};
-
 module.exports = {
   getFormData,
   getProductos, getProducto, createProducto, updateProducto, deleteProducto,
   getHistoricoPrecios, getStock,
-  importarDesdeExcel, uploadImagen,
+  uploadImagen,
 };

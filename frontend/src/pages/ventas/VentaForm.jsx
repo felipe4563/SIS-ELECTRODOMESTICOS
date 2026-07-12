@@ -260,7 +260,7 @@ export default function VentaForm() {
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
   });
-  const [items, setItems] = useState([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+  const [items, setItems] = useState([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
   const [clienteInfo, setClienteInfo] = useState(null);
   const [guardando,  setGuardando]  = useState(false);
   const [cargando,   setCargando]   = useState(esEdicion);
@@ -329,6 +329,7 @@ export default function VentaForm() {
             observaciones: v.observaciones ?? '',
           });
           setItems((v.detalle ?? []).map(d => ({
+            _key:          crypto.randomUUID(),
             id_producto:   String(d.id_producto),
             cantidad:      d.cantidad,
             precio_unitario: d.precio_unitario,
@@ -407,7 +408,7 @@ export default function VentaForm() {
       const match   = trimmed.match(/\/p\/([^/?#\s]+)$/);
       const codigo  = match ? decodeURIComponent(match[1]) : trimmed;
 
-      const prod = productos.find(p => p.codigo_interno === codigo);
+      const prod = productos.find(p => p.codigo_interno === codigo || p.codigo_barras === codigo);
       if (!prod) {
         setQrError(`No encontrado: ${codigo}`);
         setTimeout(() => setQrError(''), 3000);
@@ -428,6 +429,7 @@ export default function VentaForm() {
           ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
           : impuestos.find(i => i.es_default);
         return [...prev, {
+          _key:            crypto.randomUUID(),
           id_producto:     String(prod.id_producto),
           cantidad:        1,
           precio_unitario: precio,
@@ -441,10 +443,10 @@ export default function VentaForm() {
     }, 300);
   };
 
-  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+  const addItem    = () => setItems(p => [...p, { _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
-  const limpiarItems = () => setItems([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+  const limpiarItems = () => setItems([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
 
   const subtotal  = items.reduce((s, it) => {
     const base = Number(it.cantidad ?? 0) * Number(it.precio_unitario ?? 0);
@@ -503,7 +505,18 @@ export default function VentaForm() {
       const nuevoProd = res.data.producto;
       setProductos(prev => [...prev, nuevoProd]);
       const precio = resolverPrecio(nuevoProd, form.tipo_venta);
-      setItems(prev => [...prev, { id_producto: String(nuevoProd.id_producto), cantidad: 1, precio_unitario: precio, descuento_porc: 0 }]);
+      const impDef = nuevoProd.id_impuesto_default
+        ? impuestos.find(i => String(i.id_impuesto) === String(nuevoProd.id_impuesto_default))
+        : impuestos.find(i => i.es_default);
+      setItems(prev => [...prev, {
+        _key:            crypto.randomUUID(),
+        id_producto:     String(nuevoProd.id_producto),
+        cantidad:        1,
+        precio_unitario: precio,
+        descuento_porc:  0,
+        id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
+        impuesto_porc:   impDef ? Number(impDef.porcentaje) : 0,
+      }]);
       setModalRapido(false);
       setRpForm({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
     } catch (err) {
@@ -802,7 +815,7 @@ export default function VentaForm() {
             <tbody>
               {items.map((fila, i) => (
                 <FilaItem
-                  key={i} fila={fila} index={i}
+                  key={fila._key} fila={fila} index={i}
                   productos={productos} stockMap={stockMap}
                   tipoVenta={form.tipo_venta}
                   promociones={promociones}

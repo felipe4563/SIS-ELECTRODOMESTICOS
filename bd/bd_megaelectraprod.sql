@@ -629,6 +629,7 @@ CREATE TABLE `pagos_venta` (
   `id_cuota` bigint(20) DEFAULT NULL,
   `id_cliente` int(11) NOT NULL,
   `id_sucursal` int(11) NOT NULL,
+  `id_arqueo` bigint(20) DEFAULT NULL COMMENT 'Arqueo de caja activo al momento del cobro',
   `fecha` datetime NOT NULL DEFAULT current_timestamp(),
   `metodo_pago` enum('EFECTIVO','TRANSFERENCIA','QR','CHEQUE','TARJETA_DEBITO','TARJETA_CREDITO','OTRO') NOT NULL,
   `id_moneda` int(11) NOT NULL,
@@ -1853,6 +1854,7 @@ ALTER TABLE `pagos_venta`
   ADD KEY `fk_pv_venta` (`id_venta`),
   ADD KEY `fk_pv_cuota` (`id_cuota`),
   ADD KEY `fk_pv_cliente` (`id_cliente`),
+  ADD KEY `fk_pv_arqueo` (`id_arqueo`),
   ADD KEY `fk_pv_sucursal` (`id_sucursal`),
   ADD KEY `fk_pv_moneda` (`id_moneda`),
   ADD KEY `fk_pv_usuario` (`id_usuario`),
@@ -2541,6 +2543,7 @@ ALTER TABLE `pagos_compra`
 -- Filtros para la tabla `pagos_venta`
 --
 ALTER TABLE `pagos_venta`
+  ADD CONSTRAINT `fk_pv_arqueo` FOREIGN KEY (`id_arqueo`) REFERENCES `arqueos_caja` (`id_arqueo`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_pv_cliente` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`),
   ADD CONSTRAINT `fk_pv_cuota` FOREIGN KEY (`id_cuota`) REFERENCES `venta_cuotas` (`id_cuota`),
   ADD CONSTRAINT `fk_pv_moneda` FOREIGN KEY (`id_moneda`) REFERENCES `monedas` (`id_moneda`),

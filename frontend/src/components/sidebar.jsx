@@ -259,16 +259,21 @@ function MenuItemCollapsed({ path, label, icon }) {
   );
 }
 
+/* ─── Helper compartido de filtrado ─────────────────────────────────────── */
+function filtrarItemsVisibles(items, puede) {
+  return items.filter(({ action, subject, orAction, anyOf }) => {
+    if (anyOf) return anyOf.some(([a, s]) => puede(a, s));
+    if (!action || !subject) return true;
+    return puede(action, subject) || (orAction && puede(orAction, subject));
+  });
+}
+
 /* ─── Grupo colapsable — modo expandido ─────────────────────────────────── */
 function MenuGroup({ grupo, onClose }) {
   const { puede }  = usePermission();
   const location   = useLocation();
 
-  const itemsVisibles = grupo.items.filter(({ action, subject, orAction, anyOf }) => {
-    if (anyOf) return anyOf.some(([a, s]) => puede(a, s));
-    if (!action || !subject) return true;
-    return puede(action, subject) || (orAction && puede(orAction, subject));
-  });
+  const itemsVisibles = filtrarItemsVisibles(grupo.items, puede);
   if (itemsVisibles.length === 0) return null;
 
   const estaActivo = itemsVisibles.some(i => location.pathname.startsWith(i.path));
@@ -304,11 +309,7 @@ function MenuGroup({ grupo, onClose }) {
 function MenuGroupCollapsed({ grupo }) {
   const { puede } = usePermission();
 
-  const itemsVisibles = grupo.items.filter(({ action, subject, orAction, anyOf }) => {
-    if (anyOf) return anyOf.some(([a, s]) => puede(a, s));
-    if (!action || !subject) return true;
-    return puede(action, subject) || (orAction && puede(orAction, subject));
-  });
+  const itemsVisibles = filtrarItemsVisibles(grupo.items, puede);
   if (itemsVisibles.length === 0) return null;
 
   return (

@@ -48,14 +48,21 @@ const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, jwtSecret);
     const { jti, id_usuario, rol, id_sucursal, debe_cambiar_pass } = decoded;
 
-    // Verificar que la sesión no fue cerrada manualmente
+    // Verificar que la sesión esté activa y el usuario no fue desactivado
     const [sesiones] = await db.promise().query(
-      `SELECT cerrada FROM sesiones WHERE jti = ? LIMIT 1`,
+      `SELECT s.cerrada, u.activo
+       FROM sesiones s
+       JOIN usuarios u ON u.id_usuario = s.id_usuario
+       WHERE s.jti = ? LIMIT 1`,
       [jti]
     );
 
     if (sesiones.length === 0 || sesiones[0].cerrada === 1) {
       return res.status(401).json({ error: 'Sesión cerrada. Inicia sesión nuevamente.' });
+    }
+
+    if (sesiones[0].activo !== 1) {
+      return res.status(401).json({ error: 'Usuario desactivado. Contacte al administrador.' });
     }
 
     // Obtener permisos actuales del rol (desde caché o BD)

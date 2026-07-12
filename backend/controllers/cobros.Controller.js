@@ -6,7 +6,16 @@ async function generarNumeroCobro() {
   const [[row]] = await db.promise().query(
     `SELECT COUNT(*) AS cnt FROM pagos_venta WHERE numero LIKE ?`, [`COB-${ym}-%`]
   );
-  return `COB-${ym}-${String(Number(row.cnt) + 1).padStart(4, '0')}`;
+  // Buscar el primer número no usado para reducir colisiones bajo carga concurrente
+  let seq = Number(row.cnt) + 1;
+  for (let i = 0; i < 20; i++, seq++) {
+    const candidato = `COB-${ym}-${String(seq).padStart(4, '0')}`;
+    const [[{ n }]] = await db.promise().query(
+      `SELECT COUNT(*) AS n FROM pagos_venta WHERE numero = ?`, [candidato]
+    );
+    if (n === 0) return candidato;
+  }
+  throw new Error('No se pudo generar número único para cobro');
 }
 
 // GET /api/cobros
@@ -187,18 +196,19 @@ const getRecibo = async (req, res) => {
 // POST /api/cobros
 const registrarCobro = async (req, res) => {
   const {
-    id_venta, id_cuota, id_cliente,
+    id_venta, id_cuota,
     metodo_pago, id_moneda, tipo_cambio = 1,
     monto, numero_referencia, observaciones,
   } = req.body;
 
-  if (!id_venta || !id_cliente || !metodo_pago || !id_moneda || !monto) {
+  if (!id_venta || !metodo_pago || !id_moneda || !monto) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
   try {
+    // id_cliente se deriva de la venta (fuente autoritativa) — nunca del body
     const [[venta]] = await db.promise().query(
-      `SELECT id_venta, id_sucursal, saldo_pendiente, total, estado, condicion_pago FROM ventas WHERE id_venta = ?`,
+      `SELECT id_venta, id_cliente, id_sucursal, saldo_pendiente, total, estado, condicion_pago FROM ventas WHERE id_venta = ?`,
       [id_venta]
     );
     if (!venta)                      return res.status(404).json({ error: 'Venta no encontrada' });
@@ -208,16 +218,26 @@ const registrarCobro = async (req, res) => {
       return res.status(400).json({ error: `El monto (${monto}) excede el saldo pendiente (${venta.saldo_pendiente})` });
     }
 
-    // Usar la sucursal de la venta (fuente autoritativa) en vez de confiar en el cliente
+    const id_cliente  = venta.id_cliente;
     const id_sucursal = venta.id_sucursal;
 
     const numero = await generarNumeroCobro();
 
+    // Buscar arqueo activo de la sucursal (para todos los métodos, para poder escopar el detalle por caja)
+    const [[arqueoActivo]] = await db.promise().query(
+      `SELECT a.id_arqueo FROM arqueos_caja a
+       JOIN cajas c ON a.id_caja = c.id_caja
+       WHERE c.id_sucursal = ? AND a.estado = 'ABIERTA'
+       ORDER BY a.fecha_apertura DESC LIMIT 1`,
+      [id_sucursal]
+    );
+    const id_arqueo = arqueoActivo?.id_arqueo ?? null;
+
     const [ins] = await db.promise().query(
       `INSERT INTO pagos_venta
-         (numero, id_venta, id_cuota, id_cliente, id_sucursal, metodo_pago, id_moneda, tipo_cambio, monto, numero_referencia, id_usuario, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [numero, id_venta, id_cuota || null, id_cliente, id_sucursal, metodo_pago,
+         (numero, id_venta, id_cuota, id_cliente, id_sucursal, id_arqueo, metodo_pago, id_moneda, tipo_cambio, monto, numero_referencia, id_usuario, observaciones)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [numero, id_venta, id_cuota || null, id_cliente, id_sucursal, id_arqueo, metodo_pago,
        id_moneda, tipo_cambio, monto, numero_referencia || null, req.user.id_usuario, observaciones || null]
     );
     const id_pago = ins.insertId;
@@ -245,27 +265,18 @@ const registrarCobro = async (req, res) => {
       [nuevoSaldo, estadoVenta, id_venta]
     );
 
-    // Actualizar saldo cliente
+    // Actualizar saldo cliente (id_cliente viene de la venta, no del body)
     await db.promise().query(
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
-      [monto, id_cliente]
+      [monto, venta.id_cliente]
     );
 
-    // Arqueo de caja si EFECTIVO
-    if (metodo_pago === 'EFECTIVO') {
-      const [[arqueo]] = await db.promise().query(
-        `SELECT a.id_arqueo FROM arqueos_caja a
-         JOIN cajas c ON a.id_caja = c.id_caja
-         WHERE c.id_sucursal = ? AND a.estado = 'ABIERTA'
-         ORDER BY a.fecha_apertura DESC LIMIT 1`,
-        [id_sucursal]
+    // Actualizar monto del arqueo si EFECTIVO
+    if (metodo_pago === 'EFECTIVO' && id_arqueo) {
+      await db.promise().query(
+        `UPDATE arqueos_caja SET monto_cierre_sistema = monto_cierre_sistema + ? WHERE id_arqueo = ?`,
+        [monto, id_arqueo]
       );
-      if (arqueo) {
-        await db.promise().query(
-          `UPDATE arqueos_caja SET monto_cierre_sistema = monto_cierre_sistema + ? WHERE id_arqueo = ?`,
-          [monto, arqueo.id_arqueo]
-        );
-      }
     }
 
     // Auditoría
@@ -313,6 +324,9 @@ const anularCobro = async (req, res) => {
       [id]
     );
     if (!pago) return res.status(404).json({ error: 'Cobro no encontrado' });
+    if (pago.estado_venta === 'ANULADA') {
+      return res.status(400).json({ error: 'No se puede anular un cobro de una venta ya anulada' });
+    }
 
     // Revertir cuota
     if (pago.id_cuota) {

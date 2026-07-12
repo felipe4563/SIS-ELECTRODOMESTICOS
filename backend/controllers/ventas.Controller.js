@@ -15,7 +15,16 @@ async function generarNumero(prefijo, tabla) {
   const [[{ cnt }]] = await db.promise().query(
     `SELECT COUNT(*) AS cnt FROM ${tabla} WHERE numero LIKE ?`, [`${prefijo}-${ym}-%`]
   );
-  return `${prefijo}-${ym}-${String(Number(cnt) + 1).padStart(4, '0')}`;
+  // Buscar el primer número no usado para reducir colisiones bajo carga concurrente
+  let seq = Number(cnt) + 1;
+  for (let i = 0; i < 20; i++, seq++) {
+    const candidato = `${prefijo}-${ym}-${String(seq).padStart(4, '0')}`;
+    const [[{ n }]] = await db.promise().query(
+      `SELECT COUNT(*) AS n FROM ${tabla} WHERE numero = ?`, [candidato]
+    );
+    if (n === 0) return candidato;
+  }
+  throw new Error(`No se pudo generar número único para ${tabla}`);
 }
 
 async function tipoMov(codigo) {
@@ -228,6 +237,11 @@ const createVenta = async (req, res) => {
     if (!items.length) {
       return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
     }
+    for (const it of items) {
+      if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
+      if (Number(it.cantidad) <= 0) return res.status(400).json({ mensaje: 'La cantidad de cada ítem debe ser mayor a 0' });
+      if (Number(it.precio_unitario) < 0) return res.status(400).json({ mensaje: 'El precio unitario no puede ser negativo' });
+    }
 
     // Validate descuentos
     const DESCUENTO_MAX_NORMAL = 15;
@@ -349,6 +363,11 @@ const updateVenta = async (req, res) => {
     } = req.body;
 
     if (!items.length) return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
+    for (const it of items) {
+      if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
+      if (Number(it.cantidad) <= 0) return res.status(400).json({ mensaje: 'La cantidad de cada ítem debe ser mayor a 0' });
+      if (Number(it.precio_unitario) < 0) return res.status(400).json({ mensaje: 'El precio unitario no puede ser negativo' });
+    }
 
     // Validate descuentos
     const DESCUENTO_MAX_NORMAL_U = 15;
@@ -718,6 +737,40 @@ const anularVenta = async (req, res) => {
       );
     }
 
+    // Revertir cobros registrados para esta venta
+    const [cobrosExistentes] = await db.promise().query(
+      `SELECT id_pago, monto, metodo_pago, id_sucursal FROM pagos_venta WHERE id_venta = ?`,
+      [id]
+    );
+
+    for (const cobro of cobrosExistentes) {
+      if (cobro.metodo_pago === 'EFECTIVO') {
+        const [[arqueo]] = await db.promise().query(
+          `SELECT a.id_arqueo FROM arqueos_caja a
+           JOIN cajas c ON a.id_caja = c.id_caja
+           WHERE c.id_sucursal = ? AND a.estado = 'ABIERTA'
+           ORDER BY a.fecha_apertura DESC LIMIT 1`,
+          [cobro.id_sucursal]
+        );
+        if (arqueo) {
+          await db.promise().query(
+            `UPDATE arqueos_caja SET monto_cierre_sistema = GREATEST(0, monto_cierre_sistema - ?) WHERE id_arqueo = ?`,
+            [cobro.monto, arqueo.id_arqueo]
+          );
+        }
+      }
+    }
+
+    // Eliminar cobros y resetear cuotas de esta venta
+    await db.promise().query(`DELETE FROM pagos_venta WHERE id_venta = ?`, [id]);
+    await db.promise().query(
+      `UPDATE venta_cuotas SET monto_pagado = 0, estado = 'PENDIENTE' WHERE id_venta = ?`,
+      [id]
+    );
+
+    // saldo_pendiente ya refleja lo que queda por cobrar; el resto fue cobrado y
+    // su impacto en saldo_actual se deshizo al borrar los cobros arriba.
+    // Revertir solo el saldo pendiente (deuda que nunca se pagó).
     await db.promise().query(
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
       [venta.saldo_pendiente, venta.id_cliente]
@@ -1004,14 +1057,16 @@ const getFormData = async (req, res) => {
       );
     }
 
-    // Productos activos con precios
+    // Productos activos con precios — limitado para evitar transfers masivos
+    // El frontend debe complementar con GET /api/productos?q=...&limit=20 para búsqueda lazy
     const [productos] = await db.promise().query(
       `SELECT p.id_producto, p.codigo_interno, p.codigo_barras,
               p.producto, p.precio_publico, p.precio_mayor, p.precio_real,
               p.id_categoria, p.id_marca, p.id_impuesto_default, p.activo
        FROM productos p
        WHERE p.activo = 1
-       ORDER BY p.producto`
+       ORDER BY p.producto
+       LIMIT 200`
     );
 
     // Monedas activas

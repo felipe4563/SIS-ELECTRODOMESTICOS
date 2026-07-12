@@ -145,25 +145,28 @@ exports.descargarBackup = async (req, res) => {
 };
 
 exports.restaurarBackup = async (req, res) => {
+  const filepath = resolveBackupPath(req.body.id);
+  if (!filepath) return res.status(400).json({ mensaje: 'Archivo inválido' });
+  if (!fs.existsSync(filepath)) return res.status(404).json({ mensaje: 'Backup no encontrado' });
+
+  const sql   = fs.readFileSync(filepath, 'utf8');
+  const stmts = sql.split(';\n').map(s => s.trim()).filter(s => s && !s.startsWith('--') && s.length > 0);
+
+  const conn = await db.promise().getConnection();
   try {
-    const filepath = resolveBackupPath(req.body.id);
-    if (!filepath) return res.status(400).json({ mensaje: 'Archivo inválido' });
-
-    if (!fs.existsSync(filepath)) return res.status(404).json({ mensaje: 'Backup no encontrado' });
-
-    const sql  = fs.readFileSync(filepath, 'utf8');
-    const conn = db.promise();
-    const stmts = sql.split(';\n').map(s => s.trim()).filter(s => s && !s.startsWith('--'));
-
+    await conn.beginTransaction();
     for (const stmt of stmts) {
-      if (stmt) await conn.query(stmt + ';').catch(() => {});
+      await conn.query(stmt + ';');
     }
-
-    auditLog(req.user?.id, 'backup', 0, 'OTRO', req.ip);
+    await conn.commit();
+    auditLog(req.user?.id_usuario, 'backup', 0, 'OTRO', req.ip);
     res.json({ ok: true, mensaje: 'Backup restaurado correctamente' });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ mensaje: 'Error al restaurar: ' + e.message });
+    await conn.rollback().catch(() => {});
+    console.error('[restaurarBackup]', e);
+    res.status(500).json({ mensaje: `Error al restaurar (cambios revertidos): ${e.message}` });
+  } finally {
+    conn.release();
   }
 };
 
@@ -199,7 +202,6 @@ exports.descargarPlantilla = async (req, res) => {
     const ws = wb.addWorksheet('Productos');
     
     ws.columns = PLANTILLA_COLS.map(col => ({ header: col, key: col, width: 20 }));
-    ws.addRow(PLANTILLA_COLS);
 
     const buf = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Disposition', 'attachment; filename="plantilla_productos.xlsx"');

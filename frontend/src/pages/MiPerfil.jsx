@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usuariosService } from '../services/usuariosRoles.service';
 import authService from '../services/auth.service';
 import PageHeader from '../components/ui/PageHeader';
+import { validatePassword } from '../utils/validation';
 
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
@@ -98,8 +99,9 @@ export default function MiPerfil() {
       setBannerC({ tipo: 'err', texto: 'Las contraseñas nuevas no coinciden' });
       return;
     }
-    if (pass.nueva.length < 6) {
-      setBannerC({ tipo: 'err', texto: 'Mínimo 6 caracteres' });
+    const errorPass = validatePassword(pass.nueva);
+    if (errorPass) {
+      setBannerC({ tipo: 'err', texto: errorPass });
       return;
     }
     setGuardandoC(true);
@@ -173,7 +175,7 @@ export default function MiPerfil() {
         <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Cambiar contraseña</h2>
         <form onSubmit={guardarContrasena} className="space-y-4">
           <CampoPass label="Contraseña actual *" name="actual"    value={pass.actual}    onChange={handlePassChange} placeholder="••••••••" />
-          <CampoPass label="Nueva contraseña *"  name="nueva"     value={pass.nueva}     onChange={handlePassChange} placeholder="Mínimo 6 caracteres" />
+          <CampoPass label="Nueva contraseña *"  name="nueva"     value={pass.nueva}     onChange={handlePassChange} placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número" />
           <CampoPass label="Confirmar nueva *"   name="confirmar" value={pass.confirmar} onChange={handlePassChange} placeholder="Repetir nueva contraseña" />
           {bannerC && <Banner tipo={bannerC.tipo} texto={bannerC.texto} />}
           <div className="flex justify-end">

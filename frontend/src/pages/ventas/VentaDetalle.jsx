@@ -77,10 +77,12 @@ export default function VentaDetalle() {
   const [procesando, setProcesando] = useState(false);
   const [error,      setError]      = useState('');
 
-  const [cobro,      setCobro]      = useState({ metodo_pago: 'EFECTIVO', monto: '', numero_referencia: '', observaciones: '', id_cuota: '' });
-  const [nroFactura, setNroFactura] = useState('');
-  const [devItems,   setDevItems]   = useState([]);
-  const [devMotivo,  setDevMotivo]  = useState('');
+  const [cobro,            setCobro]           = useState({ metodo_pago: 'EFECTIVO', monto: '', numero_referencia: '', observaciones: '', id_cuota: '' });
+  const [nroFactura,       setNroFactura]       = useState('');
+  const [devItems,         setDevItems]         = useState([]);
+  const [devMotivo,        setDevMotivo]        = useState('');
+  const [confirmCobroId,   setConfirmCobroId]   = useState(null);
+  const [pageError,        setPageError]        = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -104,7 +106,7 @@ export default function VentaDetalle() {
         motivo: '',
       })));
     }
-  }, [venta?.detalle?.length]); // eslint-disable-line
+  }, [venta]); // eslint-disable-line
 
   const accionEmitir = async () => {
     setError(''); setProcesando(true);
@@ -168,17 +170,19 @@ export default function VentaDetalle() {
       else await ventasService.rechazarDevolucion(id_devolucion);
       await cargar();
     } catch (err) {
-      alert(err.response?.data?.mensaje ?? 'Error');
+      setPageError(err.response?.data?.mensaje ?? 'Error al procesar la devolución');
     } finally { setProcesando(false); }
   };
 
-  const anularCobro = async (id_pago) => {
-    if (!confirm('¿Anular este cobro?')) return;
+  const accionAnularCobro = async () => {
+    if (!confirmCobroId) return;
     try {
-      await ventasService.anularCobro(id_pago);
+      await ventasService.anularCobro(confirmCobroId);
+      setConfirmCobroId(null);
       await cargar();
     } catch (err) {
-      alert(err.response?.data?.mensaje ?? 'Error al anular cobro');
+      setPageError(err.response?.data?.mensaje ?? 'Error al anular cobro');
+      setConfirmCobroId(null);
     }
   };
 
@@ -502,7 +506,7 @@ export default function VentaDetalle() {
                     <td className="px-4 py-2.5 text-zinc-500 dark:text-zinc-400 text-xs">{p.usuario_nombre}</td>
                     <td className="px-4 py-2.5">
                       {puede('anular_cobro', 'ventas') && !['ANULADA'].includes(venta.estado) && (
-                        <button onClick={() => anularCobro(p.id_pago)}
+                        <button onClick={() => setConfirmCobroId(p.id_pago)}
                           className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
                           Anular
                         </button>
@@ -532,7 +536,7 @@ export default function VentaDetalle() {
                   <p className="text-xs text-zinc-400 mb-1">Ref: {p.numero_referencia}</p>
                 )}
                 {puede('anular_cobro', 'ventas') && !['ANULADA'].includes(venta.estado) && (
-                  <button onClick={() => anularCobro(p.id_pago)}
+                  <button onClick={() => setConfirmCobroId(p.id_pago)}
                     className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
                     Anular cobro
                   </button>
@@ -716,7 +720,12 @@ export default function VentaDetalle() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               ¿Confirmás la anulación de <strong className="text-zinc-900 dark:text-white">{venta.numero}</strong>?
               {['EMITIDA', 'PARCIAL'].includes(venta.estado) && ' El stock será reintegrado al depósito.'}
-              {Number(venta.saldo_pendiente) > 0 && ` Se revertirán Bs ${fmtMonto(venta.saldo_pendiente)} del saldo del cliente.`}
+              {venta.estado === 'PARCIAL'
+                ? ` Se cancelará la deuda pendiente (Bs ${fmtMonto(venta.saldo_pendiente)}) y se revertirán los cobros realizados (Bs ${fmtMonto(Number(venta.total) - Number(venta.saldo_pendiente))}).`
+                : Number(venta.saldo_pendiente) > 0
+                  ? ` Se revertirán Bs ${fmtMonto(venta.saldo_pendiente)} del saldo del cliente.`
+                  : ''
+              }
             </p>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <div className="flex gap-2">
@@ -775,6 +784,38 @@ export default function VentaDetalle() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {confirmCobroId && (
+        <Modal titulo="Anular cobro" onClose={() => setConfirmCobroId(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              ¿Confirmás la anulación de este cobro? El saldo de la venta y del cliente serán revertidos.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={accionAnularCobro}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition-colors">
+                Confirmar
+              </button>
+              <button onClick={() => setConfirmCobroId(null)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {pageError && (
+        <Modal titulo="Error" onClose={() => setPageError('')}>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">{pageError}</p>
+            <button onClick={() => setPageError('')}
+              className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-semibold text-sm transition-colors">
+              Cerrar
+            </button>
           </div>
         </Modal>
       )}

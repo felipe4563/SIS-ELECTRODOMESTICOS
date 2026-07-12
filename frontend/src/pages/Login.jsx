@@ -5,8 +5,7 @@ import { useAuth }           from '../contexts/AuthContext';
 import { useAbilityUpdater } from '../contexts/AbilityContext';
 import { redirigirPostAuth } from '../utils/authRedirect';
 import { buildAbility }      from '../casl/ability';
-
-const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+import { buildLogoUrl }      from '../contexts/EmpresaContext';
 
 export default function Login() {
   const [identificador,     setIdentificador]     = useState('');
@@ -21,13 +20,10 @@ export default function Login() {
   const destino = location.state?.from?.pathname ?? '/dashboard';
 
   useEffect(() => {
-    fetch(`${BACKEND}/api/empresa/publico`)
+    const base = import.meta.env.VITE_API_URL;
+    fetch(`${base}/empresa/publico`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d?.logo_url) {
-          setLogoSrc(d.logo_url.startsWith('http') ? d.logo_url : BACKEND + d.logo_url);
-        }
-      })
+      .then(d => { if (d?.logo_url) setLogoSrc(buildLogoUrl(d.logo_url)); })
       .catch(() => {});
   }, []);
 

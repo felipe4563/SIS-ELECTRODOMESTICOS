@@ -29,10 +29,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expirado o inválido → limpiar sesión y redirigir
+      // Token expirado o inválido → limpiar sesión y notificar a AuthContext vía evento
+      // CustomEvent en lugar de window.location.href para mantener la navegación SPA
       localStorage.removeItem('token');
       localStorage.removeItem('usuario');
-      window.location.href = '/login';
+      window.dispatchEvent(new CustomEvent('sesion-expirada'));
     }
     return Promise.reject(error);
   }

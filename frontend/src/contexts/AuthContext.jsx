@@ -1,9 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import authService from '../services/auth.service';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate();
   const [usuario, setUsuario] = useState(() => {
     try {
       const raw = localStorage.getItem('usuario');
@@ -67,12 +69,33 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  // ── Heartbeat: verifica sesión cada 30s, el interceptor maneja el 401 ──
+  // ── Sesión expirada: el interceptor 401 despacha este evento ─────────────
+  useEffect(() => {
+    const handler = () => {
+      setUsuario(null);
+      navigate('/login', { replace: true });
+    };
+    window.addEventListener('sesion-expirada', handler);
+    return () => window.removeEventListener('sesion-expirada', handler);
+  }, [navigate]);
+
+  // ── Heartbeat: verifica sesión cada 10s y sincroniza permisos frescos ───
   useEffect(() => {
     if (!usuario) return;
     const id = setInterval(() => {
-      authService.me().catch(() => {}); // el interceptor de axios redirige si recibe 401
-    }, 30_000);
+      authService.me()
+        .then(({ data }) => {
+          const permisos = data.usuario?.permisos ?? [];
+          setUsuario(prev => {
+            if (!prev) return prev;
+            const actualizado = { ...prev, permisos };
+            localStorage.setItem('usuario', JSON.stringify(actualizado));
+            return actualizado;
+          });
+          window.dispatchEvent(new CustomEvent('permisos-actualizados', { detail: permisos }));
+        })
+        .catch(() => {}); // el interceptor de axios redirige si recibe 401
+    }, 10_000);
     return () => clearInterval(id);
   }, [usuario]);
 
@@ -83,12 +106,13 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authService.seleccionarSucursal(id_sucursal);
       localStorage.setItem('token', data.token);
+      const permisos = data.permisos ?? [];
       setUsuario(prev => {
-        const actualizado = { ...prev, id_sucursal: data.sucursal.id_sucursal };
+        const actualizado = { ...prev, id_sucursal: data.sucursal.id_sucursal, permisos };
         localStorage.setItem('usuario', JSON.stringify(actualizado));
         return actualizado;
       });
-      return data.sucursal;
+      return { sucursal: data.sucursal, permisos };
     } catch (err) {
       const mensaje = err.response?.data?.error || 'Error al seleccionar sucursal';
       setError(mensaje);

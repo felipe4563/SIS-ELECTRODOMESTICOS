@@ -14,7 +14,16 @@ async function generarNumero(prefijo) {
   const [[{ cnt }]] = await db.promise().query(
     `SELECT COUNT(*) AS cnt FROM compras WHERE numero LIKE ?`, [`${prefijo}-${ym}-%`]
   );
-  return `${prefijo}-${ym}-${String(Number(cnt) + 1).padStart(4, '0')}`;
+  // Buscar el primer número no usado para reducir colisiones bajo carga concurrente
+  let seq = Number(cnt) + 1;
+  for (let i = 0; i < 20; i++, seq++) {
+    const candidato = `${prefijo}-${ym}-${String(seq).padStart(4, '0')}`;
+    const [[{ n }]] = await db.promise().query(
+      `SELECT COUNT(*) AS n FROM compras WHERE numero = ?`, [candidato]
+    );
+    if (n === 0) return candidato;
+  }
+  throw new Error(`No se pudo generar número único para compras`);
 }
 
 async function generarNumeroPago() {
@@ -23,7 +32,15 @@ async function generarNumeroPago() {
   const [[{ cnt }]] = await db.promise().query(
     `SELECT COUNT(*) AS cnt FROM pagos_compra WHERE numero LIKE ?`, [`PAG-${ym}-%`]
   );
-  return `PAG-${ym}-${String(Number(cnt) + 1).padStart(4, '0')}`;
+  let seq = Number(cnt) + 1;
+  for (let i = 0; i < 20; i++, seq++) {
+    const candidato = `PAG-${ym}-${String(seq).padStart(4, '0')}`;
+    const [[{ n }]] = await db.promise().query(
+      `SELECT COUNT(*) AS n FROM pagos_compra WHERE numero = ?`, [candidato]
+    );
+    if (n === 0) return candidato;
+  }
+  throw new Error(`No se pudo generar número único para pagos_compra`);
 }
 
 function calcTotales(items, body) {
@@ -529,9 +546,16 @@ const createPago = async (req, res) => {
       return res.status(400).json({ error: 'Método de pago, moneda y monto son requeridos' });
 
     const [[compra]] = await db.promise().query(
-      `SELECT id_compra, id_sucursal, id_proveedor, saldo_pendiente FROM compras WHERE id_compra = ?`, [id]
+      `SELECT id_compra, id_sucursal, id_proveedor, saldo_pendiente, estado FROM compras WHERE id_compra = ?`, [id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
+
+    const estadosValidos = ['POR_LLEGAR', 'CONFIRMADO', 'RECIBIDO', 'PARCIAL'];
+    if (!estadosValidos.includes(compra.estado)) {
+      return res.status(400).json({
+        error: `No se puede registrar un pago en una compra con estado "${compra.estado}". Estado requerido: ${estadosValidos.join(', ')}`
+      });
+    }
 
     const montoPago = +Number(monto).toFixed(2);
     if (montoPago <= 0)

@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { randomBytes } = require('crypto');
 const { isValidEmail } = require('../utils/validators');
 const { tiene_permiso } = require('../middlewares/authMiddleware');
 
@@ -13,15 +14,28 @@ const auditLog = (userId, tabla, id, accion, ip) =>
 
 const getClientes = async (req, res) => {
   try {
+    const q      = req.query.q?.trim() ?? '';
+    const limit  = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 500);
+    const page   = Math.max(parseInt(req.query.page) || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const where  = q
+      ? `WHERE (c.nombres LIKE ? OR c.apellidos LIKE ? OR c.razon_social LIKE ? OR c.documento LIKE ? OR c.codigo LIKE ?)`
+      : '';
+    const params = q ? [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`] : [];
+
     const [rows] = await db.promise().query(
       `SELECT c.*,
               COUNT(DISTINCT cd.id_direccion) AS total_direcciones
        FROM clientes c
        LEFT JOIN cliente_direcciones cd ON cd.id_cliente = c.id_cliente
+       ${where}
        GROUP BY c.id_cliente
-       ORDER BY c.nombres ASC, c.apellidos ASC`
+       ORDER BY c.nombres ASC, c.apellidos ASC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
     );
-    return res.json({ clientes: rows });
+    return res.json({ clientes: rows, page, limit });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Error al obtener clientes' });
@@ -55,21 +69,18 @@ const createCliente = async (req, res) => {
       return res.status(400).json({ error: 'El formato del email no es válido' });
     }
 
-    const [[{ nextId }]] = await db.promise().query(
-      `SELECT COALESCE(MAX(id_cliente), 0) + 1 AS nextId FROM clientes`
-    );
-    const codigo = `CLI-${String(nextId).padStart(5, '0')}`;
-
     const [result] = await db.promise().query(
       `INSERT INTO clientes
          (codigo, tipo_cliente, tipo_documento, documento, razon_social,
           nombres, apellidos, telefono, celular, email, fecha_nacimiento, descuento_default)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [codigo, tipo_cliente, tipo_documento,
+      [randomBytes(7).toString('hex'), tipo_cliente, tipo_documento,
        documento || null, razon_social || null, nombres || null, apellidos || null,
        telefono || null, celular || null, email || null,
        fecha_nacimiento || null, descuento_default]
     );
+    const codigo = `CLI-${String(result.insertId).padStart(5, '0')}`;
+    await db.promise().query(`UPDATE clientes SET codigo = ? WHERE id_cliente = ?`, [codigo, result.insertId]);
 
     await auditLog(req.user.id_usuario, 'clientes', result.insertId, 'CREATE', getIp(req));
     const [[created]] = await db.promise().query(
@@ -87,7 +98,7 @@ const updateCliente = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      codigo, tipo_cliente, tipo_documento, documento,
+      tipo_cliente, tipo_documento, documento,
       razon_social, nombres, apellidos, telefono, celular, email,
       fecha_nacimiento, descuento_default, activo,
     } = req.body;
@@ -102,11 +113,11 @@ const updateCliente = async (req, res) => {
 
     await db.promise().query(
       `UPDATE clientes SET
-         codigo = ?, tipo_cliente = ?, tipo_documento = ?, documento = ?,
+         tipo_cliente = ?, tipo_documento = ?, documento = ?,
          razon_social = ?, nombres = ?, apellidos = ?, telefono = ?, celular = ?,
          email = ?, fecha_nacimiento = ?, descuento_default = ?, activo = ?
        WHERE id_cliente = ?`,
-      [codigo?.toUpperCase(), tipo_cliente, tipo_documento,
+      [tipo_cliente, tipo_documento,
        documento || null, razon_social || null, nombres || null, apellidos || null,
        telefono || null, celular || null, email || null,
        fecha_nacimiento || null, descuento_default ?? 0, activo ? 1 : 0, id]

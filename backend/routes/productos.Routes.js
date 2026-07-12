@@ -59,11 +59,5 @@ router.post('/:id/imagen',
   validateMagic(IMAGES_ONLY),
   ctrl.uploadImagen);
 
-// ── Importación masiva ────────────────────────────────────────────────────
-router.post('/importar/excel',
-  authMiddleware, checkPermission('importar', 'productos'),
-  upload.single('archivo'),
-  validateMagic(EXCEL_ONLY),
-  ctrl.importarDesdeExcel);
 
 module.exports = router;

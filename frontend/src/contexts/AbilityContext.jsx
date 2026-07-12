@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { createContextualCan } from '@casl/react';
 import { buildAbility, emptyAbility } from '../casl/ability';
 
@@ -34,13 +34,16 @@ export function AbilityProvider({ children }) {
     return emptyAbility;
   });
 
-  /**
-   * Llamar tras login exitoso con los permisos del usuario
-   * @param {string[]} permisos - array de nombre_clave
-   */
   const actualizar = (permisos = []) => {
     setAbility(buildAbility(permisos));
   };
+
+  // Sincronizar cuando el heartbeat detecta cambios de permisos en el servidor
+  useEffect(() => {
+    const handler = (e) => setAbility(buildAbility(e.detail ?? []));
+    window.addEventListener('permisos-actualizados', handler);
+    return () => window.removeEventListener('permisos-actualizados', handler);
+  }, []);
 
   /**
    * Llamar tras logout para revocar todos los permisos

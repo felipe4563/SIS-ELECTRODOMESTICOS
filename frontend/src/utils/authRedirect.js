@@ -1,7 +1,7 @@
 // Orden de prioridad para redirigir al primer módulo accesible tras el login
 const RUTAS_PRIORITARIAS = [
   { path: '/dashboard',            action: 'ver',          subject: 'dashboard',    orAction: 'ver_todas_sucursales' },
-  { path: '/ventas',               action: 'ver_sucursal', subject: 'ventas' },
+  { path: '/ventas',               anyOf: [['ver_propias','ventas'],['ver_sucursal','ventas'],['ver_todas','ventas']] },
   { path: '/caja',                 action: 'ver',          subject: 'caja' },
   { path: '/cobros',               action: 'ver',          subject: 'cobros' },
   { path: '/cotizaciones',         action: 'ver',          subject: 'cotizaciones' },
@@ -19,6 +19,7 @@ const RUTAS_PRIORITARIAS = [
 ];
 
 function puedePath(ability, ruta) {
+  if (ruta.anyOf) return ruta.anyOf.some(([action, subject]) => ability.can(action, subject));
   if (ability.can(ruta.action, ruta.subject)) return true;
   if (ruta.orAction) return ability.can(ruta.orAction, ruta.subject);
   return false;

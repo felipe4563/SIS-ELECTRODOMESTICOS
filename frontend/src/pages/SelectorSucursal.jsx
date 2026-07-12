@@ -16,8 +16,8 @@ export default function SelectorSucursal() {
 
   const handleSeleccionar = async (id_sucursal) => {
     try {
-      await seleccionarSucursal(id_sucursal);
-      actualizar(usuario?.permisos ?? []);
+      const { permisos } = await seleccionarSucursal(id_sucursal);
+      actualizar(permisos);
       navigate(destino, { replace: true });
     } catch { /* error manejado en AuthContext */ }
   };

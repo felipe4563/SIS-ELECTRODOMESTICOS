@@ -160,7 +160,7 @@ async function getArqueo(req, res) {
 
     const fechaHasta = arqueo.fecha_cierre ?? new Date();
 
-    // Cobros de todos los métodos durante el turno
+    // Cobros de todos los métodos durante el turno (filtrado por arqueo para separar cajas)
     const [cobros] = await db.promise().query(`
       SELECT pv.id_pago, pv.numero, pv.fecha, pv.monto, pv.metodo_pago,
         v.numero AS venta_numero,
@@ -168,11 +168,9 @@ async function getArqueo(req, res) {
       FROM pagos_venta pv
       JOIN ventas v  ON v.id_venta   = pv.id_venta
       JOIN clientes cl ON cl.id_cliente = pv.id_cliente
-      WHERE pv.id_sucursal = ?
-        AND pv.fecha >= ?
-        AND pv.fecha <= ?
+      WHERE pv.id_arqueo = ?
       ORDER BY pv.fecha
-    `, [arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
+    `, [arqueo.id_arqueo]);
 
     // Gastos de todos los métodos durante el turno
     const [gastos] = await db.promise().query(`
@@ -227,6 +225,12 @@ async function abrirCaja(req, res) {
     );
     if (!caja) return res.status(404).json({ mensaje: 'Caja no encontrada' });
 
+    // Verificar que la caja pertenezca a la sucursal del usuario (salvo acceso global)
+    const tieneAccesoTotal = req.ability.can('ver_arqueo_todos', 'caja') || req.ability.can('gestionar', 'caja');
+    if (!tieneAccesoTotal && Number(caja.id_sucursal) !== Number(req.user.id_sucursal)) {
+      return res.status(403).json({ mensaje: 'No tienes acceso a cajas de otra sucursal' });
+    }
+
     const [[abierto]] = await db.promise().query(
       "SELECT id_arqueo FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'", [id_caja]
     );
@@ -269,12 +273,12 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
       return res.status(403).json({ mensaje: 'Solo el cajero que abrió el turno puede cerrarlo' });
     }
 
-    // Cobros en efectivo del turno
+    // Cobros en efectivo del turno (filtrado por arqueo para separar cajas)
     const [[{ total_cobros }]] = await db.promise().query(`
       SELECT COALESCE(SUM(monto), 0) AS total_cobros
       FROM pagos_venta
-      WHERE id_sucursal = ? AND metodo_pago = 'EFECTIVO' AND fecha >= ?
-    `, [arqueo.id_sucursal, arqueo.fecha_apertura]);
+      WHERE id_arqueo = ? AND metodo_pago = 'EFECTIVO'
+    `, [arqueo.id_arqueo]);
 
     // Gastos en efectivo del turno
     const [[{ total_gastos }]] = await db.promise().query(`

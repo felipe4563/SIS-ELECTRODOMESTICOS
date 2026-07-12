@@ -11,7 +11,7 @@ router.get(    '/backup',               authMiddleware, checkPermission('descarg
 router.post(   '/backup/crear',         authMiddleware, checkPermission('crear',      'backup'), ctrl.crearBackup);
 router.post(   '/backup/restaurar',     authMiddleware, checkPermission('restaurar',  'backup'), ctrl.restaurarBackup);
 router.get(    '/backup/:id/descargar', authMiddleware, checkPermission('descargar',  'backup'), ctrl.descargarBackup);
-router.delete( '/backup/:id',           authMiddleware, checkPermission('crear',      'backup'), ctrl.eliminarBackup);
+router.delete( '/backup/:id',           authMiddleware, checkPermission('eliminar',   'backup'), ctrl.eliminarBackup);
 
 // ── Excel — solo importar ─────────────────────────────────────────────────────
 router.post('/excel/importar-productos', authMiddleware, checkPermission('importar_productos', 'excel'), upload.single('archivo'), ctrl.importarProductos);
