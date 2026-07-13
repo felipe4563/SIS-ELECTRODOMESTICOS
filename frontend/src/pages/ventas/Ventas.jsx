@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
+import { cajaService } from '../../services/caja.service';
 import { usePermission } from '../../hooks/usePermission';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
@@ -23,9 +24,10 @@ export default function Ventas() {
   const { puede } = usePermission();
   const puedeCrear = puede('crear_menor', 'ventas') || puede('crear_mayor', 'ventas');
 
-  const [ventas,   setVentas]   = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [filtros,  setFiltros]  = useState({
+  const [ventas,       setVentas]       = useState([]);
+  const [cargando,     setCargando]     = useState(true);
+  const [arqueoActual, setArqueoActual] = useState(undefined); // undefined = cargando, null = sin caja
+  const [filtros,      setFiltros]      = useState({
     estado: '', tipo_venta: '', fecha_desde: HACE30, fecha_hasta: HOY, q: '',
   });
 
@@ -39,7 +41,14 @@ export default function Ventas() {
     finally { setCargando(false); }
   };
 
-  useEffect(() => { cargar(); }, []); // eslint-disable-line
+  useEffect(() => {
+    cargar();
+    cajaService.getArqueoActual()
+      .then(r => setArqueoActual(r.data.arqueo ?? null))
+      .catch(() => setArqueoActual(null));
+  }, []); // eslint-disable-line
+
+  const sinCaja = arqueoActual === null;
 
   const setF = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
@@ -60,13 +69,30 @@ export default function Ventas() {
         </div>
         {puedeCrear && (
           <button
-            onClick={() => navigate('/ventas/nueva')}
-            className="self-start sm:self-auto px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors"
+            onClick={() => !sinCaja && navigate('/ventas/nueva')}
+            disabled={sinCaja}
+            title={sinCaja ? 'Debes abrir una caja antes de realizar ventas' : undefined}
+            className={`self-start sm:self-auto px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${
+              sinCaja
+                ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
+                : 'bg-yellow-400 hover:bg-yellow-500 text-zinc-900'
+            }`}
           >
             + Nueva venta
           </button>
         )}
       </div>
+
+      {/* ── Banner sin caja ── */}
+      {sinCaja && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20">
+          <span className="text-orange-500 text-lg flex-shrink-0">⚠</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">No hay caja abierta</p>
+            <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5">Para realizar una venta debés abrir una caja primero desde el módulo <strong>Caja</strong>.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

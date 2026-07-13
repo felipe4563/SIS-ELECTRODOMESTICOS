@@ -1,14 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { reportesService } from '../../../services/reportes.service';
 import { hoy, inicioMes, fmt, fmtN, FiltroFechas, BtnConsultar, Tabla, Resumen } from './ReportesShared';
 
+const SELECT = 'border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-colors';
+
 export default function RptBonos() {
-  const [filtros, setFiltros] = useState({ fecha_desde: inicioMes(), fecha_hasta: hoy() });
-  const [filas, setFilas]     = useState([]);
-  const [cargando, setCargando] = useState(false);
+  const [filtros, setFiltros]       = useState({ fecha_desde: inicioMes(), fecha_hasta: hoy() });
+  const [filas, setFilas]           = useState([]);
+  const [cargando, setCargando]     = useState(false);
+  const [idVendedor, setIdVendedor] = useState('');
 
   const buscar = useCallback(() => {
     setCargando(true);
+    setIdVendedor('');
     reportesService.getBonosVendedores(filtros)
       .then(r => { setFilas(r.data); setCargando(false); })
       .catch(() => setCargando(false));
@@ -17,7 +21,19 @@ export default function RptBonos() {
   useEffect(() => { buscar(); }, []);
   const f = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
-  const totalBonos = filas.reduce((a, r) => a + Number(r.total_bonos), 0);
+  // Lista de vendedores únicos extraída del resultado
+  const vendedores = useMemo(() =>
+    filas.map(r => ({ id: r.id_usuario, nombre: r.vendedor }))
+         .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+         .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [filas]
+  );
+
+  const filasFiltradas = idVendedor
+    ? filas.filter(r => String(r.id_usuario) === idVendedor)
+    : filas;
+
+  const totalBonos = filasFiltradas.reduce((a, r) => a + Number(r.total_bonos), 0);
 
   const cols = [
     { key: 'vendedor',          label: 'Vendedor',        bold: true },
@@ -34,11 +50,39 @@ export default function RptBonos() {
         <FiltroFechas filtros={filtros} onChange={f} />
         <BtnConsultar onClick={buscar} />
       </div>
+
+      {/* Filtro por vendedor */}
+      {vendedores.length > 1 && (
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide whitespace-nowrap">
+            Vendedor
+          </label>
+          <select
+            value={idVendedor}
+            onChange={e => setIdVendedor(e.target.value)}
+            className={SELECT}
+          >
+            <option value="">Todos ({filas.length})</option>
+            {vendedores.map(v => (
+              <option key={v.id} value={v.id}>{v.nombre}</option>
+            ))}
+          </select>
+          {idVendedor && (
+            <button
+              onClick={() => setIdVendedor('')}
+              className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 underline whitespace-nowrap"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+      )}
+
       <Resumen items={[
-        { label: 'Vendedores',   valor: fmtN(filas.length) },
+        { label: 'Vendedores',   valor: fmtN(filasFiltradas.length) },
         { label: 'Total bonos',  valor: `Bs ${fmt(totalBonos)}`, color: 'text-green-600 dark:text-green-400' },
       ]} />
-      <Tabla columnas={cols} filas={filas} cargando={cargando} />
+      <Tabla columnas={cols} filas={filasFiltradas} cargando={cargando} />
     </div>
   );
 }

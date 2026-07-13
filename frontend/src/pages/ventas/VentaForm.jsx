@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
+import { cajaService } from '../../services/caja.service';
 import api from '../../api/axios';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
@@ -262,9 +263,10 @@ export default function VentaForm() {
   });
   const [items, setItems] = useState([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
   const [clienteInfo, setClienteInfo] = useState(null);
-  const [guardando,  setGuardando]  = useState(false);
-  const [cargando,   setCargando]   = useState(esEdicion);
-  const [error,      setError]      = useState('');
+  const [guardando,    setGuardando]    = useState(false);
+  const [cargando,     setCargando]     = useState(esEdicion);
+  const [error,        setError]        = useState('');
+  const [arqueoActual, setArqueoActual] = useState(undefined);
 
   const [qrInput, setQrInput] = useState('');
   const [qrError, setQrError] = useState('');
@@ -276,6 +278,12 @@ export default function VentaForm() {
   const [rpGuardando, setRpGuardando] = useState(false);
 
   useEffect(() => {
+    if (!esEdicion) {
+      cajaService.getArqueoActual()
+        .then(r => setArqueoActual(r.data.arqueo ?? null))
+        .catch(() => setArqueoActual(null));
+    }
+
     ventasService.formData().then(r => {
       const { sucursales: suc, depositos: deps, productos: prods,
               monedas: mons, impuestos: imps, categorias: cats,
@@ -576,6 +584,17 @@ export default function VentaForm() {
           </button>
         </div>
       </div>
+
+      {/* Banner sin caja (solo en nueva venta) */}
+      {!esEdicion && arqueoActual === null && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20">
+          <span className="text-orange-500 text-lg flex-shrink-0">⚠</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">No hay caja abierta</p>
+            <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5">Podés guardar el borrador, pero no podrás emitir la venta hasta abrir una caja desde el módulo <strong>Caja</strong>.</p>
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (

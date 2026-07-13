@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { cajaService } from '../../services/caja.service';
+import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -252,6 +253,7 @@ export default function Caja() {
   const puedoVerTodosArqueos = puede('ver_arqueo_todos', 'caja');
 
   const [cajas,        setCajas]        = useState([]);
+  const [sucursales,   setSucursales]   = useState([]);
   const [arqueos,      setArqueos]      = useState([]);
   const [turnoActual,  setTurnoActual]  = useState(null);
   const [cargandoCajas,   setCargandoCajas]   = useState(true);
@@ -281,6 +283,12 @@ export default function Caja() {
       .finally(() => setCargandoCajas(false));
   };
 
+  const cargarSucursales = () => {
+    sucursalesService.getAll()
+      .then(r => setSucursales(r.data.sucursales ?? []))
+      .catch(() => {});
+  };
+
   const cargarArqueos = () => {
     setCargandoArqueos(true);
     cajaService.getArqueos(filtros)
@@ -289,7 +297,7 @@ export default function Caja() {
       .finally(() => setCargandoArqueos(false));
   };
 
-  useEffect(() => { cargarCajas(); cargarTurnoActual(); }, []); // eslint-disable-line
+  useEffect(() => { cargarCajas(); cargarTurnoActual(); cargarSucursales(); }, []); // eslint-disable-line
   useEffect(() => { cargarArqueos(); }, [filtros]);
 
   const handleSuccess = () => {
@@ -505,7 +513,7 @@ export default function Caja() {
       {modalCaja !== null && (
         <ModalCaja
           caja={modalCaja?.id_caja ? modalCaja : null}
-          sucursales={[...new Map(cajas.map(c => [c.id_sucursal, { id_sucursal: c.id_sucursal, nombre: c.sucursal }])).values()]}
+          sucursales={sucursales}
           onClose={() => setModalCaja(null)}
           onSuccess={handleSuccess}
         />

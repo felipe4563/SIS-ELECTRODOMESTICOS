@@ -267,6 +267,19 @@ function normalizarHeaders(data) {
   });
 }
 
+// ExcelJS devuelve objetos { formula, result } para celdas con fórmula.
+// Estas funciones extraen el valor real sin importar si es fórmula o valor directo.
+function cellNum(val) {
+  if (val == null || val === '') return 0;
+  if (typeof val === 'object' && val !== null && 'result' in val) val = val.result;
+  return Number(val) || 0;
+}
+function cellStr(val) {
+  if (val == null) return '';
+  if (typeof val === 'object' && val !== null && 'result' in val) val = val.result;
+  return String(val ?? '');
+}
+
 // Detecta si el archivo usa el formato de lista de precios del usuario
 function esFormatoListaPrecios(headers) {
   const h = headers.map(h => h.trim().toUpperCase());
@@ -420,23 +433,23 @@ exports.importarProductos = async (req, res) => {
         const fila = i + 2;
         const r    = data[i];
 
-        const marcaNombre     = String(r['MARCA'] || '').trim();
-        const productoBase    = String(r['PRODUCTO'] || '').trim();
+        const marcaNombre     = cellStr(r['MARCA']).trim();
+        const productoBase    = cellStr(r['PRODUCTO']).trim();
 
         // Saltar filas completamente vacías
         if (!marcaNombre && !productoBase) continue;
 
-        const detalle         = String(r['DETALLE'] || '').trim();
-        const capacidad       = String(r['CAP.'] || '').trim();
-        const caracteristicas = String(r['CARACTERISTICAS'] || '').trim();
-        const modelo          = String(r['MODELO'] || '').trim();
-        const color           = String(r['COLOR'] || '').trim();
-        const precioReal      = Math.round(Number(r['REAL BS.']) || 0);
-        const costoLog        = Math.round(Number(r['LOG']) || 0);
-        const costoMcm        = Math.round(Number(r['MCM']) || 0);
-        const precioPublico   = Math.round(Number(r['PRECIO PUBLICO']) || 0);
-        const bono            = Math.round(Number(r['BONO']) || 0);
-        const proveedorNombre = String(r['PROVEEDOR'] || '').trim();
+        const detalle         = cellStr(r['DETALLE']).trim();
+        const capacidad       = cellStr(r['CAP.']).trim();
+        const caracteristicas = cellStr(r['CARACTERISTICAS']).trim();
+        const modelo          = cellStr(r['MODELO']).trim();
+        const color           = cellStr(r['COLOR']).trim();
+        const precioReal      = Math.round(cellNum(r['REAL BS.']));
+        const costoLog        = Math.round(cellNum(r['LOG']));
+        const precioMayor     = Math.round(cellNum(r['MCM']));   // MCM = precio mayorista (REAL + LOG)
+        const precioPublico   = Math.round(cellNum(r['PRECIO PUBLICO']));
+        const bono            = Math.round(cellNum(r['BONO']));
+        const proveedorNombre = cellStr(r['PROVEEDOR']).trim();
 
         if (!marcaNombre || !productoBase) {
           errores.push({ fila, campo: 'MARCA/PRODUCTO', msg: 'Ambos campos son requeridos' });
@@ -486,12 +499,12 @@ exports.importarProductos = async (req, res) => {
             id_moneda_costo: idMoneda,
             precio_real:     precioReal,
             costo_logistica: costoLog,
-            costo_mcm:       costoMcm,
+            costo_mcm:       precioMayor,  // MCM del Excel = costo_mcm y precio_mayor
             precio_publico:  precioPublico,
             bono:            bono,
-            precio_mayor:    costoMcm,
-            stock_minimo:        0,
-            stock_maximo:        0,
+            precio_mayor:    precioMayor,  // columna MCM del Excel = precio mayorista
+            stock_minimo:        5,
+            stock_maximo:        100,
             id_proveedor_default: idProveedorDefault,
             estado:              'NUEVO',
             activo:              1,

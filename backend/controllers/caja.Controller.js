@@ -129,8 +129,7 @@ async function getArqueoActual(req, res) {
       WHERE aq.id_usuario = ? AND aq.estado = 'ABIERTA'
       ORDER BY aq.fecha_apertura DESC LIMIT 1
     `, [req.user.id_usuario]);
-    if (!arqueo) return res.status(404).json({ mensaje: 'Sin turno abierto' });
-    res.json({ arqueo });
+    res.json({ arqueo: arqueo ?? null });
   } catch (e) {
     console.error(e);
     res.status(500).json({ mensaje: 'Error al obtener arqueo actual' });

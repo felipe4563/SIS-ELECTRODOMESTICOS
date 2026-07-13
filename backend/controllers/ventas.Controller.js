@@ -457,6 +457,15 @@ const emitirVenta = async (req, res) => {
     if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
     if (venta.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede emitir una venta en borrador' });
 
+    // Verificar que el usuario tenga una caja (arqueo) abierta
+    const [[arqueoAbierto]] = await db.promise().query(
+      `SELECT id_arqueo FROM arqueos_caja WHERE id_usuario = ? AND estado = 'ABIERTA' LIMIT 1`,
+      [req.user.id_usuario]
+    );
+    if (!arqueoAbierto) {
+      return res.status(400).json({ mensaje: 'Debes abrir una caja antes de emitir una venta', sin_caja: true });
+    }
+
     // Credit validation
     if (venta.condicion_pago === 'CREDITO') {
       const puedeVenderCredito  = req.ability.can('vender_credito',  'ventas');
@@ -594,13 +603,22 @@ const registrarCobro = async (req, res) => {
 
     const numero = await generarNumero('COB', 'pagos_venta');
 
+    // Obtener arqueo abierto del usuario (para todos los métodos de pago)
+    const [[arqueoActivo]] = await db.promise().query(
+      `SELECT id_arqueo FROM arqueos_caja
+       WHERE id_usuario = ? AND estado = 'ABIERTA'
+       ORDER BY fecha_apertura DESC LIMIT 1`,
+      [req.user.id_usuario]
+    );
+
     await db.promise().query(
       `INSERT INTO pagos_venta (numero, id_venta, id_cuota, id_cliente, id_sucursal, metodo_pago,
-        id_moneda, tipo_cambio, monto, numero_referencia, id_usuario, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        id_moneda, tipo_cambio, monto, numero_referencia, id_usuario, observaciones, id_arqueo)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [numero, id, id_cuota ?? null, venta.id_cliente, venta.id_sucursal,
         metodo_pago, id_moneda, tipo_cambio, montoNum,
-        numero_referencia ?? null, req.user.id_usuario, observaciones ?? null]
+        numero_referencia ?? null, req.user.id_usuario, observaciones ?? null,
+        arqueoActivo?.id_arqueo ?? null]
     );
 
     if (id_cuota) {
@@ -628,6 +646,14 @@ const registrarCobro = async (req, res) => {
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
       [montoNum, venta.id_cliente]
     );
+
+    // Actualizar monto_cierre_sistema en el arqueo si el pago es en efectivo
+    if (metodo_pago === 'EFECTIVO' && arqueoActivo) {
+      await db.promise().query(
+        `UPDATE arqueos_caja SET monto_cierre_sistema = monto_cierre_sistema + ? WHERE id_arqueo = ?`,
+        [montoNum, arqueoActivo.id_arqueo]
+      );
+    }
 
     await auditLog(req.user.id_usuario, 'pagos_venta', id, 'INSERT', getIp(req));
     res.json({ numero, mensaje: 'Cobro registrado', nuevo_saldo: nuevoSaldo, nuevo_estado: nuevoEstado });
@@ -748,9 +774,9 @@ const anularVenta = async (req, res) => {
         const [[arqueo]] = await db.promise().query(
           `SELECT a.id_arqueo FROM arqueos_caja a
            JOIN cajas c ON a.id_caja = c.id_caja
-           WHERE c.id_sucursal = ? AND a.estado = 'ABIERTA'
+           WHERE a.id_usuario = ? AND a.estado = 'ABIERTA'
            ORDER BY a.fecha_apertura DESC LIMIT 1`,
-          [cobro.id_sucursal]
+          [req.user.id_usuario]
         );
         if (arqueo) {
           await db.promise().query(
