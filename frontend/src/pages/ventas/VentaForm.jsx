@@ -105,6 +105,16 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
             </span>
           )}
         </div>
+        {/* N° de serie */}
+        {fila.id_producto && (
+          <input
+            type="text"
+            placeholder="N° de serie (opcional)"
+            value={fila.numero_serie ?? ''}
+            onChange={e => onChange({ numero_serie: e.target.value })}
+            className="mt-1.5 w-full px-2 py-1 text-[11px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+          />
+        )}
       </td>
 
       {/* Cantidad */}
@@ -261,7 +271,7 @@ export default function VentaForm() {
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
   });
-  const [items, setItems] = useState([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+  const [items, setItems] = useState([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0, numero_serie: '' }]);
   const [clienteInfo, setClienteInfo] = useState(null);
   const [guardando,    setGuardando]    = useState(false);
   const [cargando,     setCargando]     = useState(esEdicion);
@@ -344,6 +354,7 @@ export default function VentaForm() {
             descuento_porc: d.descuento_porc ?? 0,
             id_impuesto:   d.id_impuesto ? String(d.id_impuesto) : '',
             impuesto_porc: d.impuesto_porc ?? 0,
+            numero_serie:  d.numero_serie ?? '',
           })));
         })
         .catch(() => navigate('/ventas'))
@@ -484,7 +495,8 @@ export default function VentaForm() {
         const res = await ventasService.create(payload);
         ventaId = res.data.id_venta;
       }
-      navigate(`/ventas/${ventaId}`);
+      const tieneSeries = itemsValidos.some(it => it.numero_serie?.trim());
+      navigate(`/ventas/${ventaId}${tieneSeries ? '?series=1' : ''}`);
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al guardar la venta');
     } finally {

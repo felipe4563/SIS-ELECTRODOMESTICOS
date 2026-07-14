@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { usePermission } from '../../hooks/usePermission';
 
@@ -69,6 +69,7 @@ const labelCls = 'block text-[11px] font-semibold uppercase tracking-wide text-z
 export default function VentaDetalle() {
   const { id }    = useParams();
   const navigate  = useNavigate();
+  const [searchParams] = useSearchParams();
   const { puede } = usePermission();
 
   const [venta,      setVenta]      = useState(null);
@@ -83,6 +84,34 @@ export default function VentaDetalle() {
   const [devMotivo,        setDevMotivo]        = useState('');
   const [confirmCobroId,   setConfirmCobroId]   = useState(null);
   const [pageError,        setPageError]        = useState('');
+  const [uploadingSerie,   setUploadingSerie]   = useState(null); // id_detalle subiendo (inline)
+  const [modalSeries,      setModalSeries]      = useState(false);
+  const [seriesUploading,  setSeriesUploading]  = useState({}); // {[id_detalle]: bool}
+  const [seriesDone,       setSeriesDone]       = useState({}); // {[id_detalle]: bool}
+  const serieInputRef = useRef(null);
+  const serieDetalleRef = useRef(null);
+  const backendBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+
+  const handleSubirSerie = async (file) => {
+    const id_detalle = serieDetalleRef.current;
+    if (!file || !id_detalle) return;
+    setUploadingSerie(id_detalle);
+    try {
+      await ventasService.subirImagenSerie(id_detalle, file);
+      await cargar();
+    } catch { /* silencioso */ }
+    finally { setUploadingSerie(null); serieDetalleRef.current = null; }
+  };
+
+  const handleSubirSerieModal = async (id_detalle, file) => {
+    setSeriesUploading(p => ({ ...p, [id_detalle]: true }));
+    try {
+      await ventasService.subirImagenSerie(id_detalle, file);
+      setSeriesDone(p => ({ ...p, [id_detalle]: true }));
+      await cargar();
+    } catch { /* silencioso */ }
+    finally { setSeriesUploading(p => ({ ...p, [id_detalle]: false })); }
+  };
 
   const cargar = async () => {
     setCargando(true);
@@ -94,6 +123,14 @@ export default function VentaDetalle() {
   };
 
   useEffect(() => { cargar(); }, [id]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!venta) return;
+    if (searchParams.get('series') === '1') {
+      const tieneSeriesPendientes = (venta.detalle ?? []).some(d => d.numero_serie && !d.imagen_serie_url);
+      if (tieneSeriesPendientes) setModalSeries(true);
+    }
+  }, [venta]); // eslint-disable-line
 
   useEffect(() => {
     if (venta?.detalle) {
@@ -204,6 +241,7 @@ export default function VentaDetalle() {
   const puedeImprimir    = puede('imprimir',         'ventas') && venta.estado !== 'BORRADOR';
   const puedePreview     = venta.estado === 'BORRADOR';
   const puedeVerUtilidad = puede('ver_utilidad',     'ventas');
+  const tieneSeriesSinFoto = (venta.detalle ?? []).some(d => d.numero_serie && !d.imagen_serie_url);
 
   return (
     <div className="space-y-4">
@@ -268,6 +306,12 @@ export default function VentaDetalle() {
                 Devolución
               </button>
             )}
+            {tieneSeriesSinFoto && (
+              <button onClick={() => setModalSeries(true)}
+                className="px-3 py-1.5 rounded-xl border border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 font-medium text-sm transition-colors">
+                Fotos de serie
+              </button>
+            )}
             {puedeAnular && (
               <button onClick={() => { setError(''); setModal('anular'); }}
                 className="px-3 py-1.5 rounded-xl border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium text-sm transition-colors">
@@ -327,6 +371,35 @@ export default function VentaDetalle() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-zinc-900 dark:text-white">{d.producto}</p>
                       <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
+                      {(d.marca || d.modelo || d.color) && (
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                          {[d.marca, d.modelo, d.color].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      {/* N° de serie */}
+                      {d.numero_serie ? (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded">
+                            Serie: {d.numero_serie}
+                          </span>
+                          {d.imagen_serie_url ? (
+                            <a href={`${backendBase}${d.imagen_serie_url}`} target="_blank" rel="noreferrer"
+                              className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                              ver foto
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
+                              disabled={uploadingSerie === d.id_detalle}
+                              className="text-[10px] text-zinc-400 hover:text-yellow-600 dark:hover:text-yellow-400 underline"
+                            >
+                              {uploadingSerie === d.id_detalle ? 'subiendo…' : '+ foto serie'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-zinc-300 dark:text-zinc-600 mt-0.5 italic">Sin serie</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-zinc-600 dark:text-zinc-400">{fmtMonto(d.cantidad)}</td>
                     <td className="px-4 py-3 font-mono text-zinc-600 dark:text-zinc-400">Bs {fmtMonto(d.precio_unitario)}</td>
@@ -402,6 +475,11 @@ export default function VentaDetalle() {
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-zinc-900 dark:text-white leading-snug">{d.producto}</p>
                     <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
+                    {(d.marca || d.modelo || d.color) && (
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        {[d.marca, d.modelo, d.color].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
                   </div>
                   <p className="font-mono font-semibold text-sm text-zinc-900 dark:text-white shrink-0">Bs {fmtMonto(d.subtotal)}</p>
                 </div>
@@ -414,6 +492,28 @@ export default function VentaDetalle() {
                     </span>
                   )}
                 </div>
+                {/* Serie en mobile */}
+                {d.numero_serie && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded">
+                      Serie: {d.numero_serie}
+                    </span>
+                    {d.imagen_serie_url ? (
+                      <a href={`${backendBase}${d.imagen_serie_url}`} target="_blank" rel="noreferrer"
+                        className="text-[10px] text-yellow-600 hover:text-yellow-700 underline">
+                        ver foto
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
+                        disabled={uploadingSerie === d.id_detalle}
+                        className="text-[10px] text-zinc-400 hover:text-yellow-600 underline"
+                      >
+                        {uploadingSerie === d.id_detalle ? 'subiendo…' : '+ foto serie'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -422,6 +522,15 @@ export default function VentaDetalle() {
             <p className="font-mono font-bold text-zinc-900 dark:text-white">Bs {fmtMonto(venta.total)}</p>
           </div>
         </div>
+
+        {/* Input hidden para subir imagen de serie */}
+        <input
+          ref={serieInputRef}
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp"
+          className="hidden"
+          onChange={e => { handleSubirSerie(e.target.files[0]); e.target.value = ''; }}
+        />
       </SectionCard>
 
       {/* ── Cuotas ── */}
@@ -814,6 +923,66 @@ export default function VentaDetalle() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">{pageError}</p>
             <button onClick={() => setPageError('')}
               className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-semibold text-sm transition-colors">
+              Cerrar
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {modalSeries && (
+        <Modal titulo="Fotos de número de serie" onClose={() => setModalSeries(false)}>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Subí la foto del número de serie para cada producto. Podés hacerlo ahora o más tarde desde el detalle de la venta.
+            </p>
+            {(venta?.detalle ?? []).filter(d => d.numero_serie).map(d => (
+              <div key={d.id_detalle} className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-2">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white leading-snug">{d.producto}</p>
+                  <span className="text-[11px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                    S/N: {d.numero_serie}
+                  </span>
+                </div>
+                {(d.imagen_serie_url || seriesDone[d.id_detalle]) ? (
+                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                    <span className="text-xs font-semibold">✓ Foto subida</span>
+                    {d.imagen_serie_url && (
+                      <a href={`${backendBase}${d.imagen_serie_url}`} target="_blank" rel="noreferrer"
+                        className="text-[11px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                        ver foto
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <label className={`flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-lg border-2 border-dashed transition-colors ${
+                    seriesUploading[d.id_detalle]
+                      ? 'border-yellow-300 bg-yellow-50 dark:bg-yellow-900/10'
+                      : 'border-zinc-300 dark:border-zinc-600 hover:border-yellow-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                  }`}>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp"
+                      className="hidden"
+                      disabled={!!seriesUploading[d.id_detalle]}
+                      onChange={e => {
+                        const file = e.target.files[0];
+                        if (file) handleSubirSerieModal(d.id_detalle, file);
+                        e.target.value = '';
+                      }}
+                    />
+                    {seriesUploading[d.id_detalle] ? (
+                      <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Subiendo…</span>
+                    ) : (
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        Seleccionar foto <span className="text-zinc-400 dark:text-zinc-500">(jpg, png, webp · máx. 5 MB)</span>
+                      </span>
+                    )}
+                  </label>
+                )}
+              </div>
+            ))}
+            <button onClick={() => setModalSeries(false)}
+              className="w-full mt-2 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
               Cerrar
             </button>
           </div>

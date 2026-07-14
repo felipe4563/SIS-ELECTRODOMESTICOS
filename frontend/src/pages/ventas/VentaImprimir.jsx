@@ -104,16 +104,25 @@ export default function VentaImprimir() {
               const base = Number(d.cantidad) * Number(d.precio_unitario);
               const desc = base * (Number(d.descuento_porc ?? 0) / 100);
               const sub  = base - desc;
+              const especificacion = [d.marca, d.modelo, d.color].filter(Boolean).join(' · ');
               return (
-                <div key={i} style={{ marginBottom: '3px' }}>
+                <div key={i} style={{ marginBottom: '5px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ maxWidth: '55mm', wordBreak: 'break-word' }}>{d.producto}</span>
+                    <span style={{ maxWidth: '55mm', wordBreak: 'break-word', fontWeight: 'bold' }}>{d.producto}</span>
                     <span style={{ fontWeight: 'bold' }}>Bs {fmtMonto(sub)}</span>
                   </div>
+                  {especificacion && (
+                    <div style={{ fontSize: '9px', color: '#555', paddingLeft: '4px' }}>{especificacion}</div>
+                  )}
                   <div style={{ fontSize: '10px', color: '#444', paddingLeft: '4px' }}>
                     {fmtMonto(d.cantidad)} x Bs {fmtMonto(d.precio_unitario)}
                     {Number(d.descuento_porc) > 0 && ` (-${d.descuento_porc}%)`}
                   </div>
+                  {d.numero_serie && (
+                    <div style={{ fontSize: '9px', color: '#333', paddingLeft: '4px', fontFamily: 'monospace' }}>
+                      S/N: {d.numero_serie}
+                    </div>
+                  )}
                 </div>
               );
             })}

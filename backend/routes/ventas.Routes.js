@@ -1,7 +1,30 @@
 const express = require('express');
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
 const router  = express.Router();
 const { authMiddleware, checkPermission, checkAnyPermission } = require('../middlewares/authMiddleware');
 const ctrl = require('../controllers/ventas.Controller');
+
+const storageSerie = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '..', 'uploads', 'series');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `serie-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadSerie = multer({
+  storage: storageSerie,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
+  },
+});
 
 const puedeVerVentas = checkAnyPermission([
   ['ver_propias',  'ventas'],
@@ -35,5 +58,7 @@ router.post('/devoluciones/:id_devolucion/aprobar',  authMiddleware, checkPermis
 router.post('/devoluciones/:id_devolucion/rechazar', authMiddleware, checkPermission('devolucion_aprobar', 'ventas'), ctrl.rechazarDevolucion);
 
 router.delete('/cobros/:id_pago', authMiddleware, checkPermission('anular_cobro', 'ventas'), ctrl.anularCobro);
+
+router.post('/detalle/:id_detalle/imagen-serie', authMiddleware, checkAnyPermission([['crear','ventas'],['editar_borrador','ventas']]), uploadSerie.single('imagen_serie'), ctrl.subirImagenSerie);
 
 module.exports = router;

@@ -20,4 +20,12 @@ export const ventasService = {
   rechazarDevolucion: (id_devolucion)     => api.post(`/ventas/devoluciones/${id_devolucion}/rechazar`),
 
   anularCobro:     (id_pago)       => api.delete(`/ventas/cobros/${id_pago}`),
+
+  subirImagenSerie: (id_detalle, file) => {
+    const form = new FormData();
+    form.append('imagen_serie', file);
+    return api.post(`/ventas/detalle/${id_detalle}/imagen-serie`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };

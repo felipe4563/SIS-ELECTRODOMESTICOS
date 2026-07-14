@@ -182,9 +182,11 @@ const getVenta = async (req, res) => {
 
     const [detalle] = await db.promise().query(
       `SELECT vd.*, p.producto, p.codigo_interno, p.codigo_barras, p.imagen_url,
+              p.modelo, p.color, m.nombre AS marca,
               um.nombre AS unidad_nombre
        FROM venta_detalle vd
-       JOIN productos      p  ON p.id_producto = vd.id_producto
+       JOIN productos       p  ON p.id_producto = vd.id_producto
+       JOIN marcas          m  ON m.id_marca    = p.id_marca
        JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
        WHERE vd.id_venta = ?`, [id]
     );
@@ -331,11 +333,12 @@ const createVenta = async (req, res) => {
 
       await db.promise().query(
         `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, observacion)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, observacion, numero_serie)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id_venta, it.id_producto, it.cantidad, it.precio_unitario,
           it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, it.observacion ?? null]
+          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, it.observacion ?? null,
+          it.numero_serie?.trim() || null]
       );
     }
 
@@ -426,11 +429,12 @@ const updateVenta = async (req, res) => {
 
       await db.promise().query(
         `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, observacion)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, observacion, numero_serie)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, it.id_producto, it.cantidad, it.precio_unitario,
           it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, it.observacion ?? null]
+          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, it.observacion ?? null,
+          it.numero_serie?.trim() || null]
       );
     }
 
@@ -1038,8 +1042,11 @@ const getTicket = async (req, res) => {
     if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
 
     const [detalle] = await db.promise().query(
-      `SELECT vd.*, p.producto, p.codigo_interno
-       FROM venta_detalle vd JOIN productos p ON p.id_producto = vd.id_producto
+      `SELECT vd.*, p.producto, p.codigo_interno,
+              m.nombre AS marca, p.modelo, p.color
+       FROM venta_detalle vd
+       JOIN productos p ON p.id_producto = vd.id_producto
+       JOIN marcas    m ON m.id_marca    = p.id_marca
        WHERE vd.id_venta = ?`, [id]
     );
 
@@ -1177,6 +1184,33 @@ const getStockDeposito = async (req, res) => {
 };
 
 
+// ── Subir imagen de número de serie ──────────────────────────────────────────
+
+const subirImagenSerie = async (req, res) => {
+  try {
+    const { id_detalle } = req.params;
+    if (!req.file) return res.status(400).json({ mensaje: 'No se recibió archivo' });
+
+    const [[det]] = await db.promise().query(
+      `SELECT vd.id_detalle, v.id_venta FROM venta_detalle vd
+       JOIN ventas v ON v.id_venta = vd.id_venta
+       WHERE vd.id_detalle = ?`, [id_detalle]
+    );
+    if (!det) return res.status(404).json({ mensaje: 'Detalle no encontrado' });
+
+    const url = `/uploads/series/${req.file.filename}`;
+    await db.promise().query(
+      `UPDATE venta_detalle SET imagen_serie_url = ? WHERE id_detalle = ?`,
+      [url, id_detalle]
+    );
+    await auditLog(req.user.id_usuario, 'venta_detalle', id_detalle, 'UPDATE', getIp(req));
+    res.json({ imagen_serie_url: url, mensaje: 'Imagen de serie subida correctamente' });
+  } catch (err) {
+    console.error('[subirImagenSerie]', err);
+    res.status(500).json({ error: 'Error al subir imagen de serie' });
+  }
+};
+
 module.exports = {
   getVentas, getVenta, getPreview,
   getFormData, getStockDeposito,
@@ -1186,4 +1220,5 @@ module.exports = {
   crearDevolucion, aprobarDevolucion, rechazarDevolucion,
   agregarProductoRapido,
   getTicket,
+  subirImagenSerie,
 };

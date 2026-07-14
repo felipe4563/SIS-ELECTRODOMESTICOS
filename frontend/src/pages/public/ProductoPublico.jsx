@@ -43,9 +43,20 @@ export default function ProductoPublico() {
                     onError={e => { e.target.style.display = 'none'; }} />
                 : <div className="pp-logomark">⚡</div>
               }
-              <span className="pp-brand-name">
-                {producto?.empresa?.nombre || 'MEGAELECTRA'}
-              </span>
+              <div className="pp-brand-info">
+                <span className="pp-brand-name">
+                  {producto?.empresa?.nombre_comercial || producto?.empresa?.razon_social || 'MEGAELECTRA'}
+                </span>
+                <div className="pp-brand-meta">
+                  {producto?.empresa?.razon_social && producto?.empresa?.nombre_comercial && (
+                    <span>{producto.empresa.razon_social}</span>
+                  )}
+                  {producto?.empresa?.nit && <span>NIT {producto.empresa.nit}</span>}
+                  {producto?.empresa?.direccion && <span>{producto.empresa.direccion}</span>}
+                  {producto?.empresa?.telefono && <span>Tel. {producto.empresa.telefono}</span>}
+                  {producto?.empresa?.email && <span>{producto.empresa.email}</span>}
+                </div>
+              </div>
             </div>
             <button
               className="pp-theme-btn"
@@ -122,19 +133,6 @@ export default function ProductoPublico() {
                       por <strong>{producto.marca}</strong>
                     </p>
                   )}
-
-                  {/* Precio */}
-                  <div className="pp-price-wrap">
-                    <div className="pp-price-line">
-                      <sup className="pp-currency">Bs</sup>
-                      <span className="pp-price">
-                        {Number(producto.precio_publico ?? 0).toLocaleString('es-BO', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                  </div>
 
                   {/* Bloque de promoción */}
                   {producto.promociones?.length > 0 && (
@@ -432,15 +430,39 @@ body { background: var(--bg); }
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 1.25rem;
-  height: 56px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 .pp-bar-brand {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+.pp-brand-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+.pp-brand-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+}
+.pp-brand-meta span {
+  font-size: 0.6rem;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pp-logo {
   height: 30px;

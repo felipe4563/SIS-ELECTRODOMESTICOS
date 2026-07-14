@@ -22,9 +22,11 @@ exports.getProductoPorCodigo = async (req, res) => {
 
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
 
-    // 2. Logo y nombre de la empresa
+    // 2. Datos de la empresa
     const [[empresa]] = await db.promise().query(
-      `SELECT logo_url, COALESCE(nombre_comercial, razon_social) AS nombre
+      `SELECT logo_url, razon_social, nombre_comercial,
+              COALESCE(nombre_comercial, razon_social) AS nombre,
+              nit, direccion, telefono, email
        FROM empresas WHERE activo = 1 LIMIT 1`
     ).catch(() => [[null]]);
 
@@ -97,7 +99,16 @@ exports.getProductoPorCodigo = async (req, res) => {
     res.json({
       ...datos,
       disponibilidad,
-      empresa: empresa ? { logo_url: empresa.logo_url, nombre: empresa.nombre } : null,
+      empresa: empresa ? {
+        logo_url:        empresa.logo_url,
+        nombre:          empresa.nombre,
+        razon_social:    empresa.razon_social,
+        nombre_comercial: empresa.nombre_comercial,
+        nit:             empresa.nit,
+        direccion:       empresa.direccion,
+        telefono:        empresa.telefono,
+        email:           empresa.email,
+      } : null,
       promociones,
       combos,
     });
