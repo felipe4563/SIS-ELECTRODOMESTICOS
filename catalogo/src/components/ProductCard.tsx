@@ -9,7 +9,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
   const agotado = !p.disponible;
 
   return (
-    <Link href={`/producto/${p.codigo_interno}`} style={{ textDecoration: 'none', display: 'block' }}>
+    <Link href={`/producto/${encodeURIComponent(p.codigo_interno)}`} style={{ textDecoration: 'none', display: 'block' }}>
       <article style={{
         background:    'var(--color-card)',
         border:        '1px solid var(--color-border)',

@@ -14,7 +14,7 @@ interface Props { params: Promise<{ codigo: string }> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { codigo } = await params;
   try {
-    const p = await api.producto(codigo);
+    const p = await api.producto(decodeURIComponent(codigo));
     return { title: `${p.producto} — Mega Electra`, description: p.caracteristicas ?? undefined };
   } catch {
     return { title: 'Producto no encontrado' };
@@ -23,8 +23,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductoPage({ params }: Props) {
   const { codigo } = await params;
+  const codigoDecoded = decodeURIComponent(codigo);
   let producto;
-  try { producto = await api.producto(codigo); }
+  try { producto = await api.producto(codigoDecoded); }
   catch { notFound(); }
 
   const img     = imgUrl(producto.imagen_url);
