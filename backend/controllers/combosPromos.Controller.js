@@ -476,27 +476,50 @@ const upsertAplicaciones = async (req, res) => {
 
 const exportarCombos = async (req, res) => {
   try {
-    const { filtro } = req.query; // 'activos' | 'inactivos' | 'todos' (default)
+    const { filtro } = req.query;
 
     let comboWhere = '';
-    const comboParams = [];
-    if (filtro === 'activos')   { comboWhere = 'WHERE c.activo = 1'; }
-    if (filtro === 'inactivos') { comboWhere = 'WHERE c.activo = 0'; }
+    if (filtro === 'activos')   comboWhere = 'WHERE c.activo = 1';
+    if (filtro === 'inactivos') comboWhere = 'WHERE c.activo = 0';
 
-    // Datos de empresa y combos en paralelo
-    const [[empresaRows], [rows]] = await Promise.all([
+    const [[empresaRows], [detalleRows]] = await Promise.all([
       db.promise().query(`SELECT * FROM empresas WHERE activo = 1 LIMIT 1`),
       db.promise().query(`
-        SELECT c.codigo, c.nombre, c.descripcion, c.precio_combo,
+        SELECT c.id_combo, c.codigo, c.nombre, c.descripcion, c.precio_combo,
                c.fecha_inicio, c.fecha_fin, c.activo,
-               COUNT(cd.id_combo_detalle) AS total_productos
+               cd.cantidad,
+               p.codigo_interno AS prod_codigo,
+               p.producto        AS prod_nombre,
+               p.precio_publico  AS prod_precio
         FROM combos c
         LEFT JOIN combo_detalle cd ON cd.id_combo = c.id_combo
+        LEFT JOIN productos p ON p.id_producto = cd.id_producto
         ${comboWhere}
-        GROUP BY c.id_combo
-        ORDER BY c.nombre ASC
-      `, comboParams),
+        ORDER BY c.nombre ASC, p.producto ASC
+      `),
     ]);
+
+    // Agrupar por combo
+    const comboMap = new Map();
+    for (const r of detalleRows) {
+      if (!comboMap.has(r.id_combo)) {
+        comboMap.set(r.id_combo, {
+          id_combo: r.id_combo, codigo: r.codigo, nombre: r.nombre,
+          descripcion: r.descripcion, precio_combo: r.precio_combo,
+          fecha_inicio: r.fecha_inicio, fecha_fin: r.fecha_fin, activo: r.activo,
+          productos: [],
+        });
+      }
+      if (r.prod_codigo) {
+        comboMap.get(r.id_combo).productos.push({
+          codigo:    r.prod_codigo,
+          nombre:    r.prod_nombre,
+          cantidad:  parseFloat(r.cantidad) || 1,
+          precio:    parseFloat(r.prod_precio) || 0,
+        });
+      }
+    }
+    const rows = [...comboMap.values()];
 
     const empresa = empresaRows[0] ?? {};
     const fecha   = new Date().toISOString().slice(0, 10);
@@ -566,95 +589,153 @@ const exportarCombos = async (req, res) => {
        .text(`Generado: ${new Date().toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}   Total: ${rows.length} combo${rows.length !== 1 ? 's' : ''}`,
              margin, doc.y + 2);
 
-    const tableTop = doc.y + 12;
-
-    // ── Tabla ─────────────────────────────────────────────────────────────
-    const cols = [
-      { label: 'Código',        w: 80,  align: 'left'  },
-      { label: 'Nombre',        w: 160, align: 'left'  },
-      { label: 'Descripción',   w: 190, align: 'left'  },
-      { label: 'Precio (Bs.)',  w: 75,  align: 'right' },
-      { label: 'Inicio',        w: 60,  align: 'center'},
-      { label: 'Fin',           w: 60,  align: 'center'},
-      { label: 'Prods.',        w: 40,  align: 'center'},
-      { label: 'Estado',        w: 55,  align: 'center'},
-    ];
-
-    const rowH   = 20;
-    const headH  = 22;
-    let   y      = tableTop;
-    let   startX = margin;
+    let y = doc.y + 14;
+    const startX = margin;
 
     const fmtD = d => {
       if (!d) return '—';
       const iso = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
       return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
     };
+    const fmtN = v => parseFloat(v || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // Header row
-    doc.rect(startX, y, contentW, headH).fill(YELLOW);
-    let cx = startX;
-    cols.forEach(col => {
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
-         .text(col.label, cx + 4, y + 6, { width: col.w - 8, align: col.align });
-      cx += col.w;
-    });
-    y += headH;
+    const ORANGE   = '#F97316';
+    const GREEN    = '#16A34A';
+    const BLUE_D   = '#1D4ED8';
 
-    // Data rows
-    rows.forEach((r, i) => {
-      if (y + rowH > doc.page.height - margin) {
+    const drawPageFooter = () => {
+      doc.font('Helvetica').fontSize(7).fillColor(GRAY)
+         .text(`${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`,
+               margin, doc.page.height - 30, { width: contentW, align: 'center' });
+    };
+
+    const ensureSpace = (needed) => {
+      if (y + needed > doc.page.height - 50) {
+        drawPageFooter();
         doc.addPage();
         y = margin;
-        // Re-dibujar header en nueva página
-        doc.rect(startX, y, contentW, headH).fill(YELLOW);
-        let hx = startX;
-        cols.forEach(col => {
-          doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
-             .text(col.label, hx + 4, y + 6, { width: col.w - 8, align: col.align });
-          hx += col.w;
+      }
+    };
+
+    // Columnas cabecera del combo
+    const hCols = [
+      { label: 'Código',       w: 80,  align: 'left'   },
+      { label: 'Nombre',       w: 185, align: 'left'   },
+      { label: 'Descripción',  w: 205, align: 'left'   },
+      { label: 'Precio (Bs.)', w: 80,  align: 'right'  },
+      { label: 'Vigencia',     w: 110, align: 'center' },
+      { label: 'Estado',       w: 60,  align: 'center' },
+    ];
+    // Columnas sub-detalle de productos
+    const pCols = [
+      { label: 'Código',        w: 90,  align: 'left'   },
+      { label: 'Producto',      w: 295, align: 'left'   },
+      { label: 'Cantidad',      w: 60,  align: 'center' },
+      { label: 'Precio Unit.',  w: 85,  align: 'right'  },
+      { label: 'Precio Línea',  w: 80,  align: 'right'  },
+    ];
+    const INDENT = 20;
+
+    rows.forEach((combo) => {
+      const totalCatalogo = combo.productos.reduce((s, p) => s + p.cantidad * p.precio, 0);
+      const ahorro       = totalCatalogo - parseFloat(combo.precio_combo);
+      const porcAhorro   = totalCatalogo > 0 ? (ahorro / totalCatalogo * 100) : 0;
+      const estadoText   = combo.activo ? 'Activo' : 'Inactivo';
+      const estadoColor  = combo.activo ? GREEN : GRAY;
+      const headH = 22;
+
+      ensureSpace(headH + 4);
+
+      // ── Fila cabecera del combo (fondo amarillo) ──────────────────────
+      doc.rect(startX, y, contentW, headH).fill(YELLOW);
+      let cx = startX;
+      const vigencia = (() => {
+        const a = fmtD(combo.fecha_inicio), b = fmtD(combo.fecha_fin);
+        if (!a && !b) return '—'; if (a && b) return `${a} → ${b}`;
+        return a ? `desde ${a}` : `hasta ${b}`;
+      })();
+      const hVals = [
+        combo.codigo,
+        combo.nombre,
+        combo.descripcion || '—',
+        fmtN(combo.precio_combo),
+        vigencia,
+        estadoText,
+      ];
+      hVals.forEach((val, ci) => {
+        const col   = hCols[ci];
+        const color = ci === 5 ? estadoColor : DARK;
+        doc.font('Helvetica-Bold').fontSize(8).fillColor(color)
+           .text(String(val), cx + 4, y + 7, { width: col.w - 8, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+      y += headH;
+
+      // ── Sub-cabecera columnas productos ──────────────────────────────
+      ensureSpace(18 + 4);
+      doc.rect(startX + INDENT, y, contentW - INDENT, 18).fill('#F1F5F9');
+      let px = startX + INDENT;
+      pCols.forEach(col => {
+        doc.font('Helvetica-Bold').fontSize(7).fillColor('#475569')
+           .text(col.label, px + 3, y + 5, { width: col.w - 6, align: col.align });
+        px += col.w;
+      });
+      y += 18;
+
+      if (combo.productos.length === 0) {
+        ensureSpace(16);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 16).fill(WHITE);
+        doc.font('Helvetica').fontSize(7.5).fillColor(GRAY)
+           .text('Sin productos asignados', startX + INDENT + 8, y + 4, { width: contentW - INDENT - 16 });
+        y += 16;
+      } else {
+        combo.productos.forEach((prod, pi) => {
+          ensureSpace(17);
+          const rowBg = pi % 2 === 0 ? WHITE : '#F8FAFC';
+          doc.rect(startX + INDENT, y, contentW - INDENT, 17).fill(rowBg);
+          const linea = prod.cantidad * prod.precio;
+          const pVals = [
+            prod.codigo,
+            prod.nombre,
+            String(parseInt(prod.cantidad) === prod.cantidad ? prod.cantidad : prod.cantidad.toFixed(2)),
+            `Bs. ${fmtN(prod.precio)}`,
+            `Bs. ${fmtN(linea)}`,
+          ];
+          let rx = startX + INDENT;
+          pVals.forEach((val, ci) => {
+            const col = pCols[ci];
+            doc.font('Helvetica').fontSize(7.5).fillColor(DARK)
+               .text(String(val), rx + 3, y + 5, { width: col.w - 6, align: col.align, lineBreak: false });
+            rx += col.w;
+          });
+          doc.moveTo(startX + INDENT, y + 17).lineTo(startX + contentW, y + 17)
+             .strokeColor('#E2E8F0').lineWidth(0.3).stroke();
+          y += 17;
         });
-        y += headH;
+
+        // ── Fila resumen del combo ─────────────────────────────────────
+        ensureSpace(18);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 18).fill('#FEF9C3');
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(DARK)
+           .text('Precio catálogo:', startX + INDENT + 8, y + 5);
+        doc.font('Helvetica').fontSize(7.5).fillColor(DARK)
+           .text(`Bs. ${fmtN(totalCatalogo)}`, startX + INDENT + 95, y + 5);
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(DARK)
+           .text('Precio combo:', startX + INDENT + 190, y + 5);
+        doc.font('Helvetica').fontSize(7.5).fillColor(BLUE_D)
+           .text(`Bs. ${fmtN(combo.precio_combo)}`, startX + INDENT + 275, y + 5);
+        if (ahorro > 0) {
+          doc.font('Helvetica-Bold').fontSize(7.5).fillColor(GREEN)
+             .text(`Ahorro: Bs. ${fmtN(ahorro)} (${porcAhorro.toFixed(0)}%)`, startX + INDENT + 370, y + 5);
+        }
+        y += 18;
       }
 
-      const bg = i % 2 === 0 ? WHITE : LIGHT;
-      doc.rect(startX, y, contentW, rowH).fill(bg);
-
-      const cells = [
-        r.codigo,
-        r.nombre,
-        r.descripcion || '—',
-        Number(r.precio_combo).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        fmtD(r.fecha_inicio),
-        fmtD(r.fecha_fin),
-        String(r.total_productos),
-        r.activo ? 'Activo' : 'Inactivo',
-      ];
-
-      let rx = startX;
-      cells.forEach((cell, ci) => {
-        const col   = cols[ci];
-        const color = ci === 7 ? (r.activo ? '#16A34A' : GRAY) : DARK;
-        doc.font('Helvetica').fontSize(7.5).fillColor(color)
-           .text(String(cell), rx + 4, y + 6, { width: col.w - 8, align: col.align, lineBreak: false });
-        rx += col.w;
-      });
-
-      // Línea inferior de fila
-      doc.moveTo(startX, y + rowH).lineTo(startX + contentW, y + rowH)
-         .strokeColor('#E4E4E7').lineWidth(0.3).stroke();
-      y += rowH;
+      y += 8; // espacio entre combos
     });
 
-    // Borde exterior tabla
-    doc.rect(startX, tableTop, contentW, y - tableTop)
-       .strokeColor('#D1D5DB').lineWidth(0.5).stroke();
-
-    // ── Pie de página ─────────────────────────────────────────────────────
-    doc.font('Helvetica').fontSize(7).fillColor(GRAY)
-       .text(`${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`,
-             margin, doc.page.height - 30, { width: contentW, align: 'center' });
-
+    // Borde total
+    drawPageFooter();
     doc.end();
   } catch (err) {
     console.error(err);
@@ -742,23 +823,50 @@ const exportarPromociones = async (req, res) => {
     const { filtro } = req.query;
 
     let where = '';
-    if (filtro === 'activos')   where = 'WHERE p.activo = 1';
-    if (filtro === 'inactivos') where = 'WHERE p.activo = 0';
+    if (filtro === 'activos')   where = 'WHERE pr.activo = 1';
+    if (filtro === 'inactivos') where = 'WHERE pr.activo = 0';
 
-    const [[empresaRows], [rows]] = await Promise.all([
+    const [[empresaRows], [detalleRows]] = await Promise.all([
       db.promise().query(`SELECT * FROM empresas WHERE activo = 1 LIMIT 1`),
       db.promise().query(`
-        SELECT p.codigo, p.nombre, p.tipo_descuento, p.valor_descuento,
-               p.aplica_a, p.cantidad_minima,
-               p.fecha_inicio, p.fecha_fin, p.activo,
-               COUNT(pp.id_promo_prod) AS total_aplicaciones
-        FROM promociones p
-        LEFT JOIN promocion_producto pp ON pp.id_promocion = p.id_promocion
+        SELECT pr.id_promocion, pr.codigo, pr.nombre, pr.descripcion,
+               pr.tipo_descuento, pr.valor_descuento,
+               pr.aplica_a, pr.cantidad_minima,
+               pr.fecha_inicio, pr.fecha_fin, pr.activo,
+               pp.id_producto, pp.id_categoria, pp.id_marca,
+               p.codigo_interno  AS prod_codigo,
+               p.producto        AS prod_nombre,
+               cat.nombre        AS cat_nombre,
+               m.nombre          AS marca_nombre
+        FROM promociones pr
+        LEFT JOIN promocion_producto pp ON pp.id_promocion = pr.id_promocion
+        LEFT JOIN productos p   ON p.id_producto     = pp.id_producto
+        LEFT JOIN categorias cat ON cat.id_categoria = pp.id_categoria
+        LEFT JOIN marcas m       ON m.id_marca       = pp.id_marca
         ${where}
-        GROUP BY p.id_promocion
-        ORDER BY p.fecha_inicio DESC
+        ORDER BY pr.fecha_inicio DESC, pr.nombre ASC
       `),
     ]);
+
+    // Agrupar por promoción
+    const promoMap = new Map();
+    for (const r of detalleRows) {
+      if (!promoMap.has(r.id_promocion)) {
+        promoMap.set(r.id_promocion, {
+          id_promocion: r.id_promocion, codigo: r.codigo, nombre: r.nombre,
+          descripcion: r.descripcion, tipo_descuento: r.tipo_descuento,
+          valor_descuento: r.valor_descuento, aplica_a: r.aplica_a,
+          cantidad_minima: r.cantidad_minima,
+          fecha_inicio: r.fecha_inicio, fecha_fin: r.fecha_fin, activo: r.activo,
+          items: [],
+        });
+      }
+      const promo = promoMap.get(r.id_promocion);
+      if (r.aplica_a === 'PRODUCTO'  && r.prod_nombre)  promo.items.push({ codigo: r.prod_codigo, nombre: r.prod_nombre });
+      if (r.aplica_a === 'CATEGORIA' && r.cat_nombre)   promo.items.push({ nombre: r.cat_nombre });
+      if (r.aplica_a === 'MARCA'     && r.marca_nombre) promo.items.push({ nombre: r.marca_nombre });
+    }
+    const rows = [...promoMap.values()];
 
     const empresa = empresaRows[0] ?? {};
     const fecha   = new Date().toISOString().slice(0, 10);
@@ -773,8 +881,9 @@ const exportarPromociones = async (req, res) => {
       res.send(buf);
     });
 
-    const YELLOW = '#FBBF24', DARK = '#1C1C1E', GRAY = '#6B7280', LIGHT = '#F4F4F5', WHITE = '#FFFFFF';
-    const pageW = doc.page.width, margin = 40, contentW = pageW - margin * 2;
+    const YELLOW = '#FBBF24', DARK = '#1C1C1E', GRAY = '#6B7280', WHITE = '#FFFFFF';
+    const GREEN  = '#16A34A', BLUE_D = '#1D4ED8', AMBER = '#D97706';
+    const pageW  = doc.page.width, margin = 40, contentW = pageW - margin * 2;
     let headerBottom = margin;
 
     if (empresa.logo_url) {
@@ -787,10 +896,10 @@ const exportarPromociones = async (req, res) => {
     doc.font('Helvetica').fontSize(8).fillColor(GRAY);
     [
       empresa.razon_social && empresa.nombre_comercial ? `Razón social: ${empresa.razon_social}` : null,
-      empresa.nit       ? `NIT: ${empresa.nit}`     : null,
-      empresa.direccion ? empresa.direccion          : null,
-      empresa.telefono  ? `Tel: ${empresa.telefono}` : null,
-      empresa.email     ? empresa.email              : null,
+      empresa.nit       ? `NIT: ${empresa.nit}`      : null,
+      empresa.direccion ? empresa.direccion           : null,
+      empresa.telefono  ? `Tel: ${empresa.telefono}`  : null,
+      empresa.email     ? empresa.email               : null,
     ].filter(Boolean).forEach(l => doc.text(l, textX, doc.y, { width: contentW - 70 }));
 
     headerBottom = Math.max(doc.y, margin + 65) + 6;
@@ -798,95 +907,164 @@ const exportarPromociones = async (req, res) => {
     headerBottom += 10;
 
     const tituloFiltro = filtro === 'activos' ? ' — Activas' : filtro === 'inactivos' ? ' — Inactivas' : '';
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text(`Reporte de Promociones${tituloFiltro}`, margin, headerBottom);
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK)
+       .text(`Reporte de Promociones${tituloFiltro}`, margin, headerBottom);
     doc.font('Helvetica').fontSize(8).fillColor(GRAY)
        .text(`Generado: ${new Date().toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}   Total: ${rows.length} promoción${rows.length !== 1 ? 'es' : ''}`,
              margin, doc.y + 2);
 
-    const tableTop = doc.y + 12;
-    const cols = [
-      { label: 'Código',       w: 75,  align: 'left'   },
-      { label: 'Nombre',       w: 150, align: 'left'   },
-      { label: 'Tipo',         w: 70,  align: 'center' },
-      { label: 'Descuento',    w: 65,  align: 'right'  },
-      { label: 'Aplica a',     w: 65,  align: 'center' },
-      { label: 'Cant. Mín.',   w: 50,  align: 'center' },
-      { label: 'Inicio',       w: 60,  align: 'center' },
-      { label: 'Fin',          w: 60,  align: 'center' },
-      { label: 'Estado',       w: 55,  align: 'center' },
-    ];
-
-    const rowH = 20, headH = 22;
-    let y = tableTop;
+    let y = doc.y + 14;
     const startX = margin;
+    const today = new Date().toISOString().slice(0, 10);
+
     const fmtD = d => {
       if (!d) return '—';
       const iso = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
       return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
     };
-    const today = new Date().toISOString().slice(0, 10);
 
-    const drawHeader = (yPos) => {
-      doc.rect(startX, yPos, contentW, headH).fill(YELLOW);
-      let cx = startX;
-      cols.forEach(col => {
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
-           .text(col.label, cx + 4, yPos + 6, { width: col.w - 8, align: col.align });
-        cx += col.w;
-      });
-      return yPos + headH;
+    const drawPageFooter = () => {
+      doc.font('Helvetica').fontSize(7).fillColor(GRAY)
+         .text(`${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`,
+               margin, doc.page.height - 30, { width: contentW, align: 'center' });
     };
 
-    y = drawHeader(y);
-
-    rows.forEach((r, i) => {
-      if (y + rowH > doc.page.height - margin) {
+    const ensureSpace = (needed) => {
+      if (y + needed > doc.page.height - 50) {
+        drawPageFooter();
         doc.addPage();
-        y = drawHeader(margin);
+        y = margin;
       }
-      doc.rect(startX, y, contentW, rowH).fill(i % 2 === 0 ? WHITE : LIGHT);
+    };
 
-      const fi = r.fecha_inicio ? String(r.fecha_inicio).slice(0,10) : null;
-      const ff = r.fecha_fin    ? String(r.fecha_fin).slice(0,10)    : null;
-      let estado = 'Inactivo';
-      if (r.activo) {
-        if (fi && fi > today) estado = 'Próxima';
-        else if (ff && ff < today) estado = 'Vencida';
-        else estado = 'Vigente';
-      } else if (ff && ff < today) estado = 'Vencida';
+    const getEstado = (r) => {
+      const fi = r.fecha_inicio ? (r.fecha_inicio instanceof Date ? r.fecha_inicio.toISOString().slice(0,10) : String(r.fecha_inicio).slice(0,10)) : null;
+      const ff = r.fecha_fin    ? (r.fecha_fin    instanceof Date ? r.fecha_fin.toISOString().slice(0,10)    : String(r.fecha_fin).slice(0,10))    : null;
+      if (!r.activo) return ff && ff < today ? { label: 'Vencida', color: AMBER } : { label: 'Inactiva', color: GRAY };
+      if (fi && fi > today) return { label: 'Próxima', color: BLUE_D };
+      if (ff && ff < today) return { label: 'Vencida',  color: AMBER };
+      return { label: 'Vigente', color: GREEN };
+    };
 
-      const statusColor = { Vigente: '#16A34A', Próxima: '#2563EB', Vencida: '#D97706', Inactivo: GRAY }[estado] || GRAY;
-      const cells = [
-        r.codigo,
-        r.nombre,
-        r.tipo_descuento === 'PORCENTAJE' ? 'Porcentaje' : 'Monto fijo',
-        r.tipo_descuento === 'PORCENTAJE'
-          ? `${parseFloat(r.valor_descuento).toFixed(0)}%`
-          : `Bs. ${parseFloat(r.valor_descuento).toFixed(2)}`,
-        r.aplica_a,
-        String(parseInt(r.cantidad_minima) || 1),
-        fmtD(r.fecha_inicio),
-        fmtD(r.fecha_fin),
-        estado,
+    const APLICA_LABEL = { PRODUCTO: 'Producto', CATEGORIA: 'Categoría', MARCA: 'Marca', TODOS: 'Todos' };
+
+    // Columnas cabecera de promoción
+    const hCols = [
+      { label: 'Código',      w: 80,  align: 'left'   },
+      { label: 'Nombre',      w: 170, align: 'left'   },
+      { label: 'Descuento',   w: 90,  align: 'center' },
+      { label: 'Aplica a',    w: 75,  align: 'center' },
+      { label: 'Cant. Mín.',  w: 60,  align: 'center' },
+      { label: 'Vigencia',    w: 115, align: 'center' },
+      { label: 'Estado',      w: 60,  align: 'center' },
+    ];
+    // Columnas sub-detalle de items
+    const iCols = [
+      { label: 'Código',   w: 100, align: 'left' },
+      { label: 'Nombre',   w: 450, align: 'left' },
+    ];
+    const INDENT = 20;
+
+    rows.forEach((promo) => {
+      const estado   = getEstado(promo);
+      const descTxt  = promo.tipo_descuento === 'PORCENTAJE'
+        ? `${parseFloat(promo.valor_descuento).toFixed(0)}%`
+        : `Bs. ${parseFloat(promo.valor_descuento).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const tipoTxt  = promo.tipo_descuento === 'PORCENTAJE' ? 'Porcentaje' : 'Monto fijo';
+      const vigencia = (() => {
+        const a = fmtD(promo.fecha_inicio), b = fmtD(promo.fecha_fin);
+        if (!a && !b) return '—'; if (a && b) return `${a} → ${b}`;
+        return a ? `desde ${a}` : `hasta ${b}`;
+      })();
+      const headH = 22;
+
+      ensureSpace(headH + 4);
+
+      // ── Fila cabecera de la promoción (fondo amarillo) ─────────────
+      doc.rect(startX, y, contentW, headH).fill(YELLOW);
+      let cx = startX;
+      const hVals = [
+        promo.codigo,
+        promo.nombre,
+        `${descTxt}  (${tipoTxt})`,
+        APLICA_LABEL[promo.aplica_a] || promo.aplica_a,
+        String(parseInt(promo.cantidad_minima) || 1),
+        vigencia,
+        estado.label,
       ];
-
-      let rx = startX;
-      cells.forEach((cell, ci) => {
-        const col = cols[ci];
-        const color = ci === 8 ? statusColor : DARK;
-        doc.font('Helvetica').fontSize(7.5).fillColor(color)
-           .text(String(cell), rx + 4, y + 6, { width: col.w - 8, align: col.align, lineBreak: false });
-        rx += col.w;
+      hVals.forEach((val, ci) => {
+        const col   = hCols[ci];
+        const color = ci === 6 ? estado.color : DARK;
+        doc.font('Helvetica-Bold').fontSize(8).fillColor(color)
+           .text(String(val), cx + 4, y + 7, { width: col.w - 8, align: col.align, lineBreak: false });
+        cx += col.w;
       });
-      doc.moveTo(startX, y + rowH).lineTo(startX + contentW, y + rowH).strokeColor('#E4E4E7').lineWidth(0.3).stroke();
-      y += rowH;
+      y += headH;
+
+      // ── Descripción (si existe) ────────────────────────────────────
+      if (promo.descripcion) {
+        ensureSpace(14);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 14).fill('#FFFBEB');
+        doc.font('Helvetica').fontSize(7).fillColor('#92400E')
+           .text(promo.descripcion, startX + INDENT + 6, y + 4,
+                 { width: contentW - INDENT - 12, lineBreak: false });
+        y += 14;
+      }
+
+      // ── Sub-detalle de items ───────────────────────────────────────
+      if (promo.aplica_a === 'TODOS') {
+        ensureSpace(17);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 17).fill('#F0FDF4');
+        doc.font('Helvetica').fontSize(7.5).fillColor(GREEN)
+           .text('Aplica a todos los productos del catálogo', startX + INDENT + 8, y + 5);
+        y += 17;
+      } else if (promo.items.length === 0) {
+        ensureSpace(17);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 17).fill(WHITE);
+        doc.font('Helvetica').fontSize(7.5).fillColor(GRAY)
+           .text('Sin ítems asignados', startX + INDENT + 8, y + 5);
+        y += 17;
+      } else {
+        // Sub-cabecera de items
+        ensureSpace(18);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 18).fill('#F1F5F9');
+        let px = startX + INDENT;
+        iCols.forEach(col => {
+          doc.font('Helvetica-Bold').fontSize(7).fillColor('#475569')
+             .text(col.label, px + 3, y + 5, { width: col.w - 6, align: col.align });
+          px += col.w;
+        });
+        y += 18;
+
+        promo.items.forEach((item, ii) => {
+          ensureSpace(16);
+          doc.rect(startX + INDENT, y, contentW - INDENT, 16).fill(ii % 2 === 0 ? WHITE : '#F8FAFC');
+          let rx = startX + INDENT;
+          const iVals = [item.codigo || '—', item.nombre || '—'];
+          iVals.forEach((val, ci) => {
+            const col = iCols[ci];
+            doc.font('Helvetica').fontSize(7.5).fillColor(DARK)
+               .text(String(val), rx + 3, y + 4, { width: col.w - 6, align: col.align, lineBreak: false });
+            rx += col.w;
+          });
+          doc.moveTo(startX + INDENT, y + 16).lineTo(startX + contentW, y + 16)
+             .strokeColor('#E2E8F0').lineWidth(0.3).stroke();
+          y += 16;
+        });
+
+        // Resumen cantidad
+        ensureSpace(16);
+        doc.rect(startX + INDENT, y, contentW - INDENT, 16).fill('#FEF9C3');
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(DARK)
+           .text(`Total ${APLICA_LABEL[promo.aplica_a] || promo.aplica_a}s: ${promo.items.length}`,
+                 startX + INDENT + 8, y + 4);
+        y += 16;
+      }
+
+      y += 8; // espacio entre promociones
     });
 
-    doc.rect(startX, tableTop, contentW, y - tableTop).strokeColor('#D1D5DB').lineWidth(0.5).stroke();
-    doc.font('Helvetica').fontSize(7).fillColor(GRAY)
-       .text(`${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`,
-             margin, doc.page.height - 30, { width: contentW, align: 'center' });
-
+    drawPageFooter();
     doc.end();
   } catch (err) {
     console.error(err);
