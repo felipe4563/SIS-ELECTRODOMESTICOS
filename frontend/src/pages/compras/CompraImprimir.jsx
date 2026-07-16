@@ -5,7 +5,7 @@ import { comprasService } from '../../services/compras.service';
 
 const fmt   = n  => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN  = n  => Number(n ?? 0).toLocaleString('es-BO', { maximumFractionDigits: 4 });
-const fecha = s  => s ? new Date(s + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const fecha = s  => s ? new Date(s.includes('T') ? s : s + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
 const ESTADO_COLOR = {
   PRE_PEDIDO: { bg: '#f4f4f5', fg: '#52525b' },

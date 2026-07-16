@@ -6,7 +6,7 @@ const fs   = require('fs');
 const getEmpresaPublico = async (req, res) => {
   try {
     const [rows] = await db.promise().query(
-      `SELECT razon_social, nombre_comercial, logo_url FROM empresas WHERE activo = 1 LIMIT 1`
+      `SELECT razon_social, nombre_comercial, nit, direccion, telefono, email, logo_url FROM empresas WHERE activo = 1 LIMIT 1`
     );
     if (rows.length === 0) return res.status(404).json({ error: 'No encontrado' });
     return res.json(rows[0]);

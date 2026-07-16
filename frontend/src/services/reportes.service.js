@@ -13,7 +13,8 @@ export const reportesService = {
   getCuentasPagar:     ()  => api.get(`${R}/cuentas-pagar`),
   getRentabilidad:     (p) => api.get(`${R}/rentabilidad`,      { params: p }),
   getEstadoResultados: (p) => api.get(`${R}/estado-resultados`, { params: p }),
-  getBonosVendedores:  (p) => api.get(`${R}/bonos-vendedores`,  { params: p }),
+  getBonosVendedores:        (p) => api.get(`${R}/bonos-vendedores`,         { params: p }),
+  getBonosVendedoresDetalle: (p) => api.get(`${R}/bonos-vendedores-detalle`, { params: p }),
 
   getStockConsolidado:  (p) => api.get(`${R}/stock-consolidado`,  { params: p }),
   getKardexProducto:    (id, p) => api.get(`${R}/kardex/${id}`,  { params: p }),

@@ -4,7 +4,7 @@ const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
     `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?,?,?,?,?)`,
     [userId, tabla, String(id), accion, ip]
-  );
+  ).catch(e => console.error('[auditLog]', accion, tabla, e.message));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -502,6 +502,19 @@ const recibirMercaderia = async (req, res) => {
       [nuevoEstado, req.user.id_usuario, id]
     );
 
+    // Actualizar saldo del proveedor si la compra es a crédito
+    if (comp.condicion_pago === 'CREDITO') {
+      await db.promise().query(
+        `UPDATE proveedores SET saldo_actual = (
+           SELECT COALESCE(SUM(saldo_pendiente), 0)
+           FROM compras
+           WHERE id_proveedor = ? AND condicion_pago = 'CREDITO'
+             AND estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+         ) WHERE id_proveedor = ?`,
+        [comp.id_proveedor, comp.id_proveedor]
+      );
+    }
+
     await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
     res.json({ ok: true, estado: nuevoEstado });
   } catch (err) {
@@ -516,13 +529,27 @@ const anularCompra = async (req, res) => {
   try {
     const { id } = req.params;
     const [[compra]] = await db.promise().query(
-      `SELECT estado FROM compras WHERE id_compra = ?`, [id]
+      `SELECT estado, id_proveedor, condicion_pago FROM compras WHERE id_compra = ?`, [id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
     if (['RECIBIDO', 'ANULADO'].includes(compra.estado))
       return res.status(409).json({ error: `No se puede anular una compra en estado ${compra.estado}` });
 
     await db.promise().query(`UPDATE compras SET estado='ANULADO' WHERE id_compra = ?`, [id]);
+
+    // Recalcular saldo del proveedor si era crédito
+    if (compra.condicion_pago === 'CREDITO') {
+      await db.promise().query(
+        `UPDATE proveedores SET saldo_actual = (
+           SELECT COALESCE(SUM(saldo_pendiente), 0)
+           FROM compras
+           WHERE id_proveedor = ? AND condicion_pago = 'CREDITO'
+             AND estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+         ) WHERE id_proveedor = ?`,
+        [compra.id_proveedor, compra.id_proveedor]
+      );
+    }
+
     await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
     res.json({ ok: true });
   } catch (err) {
@@ -546,7 +573,7 @@ const createPago = async (req, res) => {
       return res.status(400).json({ error: 'Método de pago, moneda y monto son requeridos' });
 
     const [[compra]] = await db.promise().query(
-      `SELECT id_compra, id_sucursal, id_proveedor, saldo_pendiente, estado FROM compras WHERE id_compra = ?`, [id]
+      `SELECT id_compra, id_sucursal, id_proveedor, saldo_pendiente, estado, condicion_pago FROM compras WHERE id_compra = ?`, [id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
 
@@ -580,6 +607,19 @@ const createPago = async (req, res) => {
       `UPDATE compras SET saldo_pendiente = GREATEST(0, saldo_pendiente - ?) WHERE id_compra = ?`,
       [montoPago, id]
     );
+
+    // Recalcular saldo del proveedor si la compra es a crédito
+    if (compra.condicion_pago === 'CREDITO') {
+      await db.promise().query(
+        `UPDATE proveedores SET saldo_actual = (
+           SELECT COALESCE(SUM(saldo_pendiente), 0)
+           FROM compras
+           WHERE id_proveedor = ? AND condicion_pago = 'CREDITO'
+             AND estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+         ) WHERE id_proveedor = ?`,
+        [compra.id_proveedor, compra.id_proveedor]
+      );
+    }
 
     if (id_cuota) {
       await db.promise().query(
@@ -642,6 +682,10 @@ const anularPago = async (req, res) => {
     );
     if (!pago) return res.status(404).json({ error: 'Pago no encontrado' });
 
+    const [[compraAnular]] = await db.promise().query(
+      `SELECT id_proveedor, condicion_pago FROM compras WHERE id_compra = ?`, [id]
+    );
+
     await db.promise().query(
       `UPDATE compras SET saldo_pendiente = saldo_pendiente + ? WHERE id_compra = ?`,
       [pago.monto, id]
@@ -660,6 +704,20 @@ const anularPago = async (req, res) => {
     }
 
     await db.promise().query(`DELETE FROM pagos_compra WHERE id_pago = ?`, [idPago]);
+
+    // Recalcular saldo del proveedor si la compra era a crédito
+    if (compraAnular?.condicion_pago === 'CREDITO') {
+      await db.promise().query(
+        `UPDATE proveedores SET saldo_actual = (
+           SELECT COALESCE(SUM(saldo_pendiente), 0)
+           FROM compras
+           WHERE id_proveedor = ? AND condicion_pago = 'CREDITO'
+             AND estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+         ) WHERE id_proveedor = ?`,
+        [compraAnular.id_proveedor, compraAnular.id_proveedor]
+      );
+    }
+
     await auditLog(req.user.id_usuario, 'pagos_compra', idPago, 'DELETE', getIp(req));
     res.json({ ok: true });
   } catch (err) {

@@ -9,7 +9,8 @@ router.get('/ventas-vendedor',     authMiddleware, checkPermission('ventas_vende
 router.get('/ventas-cliente',      authMiddleware, checkPermission('ventas_cliente',     'reportes'), ctrl.getVentasCliente);
 router.get('/ventas-producto',     authMiddleware, checkPermission('ventas_producto',    'reportes'), ctrl.getVentasProducto);
 router.get('/top-productos',       authMiddleware, checkPermission('ventas_producto',    'reportes'), ctrl.getTopProductos);
-router.get('/bonos-vendedores',    authMiddleware, checkPermission('bonos_vendedores',   'reportes'), ctrl.getBonosVendedores);
+router.get('/bonos-vendedores',        authMiddleware, checkPermission('bonos_vendedores', 'reportes'), ctrl.getBonosVendedores);
+router.get('/bonos-vendedores-detalle',authMiddleware, checkPermission('bonos_vendedores', 'reportes'), ctrl.getBonosVendedoresDetalle);
 router.get('/compras',             authMiddleware, checkPermission('compras_periodo',    'reportes'), ctrl.getCompras);
 router.get('/compras-proveedor',   authMiddleware, checkPermission('compras_proveedor', 'reportes'), ctrl.getComprasProveedor);
 router.get('/cuentas-cobrar',      authMiddleware, checkPermission('cuentas_cobrar',    'reportes'), ctrl.getCuentasCobrar);

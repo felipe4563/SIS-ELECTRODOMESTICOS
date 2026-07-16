@@ -46,6 +46,7 @@ const corsOptions = {
   origin: [
     'https://megaelectra.rusoft.dev',
     'http://localhost:5173',
+    'http://localhost:5174'
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,

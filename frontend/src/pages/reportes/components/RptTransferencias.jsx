@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { reportesService } from '../../../services/reportes.service';
-import { hoy, inicioMes, fmtN, FiltroFechas, BtnConsultar, Tabla, Resumen, EstadoBadge } from './ReportesShared';
+import { hoy, inicioMes, fmtN, FiltroFechas, BtnConsultar, BtnPDF, Tabla, Resumen, EstadoBadge } from './ReportesShared';
 
 const ESTADOS = ['SOLICITADA', 'EN_TRANSITO', 'RECIBIDA', 'PARCIAL', 'ANULADA'];
 
@@ -48,6 +48,7 @@ export default function RptTransferencias() {
           </select>
         </div>
         <BtnConsultar onClick={buscar} />
+        <BtnPDF tipo="transferencias" filtros={filtros} />
       </div>
       <Resumen items={[
         { label: 'Transferencias', valor: fmtN(filas.length) },

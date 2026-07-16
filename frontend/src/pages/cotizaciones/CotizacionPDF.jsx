@@ -62,6 +62,8 @@ const S = StyleSheet.create({
   cSub:       { width: 72, textAlign: 'right' },
   prodName:   { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#111827' },
   prodCode:   { fontSize: 7, color: '#9ca3af', marginTop: 1 },
+  prodSpec:   { fontSize: 7, color: '#6b7280', marginTop: 1 },
+  prodSpecLbl:{ fontFamily: 'Helvetica-Bold', color: '#9ca3af' },
 
   // Totales
   totalsWrap: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6, marginBottom: 14 },
@@ -148,6 +150,9 @@ function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
             <View style={[S.cProd, { paddingVertical: 5, paddingHorizontal: 6 }]}>
               <Text style={S.prodName}>{d.producto}</Text>
               {d.codigo_interno && <Text style={S.prodCode}>{d.codigo_interno}</Text>}
+              {d.marca  && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Marca: </Text>{d.marca}</Text>}
+              {d.modelo && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Modelo: </Text>{d.modelo}</Text>}
+              {d.color  && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Color: </Text>{d.color}</Text>}
             </View>
             <Text style={[S.td, S.cCant, S.right]}>{fmt(d.cantidad)} {d.unidad_nombre}</Text>
             <Text style={[S.td, S.cPrecio, S.right]}>Bs {fmt(d.precio_unitario)}</Text>

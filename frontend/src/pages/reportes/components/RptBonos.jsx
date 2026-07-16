@@ -1,22 +1,40 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { reportesService } from '../../../services/reportes.service';
+import { exportarBonosPDF } from './BonosPDF';
+import { useEmpresa } from '../../../contexts/EmpresaContext';
 import { hoy, inicioMes, fmt, fmtN, FiltroFechas, BtnConsultar, Tabla, Resumen } from './ReportesShared';
 
 const SELECT = 'border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-colors';
 
 export default function RptBonos() {
+  const { empresa, logoUrl }        = useEmpresa();
   const [filtros, setFiltros]       = useState({ fecha_desde: inicioMes(), fecha_hasta: hoy() });
   const [filas, setFilas]           = useState([]);
   const [cargando, setCargando]     = useState(false);
   const [idVendedor, setIdVendedor] = useState('');
+  const [exportando, setExportando] = useState(false);
+  const [errorExport, setErrorExport] = useState('');
 
   const buscar = useCallback(() => {
     setCargando(true);
     setIdVendedor('');
+    setErrorExport('');
     reportesService.getBonosVendedores(filtros)
       .then(r => { setFilas(r.data); setCargando(false); })
       .catch(() => setCargando(false));
   }, [filtros]);
+
+  const handleExportPDF = async () => {
+    setExportando(true);
+    setErrorExport('');
+    try {
+      await exportarBonosPDF({ filtros, empresa, logoUrl });
+    } catch (e) {
+      setErrorExport(e.message || 'Error al generar PDF');
+    } finally {
+      setExportando(false);
+    }
+  };
 
   useEffect(() => { buscar(); }, []);
   const f = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
@@ -49,7 +67,27 @@ export default function RptBonos() {
       <div className="flex flex-wrap gap-3 items-end">
         <FiltroFechas filtros={filtros} onChange={f} />
         <BtnConsultar onClick={buscar} />
+        <button
+          onClick={handleExportPDF}
+          disabled={exportando || filas.length === 0}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold
+                     bg-yellow-400 text-zinc-900 hover:bg-yellow-300
+                     disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {exportando
+            ? <><span className="animate-spin inline-block w-4 h-4 border-2 border-zinc-700 border-t-transparent rounded-full" /> Generando...</>
+            : <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0-3-3m3 3 3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                </svg>
+                Exportar PDF detallado
+              </>
+          }
+        </button>
       </div>
+      {errorExport && (
+        <p className="text-sm text-red-500 dark:text-red-400">{errorExport}</p>
+      )}
 
       {/* Filtro por vendedor */}
       {vendedores.length > 1 && (

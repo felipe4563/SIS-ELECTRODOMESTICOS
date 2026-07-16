@@ -56,3 +56,9 @@ pnpm-lock.yaml
 yarn.lock
 
 .claude/
+.mcp.json
+
+# ===============================
+#   Backups automáticos
+# ===============================
+backend/backups/

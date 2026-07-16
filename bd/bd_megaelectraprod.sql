@@ -1575,7 +1575,9 @@ CREATE TABLE `venta_detalle` (
   `bono_vendedor` decimal(14,2) DEFAULT 0.00,
   `id_promocion` int(11) DEFAULT NULL COMMENT 'Promoción aplicada al ítem',
   `id_combo` int(11) DEFAULT NULL COMMENT 'Combo asociado',
-  `observacion` varchar(255) DEFAULT NULL
+  `observacion` varchar(255) DEFAULT NULL,
+  `numero_serie` varchar(80) DEFAULT NULL COMMENT 'Número de serie del producto vendido',
+  `imagen_serie_url` varchar(255) DEFAULT NULL COMMENT 'Foto del número de serie'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

@@ -4,7 +4,7 @@ const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
     `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?,?,?,?,?)`,
     [userId, tabla, String(id), accion, ip]
-  );
+  ).catch(e => console.error('[auditLog]', accion, tabla, e.message));
 
 // ── Cajas ─────────────────────────────────────────────────────────────────
 

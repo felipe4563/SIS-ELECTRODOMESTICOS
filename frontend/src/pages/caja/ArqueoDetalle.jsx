@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  Document, Page, View, Text, Image,
+  StyleSheet as PDFStyleSheet, PDFDownloadLink,
+} from '@react-pdf/renderer';
 import { cajaService } from '../../services/caja.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useEmpresa } from '../../contexts/EmpresaContext';
@@ -36,6 +40,270 @@ function groupByMethod(arr) {
     acc[m] = (acc[m] || 0) + Number(item.monto);
     return acc;
   }, {});
+}
+
+// ── Estilos PDF ───────────────────────────────────────────────────────────
+const P = PDFStyleSheet.create({
+  page:       { padding: '12mm 14mm 16mm', fontFamily: 'Helvetica', fontSize: 9, color: '#18181b', backgroundColor: '#fff' },
+  // Header empresa
+  header:     { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 2, borderBottomColor: '#18181b', paddingBottom: 8, marginBottom: 10 },
+  logo:       { width: 54, height: 38, objectFit: 'contain', marginRight: 10 },
+  empWrap:    { flex: 1 },
+  empName:    { fontSize: 13, fontFamily: 'Helvetica-Bold', marginBottom: 2 },
+  empSub:     { fontSize: 7.5, color: '#52525b', lineHeight: 1.5 },
+  // Título
+  titBox:     { backgroundColor: '#18181b', paddingVertical: 5, paddingHorizontal: 8, marginBottom: 10 },
+  titText:    { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#fff', textAlign: 'center', letterSpacing: 1.5 },
+  titSub:     { fontSize: 7.5, color: '#a1a1aa', textAlign: 'center', marginTop: 2 },
+  // Info grid
+  infoGrid:   { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: '#f4f4f5', padding: '6pt 8pt', marginBottom: 10 },
+  infoCell:   { width: '33.33%', marginBottom: 5 },
+  infoLbl:    { fontSize: 6.5, color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 1.5 },
+  infoVal:    { fontSize: 8.5, fontFamily: 'Helvetica-Bold' },
+  // Secciones
+  secHdr:     { fontSize: 7, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 1, color: '#71717a', borderBottomWidth: 1, borderBottomColor: '#d4d4d8', paddingBottom: 3, marginBottom: 4, marginTop: 10 },
+  row:        { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2.5, borderBottomWidth: 0.5, borderBottomColor: '#f4f4f5' },
+  lbl:        { color: '#52525b' },
+  val:        { fontFamily: 'Helvetica-Bold' },
+  rowTotal:   { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 4, marginTop: 3, borderTopWidth: 1.5, borderTopColor: '#18181b' },
+  // Tabla productos
+  tblHead:    { flexDirection: 'row', backgroundColor: '#f4f4f5', paddingVertical: 3, paddingHorizontal: 3, borderBottomWidth: 1, borderBottomColor: '#d4d4d8', marginTop: 4 },
+  tblRow:     { flexDirection: 'row', paddingVertical: 3.5, paddingHorizontal: 3, borderBottomWidth: 0.5, borderBottomColor: '#f4f4f5', alignItems: 'flex-start' },
+  tblRowAlt:  { flexDirection: 'row', paddingVertical: 3.5, paddingHorizontal: 3, borderBottomWidth: 0.5, borderBottomColor: '#f4f4f5', backgroundColor: '#fafafa', alignItems: 'flex-start' },
+  th:         { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#71717a', textTransform: 'uppercase', letterSpacing: 0.5 },
+  td:         { fontSize: 7.5, color: '#27272a' },
+  cVenta:     { width: '13%' },
+  cProd:      { width: '23%' },
+  cMarca:     { width: '11%' },
+  cModelo:    { width: '13%' },
+  cColor:     { width: '9%' },
+  cSerie:     { width: '15%' },
+  cCant:      { width: '5%', textAlign: 'right' },
+  cSub:       { width: '11%', textAlign: 'right' },
+  // Cuadre
+  cuadreBox:  { backgroundColor: '#fafafa', padding: '6pt 8pt', marginTop: 6, borderWidth: 0.5, borderColor: '#e4e4e7' },
+  cuadreRow:  { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2.5, borderBottomWidth: 0.5, borderBottomColor: '#f4f4f5' },
+  cuadreFin:  { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 5, marginTop: 4, borderTopWidth: 2, borderTopColor: '#18181b' },
+  // Footer
+  footer:     { position: 'absolute', bottom: '8mm', left: '14mm', right: '14mm', textAlign: 'center', fontSize: 7, color: '#a1a1aa', borderTopWidth: 0.5, borderTopColor: '#e4e4e7', paddingTop: 4 },
+});
+
+// ── Documento PDF ─────────────────────────────────────────────────────────
+function ResumenCajaPDF({ arqueo, empresa, logoUrl, cobros, gastos, pagosCompra, ventasDetalle }) {
+  const fmtP = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+  const fmtF = f => f ? new Date(f).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+
+  const cobrosPM  = groupByMethod(cobros);
+  const gastosPM  = groupByMethod(gastos);
+  const comprasPM = groupByMethod(pagosCompra);
+
+  const totalCobros  = cobros.reduce((s, c) => s + Number(c.monto), 0);
+  const totalGastos  = gastos.reduce((s, g) => s + Number(g.monto), 0);
+  const totalCompras = pagosCompra.reduce((s, p) => s + Number(p.monto), 0);
+  const totalVendido = ventasDetalle.reduce((s, i) => s + Number(i.subtotal ?? 0), 0);
+
+  const cobrosEf  = cobrosPM['EFECTIVO'] || 0;
+  const gastosEf  = gastosPM['EFECTIVO'] || 0;
+  const comprasEf = comprasPM['EFECTIVO'] || 0;
+  const sistemaEf = Number(arqueo.monto_apertura) + cobrosEf - gastosEf - comprasEf;
+  const difNum    = Number(arqueo.diferencia ?? 0);
+
+  const nombreEmpresa = empresa?.nombre_comercial || empresa?.razon_social || 'MEGAELECTRA';
+  const absLogo = logoUrl && logoUrl !== '/logo.png'
+    ? (logoUrl.startsWith('http') ? logoUrl : window.location.origin + logoUrl)
+    : null;
+
+  const infoItems = [
+    ['Cajero',    arqueo.usuario],
+    ['Estado',    arqueo.estado],
+    ['Apertura',  fmtF(arqueo.fecha_apertura)],
+    ['Cierre',    fmtF(arqueo.fecha_cierre)],
+    ['Monto apertura', `Bs ${fmtP(arqueo.monto_apertura)}`],
+    ['Total cobrado',  `Bs ${fmtP(totalCobros)}`],
+  ];
+
+  return (
+    <Document>
+      <Page size="A4" style={P.page}>
+
+        {/* Header empresa */}
+        <View style={P.header}>
+          {absLogo && <Image src={absLogo} style={P.logo} />}
+          <View style={P.empWrap}>
+            <Text style={P.empName}>{nombreEmpresa}</Text>
+            {empresa?.razon_social && empresa?.nombre_comercial && empresa.razon_social !== empresa.nombre_comercial && (
+              <Text style={[P.empSub, { marginBottom: 1 }]}>{empresa.razon_social}</Text>
+            )}
+            {empresa?.nit       && <Text style={P.empSub}>NIT: {empresa.nit}</Text>}
+            {empresa?.direccion && <Text style={P.empSub}>Dir: {empresa.direccion}</Text>}
+            {empresa?.telefono  && <Text style={P.empSub}>Tel: {empresa.telefono}</Text>}
+            {empresa?.email     && <Text style={P.empSub}>{empresa.email}</Text>}
+          </View>
+        </View>
+
+        {/* Título */}
+        <View style={P.titBox}>
+          <Text style={P.titText}>RESUMEN DE TURNO</Text>
+          <Text style={P.titSub}>{arqueo.caja} — {arqueo.sucursal}</Text>
+        </View>
+
+        {/* Info grid */}
+        <View style={P.infoGrid}>
+          {infoItems.map(([lbl, val]) => (
+            <View key={lbl} style={P.infoCell}>
+              <Text style={P.infoLbl}>{lbl}</Text>
+              <Text style={P.infoVal}>{val}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Cobros */}
+        {totalCobros > 0 && (
+          <View>
+            <Text style={P.secHdr}>Cobros por método de pago</Text>
+            {Object.entries(cobrosPM).map(([m, v]) => (
+              <View key={m} style={P.row}>
+                <Text style={P.lbl}>{m.replace(/_/g, ' ')}</Text>
+                <Text style={P.val}>Bs {fmtP(v)}</Text>
+              </View>
+            ))}
+            <View style={P.rowTotal}>
+              <Text style={P.val}>Total cobros</Text>
+              <Text style={P.val}>Bs {fmtP(totalCobros)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Gastos */}
+        {totalGastos > 0 && (
+          <View>
+            <Text style={P.secHdr}>Gastos por método de pago</Text>
+            {Object.entries(gastosPM).map(([m, v]) => (
+              <View key={m} style={P.row}>
+                <Text style={P.lbl}>{m.replace(/_/g, ' ')}</Text>
+                <Text style={P.val}>Bs {fmtP(v)}</Text>
+              </View>
+            ))}
+            <View style={P.rowTotal}>
+              <Text style={P.val}>Total gastos</Text>
+              <Text style={P.val}>Bs {fmtP(totalGastos)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Pagos proveedor */}
+        {totalCompras > 0 && (
+          <View>
+            <Text style={P.secHdr}>Pagos a proveedores</Text>
+            {Object.entries(comprasPM).map(([m, v]) => (
+              <View key={m} style={P.row}>
+                <Text style={P.lbl}>{m.replace(/_/g, ' ')}</Text>
+                <Text style={P.val}>Bs {fmtP(v)}</Text>
+              </View>
+            ))}
+            <View style={P.rowTotal}>
+              <Text style={P.val}>Total pagos</Text>
+              <Text style={P.val}>Bs {fmtP(totalCompras)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Productos vendidos */}
+        {ventasDetalle.length > 0 && (
+          <View>
+            <Text style={P.secHdr}>Detalle de productos vendidos</Text>
+            <View style={P.tblHead}>
+              <View style={P.cVenta}><Text style={P.th}>Venta</Text></View>
+              <View style={P.cProd}><Text style={P.th}>Producto</Text></View>
+              <View style={P.cMarca}><Text style={P.th}>Marca</Text></View>
+              <View style={P.cModelo}><Text style={P.th}>Modelo</Text></View>
+              <View style={P.cColor}><Text style={P.th}>Color</Text></View>
+              <View style={P.cSerie}><Text style={P.th}>N° Serie</Text></View>
+              <View style={P.cCant}><Text style={[P.th, { textAlign: 'right' }]}>Cant</Text></View>
+              <View style={P.cSub}><Text style={[P.th, { textAlign: 'right' }]}>Subtotal</Text></View>
+            </View>
+            {ventasDetalle.map((item, i) => (
+              <View key={i} style={i % 2 === 0 ? P.tblRow : P.tblRowAlt}>
+                <View style={P.cVenta}><Text style={[P.td, { fontSize: 7 }]}>{item.venta_numero}</Text></View>
+                <View style={P.cProd}><Text style={P.td}>{item.producto}</Text></View>
+                <View style={P.cMarca}><Text style={P.td}>{item.marca || '—'}</Text></View>
+                <View style={P.cModelo}><Text style={P.td}>{item.modelo || '—'}</Text></View>
+                <View style={P.cColor}><Text style={P.td}>{item.color || '—'}</Text></View>
+                <View style={P.cSerie}><Text style={[P.td, { fontFamily: 'Courier', fontSize: 7 }]}>{item.numero_serie || '—'}</Text></View>
+                <View style={P.cCant}><Text style={[P.td, { textAlign: 'right' }]}>{fmtP(item.cantidad)}</Text></View>
+                <View style={P.cSub}><Text style={[P.td, { textAlign: 'right', fontFamily: 'Helvetica-Bold' }]}>Bs {fmtP(item.subtotal)}</Text></View>
+              </View>
+            ))}
+            <View style={P.rowTotal}>
+              <Text style={P.val}>Total vendido</Text>
+              <Text style={P.val}>Bs {fmtP(totalVendido)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Cuadre efectivo */}
+        <Text style={P.secHdr}>Cuadre de efectivo</Text>
+        <View style={P.cuadreBox}>
+          <View style={P.cuadreRow}>
+            <Text style={P.lbl}>Monto apertura</Text>
+            <Text style={P.val}>Bs {fmtP(arqueo.monto_apertura)}</Text>
+          </View>
+          {cobrosEf > 0 && (
+            <View style={P.cuadreRow}>
+              <Text style={P.lbl}>+ Cobros en efectivo</Text>
+              <Text style={[P.val, { color: '#16a34a' }]}>Bs {fmtP(cobrosEf)}</Text>
+            </View>
+          )}
+          {gastosEf > 0 && (
+            <View style={P.cuadreRow}>
+              <Text style={P.lbl}>− Gastos en efectivo</Text>
+              <Text style={[P.val, { color: '#dc2626' }]}>Bs {fmtP(gastosEf)}</Text>
+            </View>
+          )}
+          {comprasEf > 0 && (
+            <View style={P.cuadreRow}>
+              <Text style={P.lbl}>− Pagos a proveedores</Text>
+              <Text style={[P.val, { color: '#dc2626' }]}>Bs {fmtP(comprasEf)}</Text>
+            </View>
+          )}
+          <View style={[P.cuadreRow, { borderTopWidth: 1, borderTopColor: '#d4d4d8', marginTop: 3, paddingTop: 4 }]}>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10 }}>Total esperado (sistema)</Text>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10 }}>Bs {fmtP(sistemaEf)}</Text>
+          </View>
+          {arqueo.monto_cierre_real != null && (
+            <>
+              <View style={[P.cuadreRow, { marginTop: 4 }]}>
+                <Text style={P.lbl}>Conteo físico real</Text>
+                <Text style={P.val}>Bs {fmtP(arqueo.monto_cierre_real)}</Text>
+              </View>
+              <View style={[P.cuadreFin, { color: difNum === 0 ? '#52525b' : difNum > 0 ? '#16a34a' : '#dc2626' }]}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10 }}>DIFERENCIA</Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10 }}>
+                  {difNum >= 0 ? '+' : ''}Bs {fmtP(arqueo.diferencia)}
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* Observaciones */}
+        {arqueo.observaciones && (
+          <View style={{ marginTop: 8, padding: '5pt 7pt', backgroundColor: '#fef9c3', borderWidth: 0.5, borderColor: '#fbbf24' }}>
+            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#713f12', marginBottom: 2 }}>OBSERVACIONES</Text>
+            <Text style={{ fontSize: 8, color: '#713f12' }}>{arqueo.observaciones}</Text>
+          </View>
+        )}
+
+        {/* Footer fijo */}
+        <View style={P.footer} fixed>
+          <Text>
+            Documento interno de turno — {nombreEmpresa} — Generado el{' '}
+            {new Date().toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' })}
+          </Text>
+        </View>
+      </Page>
+    </Document>
+  );
 }
 
 // ── Modal cierre ──────────────────────────────────────────────────────────
@@ -183,158 +451,12 @@ function TablaMovimientos({ filas, columnas, total, colorTotal = 'text-zinc-900 
   );
 }
 
-// ── Recibo térmico (solo impresión) ───────────────────────────────────────
-function ReciboArqueo({ arqueo, empresa, cobros, gastos, pagosCompra }) {
-  const cobrosPorMetodo  = groupByMethod(cobros);
-  const gastosPorMetodo  = groupByMethod(gastos);
-  const comprasPorMetodo = groupByMethod(pagosCompra);
-
-  const totalCobros  = cobros.reduce((s, c) => s + Number(c.monto), 0);
-  const totalGastos  = gastos.reduce((s, g) => s + Number(g.monto), 0);
-  const totalCompras = pagosCompra.reduce((s, p) => s + Number(p.monto), 0);
-
-  const cobrosEf  = cobrosPorMetodo['EFECTIVO'] || 0;
-  const gastosEf  = gastosPorMetodo['EFECTIVO'] || 0;
-  const comprasEf = comprasPorMetodo['EFECTIVO'] || 0;
-  const sistemaEf = Number(arqueo.monto_apertura) + cobrosEf - gastosEf - comprasEf;
-  const difNum    = Number(arqueo.diferencia ?? 0);
-
-  const S = {
-    wrap:    { fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.5', color: '#000', background: '#fff' },
-    center:  { textAlign: 'center' },
-    sec:     { marginBottom: '6px', paddingBottom: '6px', borderBottom: '1px dashed #d4d4d8' },
-    row:     { display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '2px' },
-    label:   { color: '#71717a', flexShrink: 0 },
-    value:   { fontWeight: '500', textAlign: 'right' },
-    hdr:     { fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#71717a', marginBottom: '3px' },
-    sub:     { borderTop: '1px dashed #d4d4d8', marginTop: '4px', paddingTop: '4px' },
-    strong:  { borderTop: '2px solid #000', marginTop: '5px', paddingTop: '5px' },
-  };
-
-  return (
-    <div id="resumen-caja" style={S.wrap}>
-      {/* Empresa */}
-      <div style={{ ...S.center, ...S.sec }}>
-        <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{empresa?.nombre_comercial || empresa?.razon_social || ''}</div>
-        {empresa?.nit && <div>NIT: {empresa.nit}</div>}
-        <div>{arqueo.sucursal}</div>
-        {empresa?.telefono && <div>Tel: {empresa.telefono}</div>}
-      </div>
-
-      {/* Título */}
-      <div style={{ ...S.center, ...S.sec }}>
-        <div style={{ fontSize: '10px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#71717a' }}>Resumen de Turno</div>
-        <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '2px' }}>{arqueo.caja}</div>
-        <div style={{ fontSize: '10px', color: '#71717a', marginTop: '2px' }}>
-          {fmtFecha(arqueo.fecha_apertura)}<br />
-          {arqueo.fecha_cierre ? `Cierre: ${fmtFecha(arqueo.fecha_cierre)}` : 'Turno abierto'}
-        </div>
-      </div>
-
-      {/* Cajero */}
-      <div style={S.sec}>
-        <div style={S.row}><span style={S.label}>Cajero:</span><span style={S.value}>{arqueo.usuario}</span></div>
-        <div style={S.row}><span style={S.label}>Estado:</span><span style={S.value}>{arqueo.estado}</span></div>
-        <div style={S.row}><span style={S.label}>Apertura:</span><span style={S.value}>Bs {fmt(arqueo.monto_apertura)}</span></div>
-      </div>
-
-      {/* Cobros por método */}
-      {totalCobros > 0 && (
-        <div style={S.sec}>
-          <div style={S.hdr}>Cobros</div>
-          {Object.entries(cobrosPorMetodo).map(([m, v]) => (
-            <div key={m} style={S.row}>
-              <span style={S.label}>{m.replace(/_/g, ' ')}:</span>
-              <span style={S.value}>Bs {fmt(v)}</span>
-            </div>
-          ))}
-          <div style={{ ...S.row, ...S.sub }}>
-            <span style={{ fontWeight: 'bold' }}>Total cobros:</span>
-            <span style={{ fontWeight: 'bold' }}>Bs {fmt(totalCobros)}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Gastos por método */}
-      {totalGastos > 0 && (
-        <div style={S.sec}>
-          <div style={S.hdr}>Gastos</div>
-          {Object.entries(gastosPorMetodo).map(([m, v]) => (
-            <div key={m} style={S.row}>
-              <span style={S.label}>{m.replace(/_/g, ' ')}:</span>
-              <span style={S.value}>Bs {fmt(v)}</span>
-            </div>
-          ))}
-          <div style={{ ...S.row, ...S.sub }}>
-            <span style={{ fontWeight: 'bold' }}>Total gastos:</span>
-            <span style={{ fontWeight: 'bold' }}>Bs {fmt(totalGastos)}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Pagos proveedor por método */}
-      {totalCompras > 0 && (
-        <div style={S.sec}>
-          <div style={S.hdr}>Pagos Proveedor</div>
-          {Object.entries(comprasPorMetodo).map(([m, v]) => (
-            <div key={m} style={S.row}>
-              <span style={S.label}>{m.replace(/_/g, ' ')}:</span>
-              <span style={S.value}>Bs {fmt(v)}</span>
-            </div>
-          ))}
-          <div style={{ ...S.row, ...S.sub }}>
-            <span style={{ fontWeight: 'bold' }}>Total pagos:</span>
-            <span style={{ fontWeight: 'bold' }}>Bs {fmt(totalCompras)}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Cuadre efectivo */}
-      <div style={S.sec}>
-        <div style={S.hdr}>Cuadre Efectivo</div>
-        <div style={S.row}><span style={S.label}>Apertura:</span><span style={S.value}>Bs {fmt(arqueo.monto_apertura)}</span></div>
-        {cobrosEf > 0 && <div style={S.row}><span style={S.label}>+ Cobros ef.:</span><span style={S.value}>Bs {fmt(cobrosEf)}</span></div>}
-        {gastosEf > 0 && <div style={S.row}><span style={S.label}>- Gastos ef.:</span><span style={S.value}>Bs {fmt(gastosEf)}</span></div>}
-        {comprasEf > 0 && <div style={S.row}><span style={S.label}>- Pagos ef.:</span><span style={S.value}>Bs {fmt(comprasEf)}</span></div>}
-        <div style={{ ...S.row, ...S.strong, fontSize: '12px' }}>
-          <span style={{ fontWeight: 'bold' }}>SISTEMA:</span>
-          <span style={{ fontWeight: 'bold' }}>Bs {fmt(sistemaEf)}</span>
-        </div>
-        {arqueo.monto_cierre_real != null && (
-          <>
-            <div style={{ ...S.row, marginTop: '3px' }}>
-              <span style={{ fontWeight: 'bold' }}>REAL:</span>
-              <span style={{ fontWeight: 'bold' }}>Bs {fmt(arqueo.monto_cierre_real)}</span>
-            </div>
-            <div style={{ ...S.row, color: difNum === 0 ? '#52525b' : difNum > 0 ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}>
-              <span>DIFERENCIA:</span>
-              <span>{difNum >= 0 ? '+' : ''}Bs {fmt(arqueo.diferencia)}</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Observaciones */}
-      {arqueo.observaciones && (
-        <div style={{ ...S.sec, fontStyle: 'italic', fontSize: '10px', color: '#71717a' }}>
-          {arqueo.observaciones}
-        </div>
-      )}
-
-      {/* Pie */}
-      <div style={{ ...S.center, fontSize: '10px', color: '#71717a', paddingTop: '4px' }}>
-        — Documento interno de turno —
-      </div>
-    </div>
-  );
-}
-
 // ── Página principal ──────────────────────────────────────────────────────
 export default function ArqueoDetalle() {
   const { id }    = useParams();
   const navigate  = useNavigate();
   const { puede } = usePermission();
-  const { empresa } = useEmpresa() ?? {};
+  const { empresa, logoUrl } = useEmpresa() ?? {};
 
   const puedoCerrar = puede('cerrar', 'caja');
 
@@ -343,36 +465,30 @@ export default function ArqueoDetalle() {
   const [modal,    setModal]    = useState(null);
   const [tab,      setTab]      = useState('cobros');
 
-  const cargar = (imprimirDespues = false) => {
+  const cargar = () => {
     setCargando(true);
     cajaService.getArqueo(id)
-      .then(r => {
-        setData(r.data);
-        if (imprimirDespues) setTimeout(() => window.print(), 300);
-      })
+      .then(r => setData(r.data))
       .catch(() => navigate('/caja'))
       .finally(() => setCargando(false));
   };
 
-  useEffect(() => { cargar(); }, [id]);
+  useEffect(() => { cargar(); }, [id]); // eslint-disable-line
 
   if (cargando) return <div className="flex items-center justify-center py-32 text-zinc-400">Cargando…</div>;
   if (!data) return null;
 
-  const { arqueo, cobros = [], gastos = [], pagosCompra = [], monto_cierre_sistema_provisional } = data;
+  const { arqueo, cobros = [], gastos = [], pagosCompra = [], ventasDetalle = [], monto_cierre_sistema_provisional } = data;
   const esAbierta = arqueo.estado === 'ABIERTA';
 
-  // Solo efectivo para el cuadre de caja
   const cobrosEf  = cobros.filter(c => c.metodo_pago === 'EFECTIVO').reduce((s, c) => s + Number(c.monto), 0);
   const gastosEf  = gastos.filter(g => g.metodo_pago === 'EFECTIVO').reduce((s, g) => s + Number(g.monto), 0);
   const comprasEf = pagosCompra.filter(p => p.metodo_pago === 'EFECTIVO').reduce((s, p) => s + Number(p.monto), 0);
 
-  // Totales de todos los métodos
   const totalCobros  = cobros.reduce((s, c) => s + Number(c.monto), 0);
   const totalGastos  = gastos.reduce((s, g) => s + Number(g.monto), 0);
   const totalCompras = pagosCompra.reduce((s, p) => s + Number(p.monto), 0);
 
-  // Desglose por método
   const cobrosPorMetodo  = groupByMethod(cobros);
   const gastosPorMetodo  = groupByMethod(gastos);
   const comprasPorMetodo = groupByMethod(pagosCompra);
@@ -387,6 +503,20 @@ export default function ArqueoDetalle() {
     if (difNum < 0) return 'text-red-500 dark:text-red-400';
     return 'text-zinc-500 dark:text-zinc-400';
   };
+
+  const pdfDoc = (
+    <ResumenCajaPDF
+      arqueo={arqueo}
+      empresa={empresa}
+      logoUrl={logoUrl}
+      cobros={cobros}
+      gastos={gastos}
+      pagosCompra={pagosCompra}
+      ventasDetalle={ventasDetalle}
+    />
+  );
+
+  const pdfFilename = `turno-${(arqueo.caja ?? 'caja').replace(/\s+/g, '-').toLowerCase()}-${arqueo.id_arqueo}.pdf`;
 
   const tabs = [
     { key: 'cobros',  label: `Cobros (${cobros.length})` },
@@ -413,15 +543,22 @@ export default function ArqueoDetalle() {
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Imprimir resumen
-          </button>
+          {/* Botón descargar PDF */}
+          <PDFDownloadLink document={pdfDoc} fileName={pdfFilename}>
+            {({ loading: pdfLoading }) => (
+              <button
+                disabled={pdfLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {pdfLoading ? 'Generando…' : 'Descargar PDF'}
+              </button>
+            )}
+          </PDFDownloadLink>
+
           <Link to="/caja"
             className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
             Volver
@@ -454,7 +591,6 @@ export default function ArqueoDetalle() {
       {/* Totales por método + Cuadre efectivo */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-        {/* Totales por método de pago */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Totales por método</h2>
           <div className="space-y-4 text-sm">
@@ -515,7 +651,6 @@ export default function ArqueoDetalle() {
           </div>
         </div>
 
-        {/* Cuadre efectivo */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">
             {esAbierta ? 'Cuadre efectivo (provisional)' : 'Cuadre efectivo'}
@@ -650,37 +785,9 @@ export default function ArqueoDetalle() {
           arqueo={arqueo}
           provisional={esAbierta ? monto_cierre_sistema_provisional : null}
           onClose={() => setModal(null)}
-          onSuccess={() => { setModal(null); cargar(true); }}
+          onSuccess={() => { setModal(null); cargar(); }}
         />
       )}
-
-      {/* Recibo térmico — oculto en pantalla, visible al imprimir */}
-      <ReciboArqueo
-        arqueo={arqueo}
-        empresa={empresa}
-        cobros={cobros}
-        gastos={gastos}
-        pagosCompra={pagosCompra}
-      />
-
-      <style>{`
-        #resumen-caja { display: none; }
-        @media print {
-          body * { visibility: hidden !important; }
-          #resumen-caja { display: block !important; }
-          #resumen-caja, #resumen-caja * { visibility: visible !important; }
-          #resumen-caja {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 74mm !important;
-            padding: 3mm !important;
-            background: white !important;
-            color: #000 !important;
-          }
-          @page { size: 80mm auto; margin: 0; }
-        }
-      `}</style>
     </div>
   );
 }

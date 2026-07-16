@@ -5,7 +5,7 @@ const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
     `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?,?,?,?,?)`,
     [userId, tabla, String(id), accion, ip]
-  );
+  ).catch(e => console.error('[auditLog]', accion, tabla, e.message));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1156,7 +1156,13 @@ const getFormData = async (req, res) => {
        FROM clientes WHERE activo = 1 ORDER BY razon_social, nombres`
     );
 
-    res.json({ sucursales, depositos, productos, monedas, impuestos, categorias, unidades, promociones, clientes });
+    // Vendedores: todos los usuarios activos (para asignación de bonos)
+    const [vendedores] = await db.promise().query(
+      `SELECT id_usuario, CONCAT(nombres, ' ', apellidos) AS nombre_completo
+       FROM usuarios WHERE activo = 1 ORDER BY nombres, apellidos`
+    );
+
+    res.json({ sucursales, depositos, productos, monedas, impuestos, categorias, unidades, promociones, clientes, vendedores });
   } catch (err) {
     console.error('[getFormData]', err);
     res.status(500).json({ error: 'Error al obtener datos del formulario' });

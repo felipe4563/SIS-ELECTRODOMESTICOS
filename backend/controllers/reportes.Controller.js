@@ -332,10 +332,14 @@ async function getCuentasPagar(req, res) {
     const [rows] = await db.promise().query(`
       SELECT pr.codigo, pr.razon_social AS proveedor,
         pr.contacto_principal, pr.telefono, pr.plazo_credito_dias,
-        pr.saldo_actual AS total_pendiente
+        COALESCE(SUM(c.saldo_pendiente), 0) AS total_pendiente
       FROM proveedores pr
-      WHERE pr.saldo_actual > 0
-      ORDER BY pr.saldo_actual DESC
+      JOIN compras c ON c.id_proveedor = pr.id_proveedor
+        AND c.condicion_pago = 'CREDITO'
+        AND c.estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+      GROUP BY pr.id_proveedor, pr.codigo, pr.razon_social, pr.contacto_principal, pr.telefono, pr.plazo_credito_dias
+      HAVING total_pendiente > 0
+      ORDER BY total_pendiente DESC
     `);
     res.json(rows);
   } catch (err) {
@@ -445,6 +449,51 @@ async function getEstadoResultados(req, res) {
       resultado_neto,
       margen_neto: ingresos_netos > 0 ? ((resultado_neto / ingresos_netos) * 100).toFixed(2) : '0.00',
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Bonos por vendedor — detalle por producto ──────────────────────────────
+async function getBonosVendedoresDetalle(req, res) {
+  if (!validarFechas(req.query, res)) return;
+  try {
+    const { id_sucursal } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    let sql = `
+      SELECT
+        u.id_usuario,
+        CONCAT(u.nombres,' ',u.apellidos) AS vendedor,
+        s.nombre AS sucursal,
+        v.id_venta,
+        v.numero   AS numero_venta,
+        DATE_FORMAT(v.fecha,'%Y-%m-%d') AS fecha_venta,
+        p.codigo_interno,
+        p.producto,
+        COALESCE(m.nombre,'') AS marca,
+        COALESCE(vd.numero_serie,'')  AS numero_serie,
+        vd.cantidad,
+        vd.precio_unitario,
+        vd.descuento_porc,
+        vd.subtotal,
+        COALESCE(vd.bono_vendedor,0) AS bono_vendedor
+      FROM venta_detalle vd
+      JOIN ventas v      ON v.id_venta      = vd.id_venta
+      JOIN usuarios u    ON u.id_usuario    = v.id_vendedor
+      JOIN sucursales s  ON s.id_sucursal   = v.id_sucursal
+      JOIN productos p   ON p.id_producto   = vd.id_producto
+      LEFT JOIN marcas m ON m.id_marca      = p.id_marca
+      WHERE DATE(v.fecha) BETWEEN ? AND ?
+        AND v.estado NOT IN ('ANULADA','BORRADOR')
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND v.id_sucursal = ?'; params.push(id_sucursal); }
+    sql += ' ORDER BY u.apellidos ASC, u.nombres ASC, v.fecha ASC, vd.id_detalle ASC';
+
+    const [rows] = await db.promise().query(sql, params);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -942,11 +991,643 @@ async function exportarStockPDF(req, res) {
   }
 }
 
+// ── Helpers PDF compartidos ────────────────────────────────────────────────
+async function getEmpresaData() {
+  const [[emp]] = await db.promise().query(
+    `SELECT razon_social, nombre_comercial, nit, direccion, telefono, email, logo_url
+     FROM empresas WHERE activo=1 LIMIT 1`
+  ).catch(() => [[null]]);
+  return emp;
+}
+
+function drawPdfHeader(doc, empresa, titulo, subtitulo) {
+  const marginL = 30;
+  const pageW   = doc.page.width - 60;
+  let logoW = 0;
+  if (empresa?.logo_url && empresa.logo_url.startsWith('/uploads/')) {
+    const logoFile = path.join(__dirname, '..', empresa.logo_url);
+    if (fs.existsSync(logoFile)) {
+      try { doc.image(logoFile, marginL, 30, { height: 48, fit: [90, 48] }); logoW = 98; } catch (_) {}
+    }
+  }
+  const textX = marginL + logoW;
+  doc.font('Helvetica-Bold').fontSize(13).fillColor('#0f172a')
+     .text(empresa?.nombre_comercial || empresa?.razon_social || '', textX, 30, { width: pageW - logoW });
+  let iy = 46;
+  doc.font('Helvetica').fontSize(7.5).fillColor('#64748b');
+  if (empresa?.nit)       { doc.text(`NIT: ${empresa.nit}`,    textX, iy); iy += 10; }
+  if (empresa?.direccion) { doc.text(empresa.direccion,         textX, iy); iy += 10; }
+  const ct = [empresa?.telefono, empresa?.email].filter(Boolean).join('  ·  ');
+  if (ct) { doc.text(ct, textX, iy); iy += 10; }
+  const sepY = Math.max(iy, 82) + 4;
+  doc.moveTo(marginL, sepY).lineTo(marginL + pageW, sepY).strokeColor('#cbd5e1').lineWidth(0.8).stroke();
+  let ty = sepY + 10;
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a')
+     .text(titulo.toUpperCase(), marginL, ty, { width: pageW, align: 'center' });
+  ty += 16;
+  doc.font('Helvetica').fontSize(7.5).fillColor('#64748b')
+     .text(subtitulo, marginL, ty, { width: pageW, align: 'center' });
+  return ty + 18;
+}
+
+function drawSummaryBoxes(doc, boxes, y) {
+  const marginL = 30;
+  const pageW   = doc.page.width - 60;
+  const bw = Math.floor(pageW / boxes.length) - 4;
+  boxes.forEach((b, i) => {
+    const bx = marginL + i * (bw + 4);
+    doc.roundedRect(bx, y, bw, 34, 4).fill('#f1f5f9');
+    doc.font('Helvetica').fontSize(7).fillColor('#64748b').text(b.label.toUpperCase(), bx + 6, y + 7, { width: bw - 12 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(b.color || '#0f172a').text(b.valor, bx + 6, y + 18, { width: bw - 12 });
+  });
+  return y + 44;
+}
+
+// ── Cuentas por Cobrar PDF detallado ───────────────────────────────────────
+async function exportarCuentasCobrarPDF(req, res) {
+  try {
+    const empresa = await getEmpresaData();
+
+    // Clientes con saldo pendiente
+    const [clientes] = await db.promise().query(`
+      SELECT c.id_cliente, c.codigo,
+        COALESCE(c.razon_social, CONCAT(c.nombres,' ',c.apellidos)) AS cliente,
+        c.tipo_cliente, c.telefono, c.limite_credito, c.dias_credito,
+        c.saldo_actual AS total_pendiente
+      FROM clientes c
+      WHERE c.saldo_actual > 0
+      ORDER BY c.saldo_actual DESC
+    `);
+
+    if (clientes.length === 0) {
+      // Devuelve PDF vacío con mensaje
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="cuentas-cobrar.pdf"');
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      doc.pipe(res);
+      const y0 = drawPdfHeader(doc, empresa, 'Cuentas por Cobrar', `Generado: ${new Date().toLocaleString('es-BO')}`);
+      doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('No hay cuentas por cobrar pendientes.', 30, y0 + 20, { align: 'center', width: doc.page.width - 60 });
+      doc.end(); return;
+    }
+
+    // Ventas pendientes por cliente
+    const ids = clientes.map(c => c.id_cliente);
+    const [ventas] = await db.promise().query(`
+      SELECT v.id_cliente, v.numero, DATE_FORMAT(v.fecha,'%d/%m/%Y') AS fecha,
+        v.total, v.saldo_pendiente,
+        COALESCE(DATE_FORMAT(DATE_ADD(v.fecha, INTERVAL c.dias_credito DAY),'%d/%m/%Y'), '—') AS vencimiento,
+        v.estado
+      FROM ventas v
+      JOIN clientes c ON c.id_cliente = v.id_cliente
+      WHERE v.id_cliente IN (?) AND v.condicion_pago='CREDITO'
+        AND v.saldo_pendiente > 0 AND v.estado NOT IN ('ANULADA','BORRADOR')
+      ORDER BY v.id_cliente, v.fecha DESC
+    `, [ids]);
+
+    const ventasPorCliente = {};
+    ventas.forEach(v => {
+      if (!ventasPorCliente[v.id_cliente]) ventasPorCliente[v.id_cliente] = [];
+      ventasPorCliente[v.id_cliente].push(v);
+    });
+
+    const totalGeneral = clientes.reduce((a, c) => a + Number(c.total_pendiente), 0);
+    const fmt = n => Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="cuentas-cobrar.pdf"');
+    const doc = new PDFDocument({ margin: 30, size: 'A4', autoFirstPage: true });
+    doc.pipe(res);
+
+    const ML = 30, PW = doc.page.width - 60;
+    const fechaGen = new Date().toLocaleString('es-BO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    let y = drawPdfHeader(doc, empresa, 'Cuentas por Cobrar', `Generado: ${fechaGen}   ·   ${clientes.length} cliente${clientes.length !== 1 ? 's' : ''} con saldo pendiente`);
+
+    y = drawSummaryBoxes(doc, [
+      { label: 'Clientes con deuda',   valor: String(clientes.length), color: '#0f172a' },
+      { label: 'Total por cobrar',     valor: `Bs ${fmt(totalGeneral)}`, color: '#dc2626' },
+    ], y);
+
+    // Columnas cabecera tabla de clientes
+    const COLS_C = [
+      { key: 'codigo',          w: 50,  label: 'CÓDIGO',         align: 'left' },
+      { key: 'cliente',         w: 160, label: 'CLIENTE',        align: 'left' },
+      { key: 'tipo_cliente',    w: 55,  label: 'TIPO',           align: 'left' },
+      { key: 'telefono',        w: 70,  label: 'TELÉFONO',       align: 'left' },
+      { key: 'limite_credito',  w: 65,  label: 'LÍMITE Bs',      align: 'right' },
+      { key: 'dias_credito',    w: 45,  label: 'DÍAS CRED.',     align: 'right' },
+      { key: 'total_pendiente', w: 70,  label: 'SALDO Bs',       align: 'right' },
+    ];
+    const COLS_V = [
+      { key: 'numero',          w: 100, label: 'N° VENTA',       align: 'left' },
+      { key: 'fecha',           w: 70,  label: 'FECHA',          align: 'left' },
+      { key: 'vencimiento',     w: 70,  label: 'VENCIMIENTO',    align: 'left' },
+      { key: 'total',           w: 80,  label: 'TOTAL Bs',       align: 'right' },
+      { key: 'saldo_pendiente', w: 80,  label: 'PENDIENTE Bs',   align: 'right' },
+      { key: 'estado',          w: 65,  label: 'ESTADO',         align: 'left' },
+    ];
+
+    const checkPage = (needed = 14) => {
+      if (y + needed > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', margin: 30 });
+        y = 30;
+      }
+    };
+
+    const drawHdr = (cols, bgColor, textColor, indent = 0) => {
+      let x = ML + indent;
+      doc.rect(x, y, PW - indent, 14).fill(bgColor);
+      cols.forEach(c => {
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor(textColor)
+           .text(c.label, x + 3, y + 4, { width: c.w - 6, align: c.align, lineBreak: false });
+        x += c.w;
+      });
+      y += 14;
+    };
+
+    const drawDataRow = (cols, vals, bgColor, fontColor, indent = 0, rowH = 13) => {
+      let x = ML + indent;
+      doc.rect(x, y, PW - indent, rowH).fill(bgColor);
+      cols.forEach(c => {
+        const v = vals[c.key] ?? '';
+        doc.font('Helvetica').fontSize(7).fillColor(fontColor)
+           .text(String(v), x + 3, y + 3, { width: c.w - 6, align: c.align, lineBreak: false });
+        x += c.w;
+      });
+      y += rowH;
+    };
+
+    // Cabecera tabla principal
+    checkPage(20);
+    drawHdr(COLS_C, '#1e293b', 'white');
+
+    clientes.forEach((cl, idx) => {
+      const vts = ventasPorCliente[cl.id_cliente] || [];
+      const rowsNeeded = 14 + (vts.length > 0 ? 12 + vts.length * 12 : 0);
+      checkPage(rowsNeeded);
+
+      // Fila cliente
+      drawDataRow(COLS_C, { ...cl, total_pendiente: fmt(cl.total_pendiente), limite_credito: fmt(cl.limite_credito) },
+        idx % 2 === 0 ? '#f8fafc' : 'white', '#0f172a');
+
+      // Sub-filas de ventas
+      if (vts.length > 0) {
+        // Mini cabecera ventas
+        let x = ML + 15;
+        doc.rect(x, y, PW - 15, 12).fill('#e2e8f0');
+        COLS_V.forEach(c => {
+          doc.font('Helvetica-Bold').fontSize(6).fillColor('#475569')
+             .text(c.label, x + 2, y + 3, { width: c.w - 4, align: c.align, lineBreak: false });
+          x += c.w;
+        });
+        y += 12;
+
+        vts.forEach(v => {
+          checkPage(12);
+          drawDataRow(COLS_V, { ...v, total: fmt(v.total), saldo_pendiente: fmt(v.saldo_pendiente) },
+            '#fafafa', '#374151', 15, 12);
+        });
+      }
+    });
+
+    // Fila de total
+    checkPage(16);
+    const totX = ML;
+    doc.rect(totX, y, PW, 16).fill('#0f172a');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('white')
+       .text('TOTAL GENERAL', totX + 3, y + 4, { width: PW - 80, lineBreak: false })
+       .text(`Bs ${fmt(totalGeneral)}`, totX + PW - 77, y + 4, { width: 74, align: 'right', lineBreak: false });
+    y += 16;
+
+    // Pie
+    y += 8;
+    doc.font('Helvetica').fontSize(6.5).fillColor('#94a3b8')
+       .text(`${empresa?.razon_social || ''}  ·  Documento generado por el sistema  ·  ${fechaGen}`,
+         ML, y, { width: PW, align: 'center' });
+
+    doc.end();
+  } catch (err) {
+    console.error('[exportarCuentasCobrarPDF]', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Cuentas por Pagar PDF detallado ────────────────────────────────────────
+async function exportarCuentasPagarPDF(req, res) {
+  try {
+    const empresa = await getEmpresaData();
+
+    const [proveedores] = await db.promise().query(`
+      SELECT pr.id_proveedor, pr.codigo, pr.razon_social AS proveedor,
+        pr.contacto_principal, pr.telefono, pr.plazo_credito_dias,
+        COALESCE(SUM(c.saldo_pendiente), 0) AS total_pendiente
+      FROM proveedores pr
+      JOIN compras c ON c.id_proveedor = pr.id_proveedor
+        AND c.condicion_pago = 'CREDITO'
+        AND c.estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+      GROUP BY pr.id_proveedor, pr.codigo, pr.razon_social, pr.contacto_principal, pr.telefono, pr.plazo_credito_dias
+      HAVING total_pendiente > 0
+      ORDER BY total_pendiente DESC
+    `);
+
+    if (proveedores.length === 0) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="cuentas-pagar.pdf"');
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      doc.pipe(res);
+      const y0 = drawPdfHeader(doc, empresa, 'Cuentas por Pagar', `Generado: ${new Date().toLocaleString('es-BO')}`);
+      doc.font('Helvetica').fontSize(9).fillColor('#64748b').text('No hay cuentas por pagar pendientes.', 30, y0 + 20, { align: 'center', width: doc.page.width - 60 });
+      doc.end(); return;
+    }
+
+    const ids = proveedores.map(p => p.id_proveedor);
+    const [compras] = await db.promise().query(`
+      SELECT c.id_proveedor, c.numero, DATE_FORMAT(c.fecha_pedido,'%d/%m/%Y') AS fecha_pedido,
+        c.total, c.saldo_pendiente, c.estado, c.dias_credito,
+        COALESCE(DATE_FORMAT(DATE_ADD(c.fecha_pedido, INTERVAL c.dias_credito DAY),'%d/%m/%Y'), '—') AS vencimiento
+      FROM compras c
+      WHERE c.id_proveedor IN (?) AND c.condicion_pago='CREDITO'
+        AND c.saldo_pendiente > 0 AND c.estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+      ORDER BY c.id_proveedor, c.fecha_pedido DESC
+    `, [ids]);
+
+    const comprasPorProv = {};
+    compras.forEach(c => {
+      if (!comprasPorProv[c.id_proveedor]) comprasPorProv[c.id_proveedor] = [];
+      comprasPorProv[c.id_proveedor].push(c);
+    });
+
+    const totalGeneral = proveedores.reduce((a, p) => a + Number(p.total_pendiente), 0);
+    const fmt = n => Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="cuentas-pagar.pdf"');
+    const doc = new PDFDocument({ margin: 30, size: 'A4', autoFirstPage: true });
+    doc.pipe(res);
+
+    const ML = 30, PW = doc.page.width - 60;
+    const fechaGen = new Date().toLocaleString('es-BO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    let y = drawPdfHeader(doc, empresa, 'Cuentas por Pagar', `Generado: ${fechaGen}   ·   ${proveedores.length} proveedor${proveedores.length !== 1 ? 'es' : ''} con saldo pendiente`);
+
+    y = drawSummaryBoxes(doc, [
+      { label: 'Proveedores con deuda', valor: String(proveedores.length), color: '#0f172a' },
+      { label: 'Total por pagar',       valor: `Bs ${fmt(totalGeneral)}`, color: '#dc2626' },
+    ], y);
+
+    const COLS_P = [
+      { key: 'codigo',           w: 50,  label: 'CÓDIGO',       align: 'left' },
+      { key: 'proveedor',        w: 165, label: 'PROVEEDOR',    align: 'left' },
+      { key: 'contacto_principal', w: 90, label: 'CONTACTO',   align: 'left' },
+      { key: 'telefono',         w: 70,  label: 'TELÉFONO',    align: 'left' },
+      { key: 'plazo_credito_dias', w: 50, label: 'PLAZO días', align: 'right' },
+      { key: 'total_pendiente',  w: 70,  label: 'SALDO Bs',    align: 'right' },
+    ];
+    const COLS_C = [
+      { key: 'numero',          w: 100, label: 'N° COMPRA',    align: 'left' },
+      { key: 'fecha_pedido',    w: 70,  label: 'FECHA',         align: 'left' },
+      { key: 'vencimiento',     w: 70,  label: 'VENCIMIENTO',   align: 'left' },
+      { key: 'total',           w: 80,  label: 'TOTAL Bs',      align: 'right' },
+      { key: 'saldo_pendiente', w: 80,  label: 'PENDIENTE Bs',  align: 'right' },
+      { key: 'estado',          w: 65,  label: 'ESTADO',        align: 'left' },
+    ];
+
+    const checkPage = (needed = 14) => {
+      if (y + needed > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', margin: 30 });
+        y = 30;
+      }
+    };
+
+    const drawHdr = (cols, bgColor, textColor, indent = 0) => {
+      let x = ML + indent;
+      doc.rect(x, y, PW - indent, 14).fill(bgColor);
+      cols.forEach(c => {
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor(textColor)
+           .text(c.label, x + 3, y + 4, { width: c.w - 6, align: c.align, lineBreak: false });
+        x += c.w;
+      });
+      y += 14;
+    };
+
+    const drawDataRow = (cols, vals, bgColor, fontColor, indent = 0, rowH = 13) => {
+      let x = ML + indent;
+      doc.rect(x, y, PW - indent, rowH).fill(bgColor);
+      cols.forEach(c => {
+        const v = vals[c.key] ?? '';
+        doc.font('Helvetica').fontSize(7).fillColor(fontColor)
+           .text(String(v), x + 3, y + 3, { width: c.w - 6, align: c.align, lineBreak: false });
+        x += c.w;
+      });
+      y += rowH;
+    };
+
+    checkPage(20);
+    drawHdr(COLS_P, '#1e293b', 'white');
+
+    proveedores.forEach((pv, idx) => {
+      const cmps = comprasPorProv[pv.id_proveedor] || [];
+      const rowsNeeded = 14 + (cmps.length > 0 ? 12 + cmps.length * 12 : 0);
+      checkPage(rowsNeeded);
+
+      drawDataRow(COLS_P, { ...pv, total_pendiente: fmt(pv.total_pendiente) },
+        idx % 2 === 0 ? '#f8fafc' : 'white', '#0f172a');
+
+      if (cmps.length > 0) {
+        let x = ML + 15;
+        doc.rect(x, y, PW - 15, 12).fill('#e2e8f0');
+        COLS_C.forEach(c => {
+          doc.font('Helvetica-Bold').fontSize(6).fillColor('#475569')
+             .text(c.label, x + 2, y + 3, { width: c.w - 4, align: c.align, lineBreak: false });
+          x += c.w;
+        });
+        y += 12;
+
+        cmps.forEach(c => {
+          checkPage(12);
+          drawDataRow(COLS_C, { ...c, total: fmt(c.total), saldo_pendiente: fmt(c.saldo_pendiente) },
+            '#fafafa', '#374151', 15, 12);
+        });
+      }
+    });
+
+    checkPage(16);
+    const totX = ML;
+    doc.rect(totX, y, PW, 16).fill('#0f172a');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('white')
+       .text('TOTAL GENERAL', totX + 3, y + 4, { width: PW - 80, lineBreak: false })
+       .text(`Bs ${fmt(totalGeneral)}`, totX + PW - 77, y + 4, { width: 74, align: 'right', lineBreak: false });
+    y += 16;
+    y += 8;
+    doc.font('Helvetica').fontSize(6.5).fillColor('#94a3b8')
+       .text(`${empresa?.razon_social || ''}  ·  Documento generado por el sistema  ·  ${fechaGen}`,
+         ML, y, { width: PW, align: 'center' });
+
+    doc.end();
+  } catch (err) {
+    console.error('[exportarCuentasPagarPDF]', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Transferencias PDF detallado ───────────────────────────────────────────
+async function exportarTransferenciasPDF(req, res) {
+  try {
+    const empresa = await getEmpresaData();
+    const desde   = req.query.fecha_desde || inicioMes();
+    const hasta   = req.query.fecha_hasta || hoy();
+    const { id_sucursal, estado } = req.query;
+
+    let sql = `
+      SELECT t.id_transferencia, t.numero,
+        DATE_FORMAT(t.fecha_solicitud,'%d/%m/%Y %H:%i') AS fecha_solicitud,
+        DATE_FORMAT(t.fecha_envio,'%d/%m/%Y %H:%i')     AS fecha_envio,
+        DATE_FORMAT(t.fecha_recepcion,'%d/%m/%Y %H:%i') AS fecha_recepcion,
+        dor.nombre AS deposito_origen,  sor.nombre AS sucursal_origen,
+        dde.nombre AS deposito_destino, sde.nombre AS sucursal_destino,
+        t.estado, t.observaciones,
+        COUNT(td.id_detalle)                 AS num_productos,
+        COALESCE(SUM(td.cantidad_enviada),0) AS total_enviado,
+        CONCAT(us.nombres,' ',us.apellidos)  AS solicitante,
+        CONCAT(ue.nombres,' ',ue.apellidos)  AS enviado_por,
+        CONCAT(ur.nombres,' ',ur.apellidos)  AS recibido_por
+      FROM transferencias t
+      JOIN depositos dor  ON dor.id_deposito = t.id_deposito_origen
+      JOIN sucursales sor ON sor.id_sucursal  = dor.id_sucursal
+      JOIN depositos dde  ON dde.id_deposito = t.id_deposito_destino
+      JOIN sucursales sde ON sde.id_sucursal  = dde.id_sucursal
+      LEFT JOIN transferencia_detalle td ON td.id_transferencia = t.id_transferencia
+      LEFT JOIN usuarios us ON us.id_usuario = t.id_usuario_solicita
+      LEFT JOIN usuarios ue ON ue.id_usuario = t.id_usuario_envia
+      LEFT JOIN usuarios ur ON ur.id_usuario = t.id_usuario_recibe
+      WHERE DATE(t.fecha_solicitud) BETWEEN ? AND ?
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND (sor.id_sucursal=? OR sde.id_sucursal=?)'; params.push(id_sucursal, id_sucursal); }
+    if (estado)      { sql += ' AND t.estado=?'; params.push(estado); }
+    sql += ' GROUP BY t.id_transferencia ORDER BY t.fecha_solicitud DESC LIMIT 500';
+
+    const [transferencias] = await db.promise().query(sql, params);
+    const fechaGen = new Date().toLocaleString('es-BO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="transferencias.pdf"');
+
+    if (transferencias.length === 0) {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      doc.pipe(res);
+      const y0 = drawPdfHeader(doc, empresa, 'Reporte de Transferencias', `Período: ${desde} al ${hasta}   ·   Generado: ${fechaGen}`);
+      doc.font('Helvetica').fontSize(9).fillColor('#64748b')
+         .text('Sin transferencias en el período seleccionado.', 30, y0 + 20, { align: 'center', width: doc.page.width - 60 });
+      doc.end(); return;
+    }
+
+    // Detalle de productos por transferencia
+    const ids = transferencias.map(t => t.id_transferencia);
+    const [detalles] = await db.promise().query(`
+      SELECT td.id_transferencia, p.codigo_interno, p.producto AS nombre_producto,
+        td.cantidad_enviada, COALESCE(td.cantidad_recibida, 0) AS cantidad_recibida,
+        (td.cantidad_enviada - COALESCE(td.cantidad_recibida, 0)) AS diferencia,
+        td.observacion
+      FROM transferencia_detalle td
+      JOIN productos p ON p.id_producto = td.id_producto
+      WHERE td.id_transferencia IN (?)
+      ORDER BY td.id_transferencia, p.producto
+    `, [ids]);
+
+    const detPor = {};
+    detalles.forEach(d => {
+      if (!detPor[d.id_transferencia]) detPor[d.id_transferencia] = [];
+      detPor[d.id_transferencia].push(d);
+    });
+
+    const totalUnidades = transferencias.reduce((a, t) => a + Number(t.total_enviado), 0);
+    const fmtN = n => Number(n || 0).toLocaleString('es-BO');
+
+    // Conteo por estado
+    const porEstado = {};
+    transferencias.forEach(t => { porEstado[t.estado] = (porEstado[t.estado] || 0) + 1; });
+    const estadoResumen = Object.entries(porEstado).map(([k, v]) => `${k}: ${v}`).join('   ·   ');
+
+    const doc = new PDFDocument({ margin: 30, size: 'A4', autoFirstPage: true });
+    doc.pipe(res);
+
+    const ML = 30, PW = doc.page.width - 60;
+    const subtitulo = [
+      `Período: ${desde} al ${hasta}`,
+      estado ? `Estado: ${estado}` : null,
+      `Generado: ${fechaGen}`,
+    ].filter(Boolean).join('   ·   ');
+
+    let y = drawPdfHeader(doc, empresa, 'Reporte de Transferencias', subtitulo);
+    y = drawSummaryBoxes(doc, [
+      { label: 'Transferencias',  valor: fmtN(transferencias.length), color: '#0f172a' },
+      { label: 'Total unidades',  valor: fmtN(totalUnidades),         color: '#0f172a' },
+    ], y);
+
+    // Línea de distribución por estado
+    doc.font('Helvetica').fontSize(6.5).fillColor('#64748b')
+       .text(estadoResumen, ML, y, { width: PW });
+    y += 13;
+
+    // ── Columnas tabla principal ────────────────────────────────────────────
+    const COLS_T = [
+      { key: 'numero',      w: 85,  label: 'N° TRANSFERENCIA', align: 'left' },
+      { key: 'fecha_sol',   w: 80,  label: 'F. SOLICITUD',     align: 'left' },
+      { key: 'origen',      w: 110, label: 'ORIGEN',           align: 'left' },
+      { key: 'destino',     w: 110, label: 'DESTINO',          align: 'left' },
+      { key: 'num_prods',   w: 40,  label: 'PRODS',            align: 'right' },
+      { key: 'total_env',   w: 45,  label: 'UNIDS',            align: 'right' },
+      { key: 'estado',      w: 65,  label: 'ESTADO',           align: 'left' },
+    ];
+    // ── Columnas sub-tabla productos ────────────────────────────────────────
+    const COLS_D = [
+      { key: 'codigo_interno',    w: 68,  label: 'CÓDIGO',      align: 'left' },
+      { key: 'nombre_producto',   w: 222, label: 'PRODUCTO',    align: 'left' },
+      { key: 'cantidad_enviada',  w: 65,  label: 'ENVIADO',     align: 'right' },
+      { key: 'cantidad_recibida', w: 65,  label: 'RECIBIDO',    align: 'right' },
+      { key: 'diferencia',        w: 55,  label: 'DIFERENCIA',  align: 'right' },
+      { key: 'observacion',       w: 45,  label: 'OBS.',        align: 'left' },
+    ];
+
+    const checkPage = (needed = 14) => {
+      if (y + needed > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', margin: 30 });
+        y = 30;
+      }
+    };
+
+    const drawHdrRow = (cols, bgColor, textColor, indent = 0) => {
+      let x = ML + indent;
+      doc.rect(x, y, PW - indent, 14).fill(bgColor);
+      cols.forEach(c => {
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor(textColor)
+           .text(c.label, x + 3, y + 4, { width: c.w - 6, align: c.align, lineBreak: false });
+        x += c.w;
+      });
+      y += 14;
+    };
+
+    const ESTADO_COLOR = {
+      RECIBIDA: '#16a34a', ANULADA: '#dc2626',
+      EN_TRANSITO: '#d97706', PARCIAL: '#2563eb', SOLICITADA: '#64748b',
+    };
+
+    checkPage(20);
+    drawHdrRow(COLS_T, '#1e293b', 'white');
+
+    transferencias.forEach((tr, idx) => {
+      const dets    = detPor[tr.id_transferencia] || [];
+      const bgMain  = idx % 2 === 0 ? '#f8fafc' : 'white';
+      const needed  = 22 + 11 + (dets.length > 0 ? 14 + dets.length * 11 : 0) + 7;
+      checkPage(needed);
+
+      // ── Fila principal de la transferencia ─────────────────────────────
+      const mainH = 22;
+      doc.rect(ML, y, PW, mainH).fill(bgMain);
+      let x = ML;
+      COLS_T.forEach(c => {
+        if (c.key === 'origen' || c.key === 'destino') {
+          const suc = c.key === 'origen' ? tr.sucursal_origen  : tr.sucursal_destino;
+          const dep = c.key === 'origen' ? tr.deposito_origen  : tr.deposito_destino;
+          doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#0f172a')
+             .text(suc || '', x + 3, y + 4,  { width: c.w - 6, lineBreak: false });
+          doc.font('Helvetica').fontSize(6).fillColor('#64748b')
+             .text(dep || '', x + 3, y + 13, { width: c.w - 6, lineBreak: false });
+        } else if (c.key === 'estado') {
+          doc.font('Helvetica-Bold').fontSize(6.5).fillColor(ESTADO_COLOR[tr.estado] || '#64748b')
+             .text(tr.estado, x + 3, y + 7, { width: c.w - 6, lineBreak: false });
+        } else {
+          const val = c.key === 'numero'    ? tr.numero :
+                      c.key === 'fecha_sol' ? tr.fecha_solicitud :
+                      c.key === 'num_prods' ? fmtN(tr.num_productos) :
+                      c.key === 'total_env' ? fmtN(tr.total_enviado) : '';
+          doc.font(c.key === 'numero' ? 'Helvetica-Bold' : 'Helvetica').fontSize(6.5).fillColor('#0f172a')
+             .text(String(val), x + 3, y + 7, { width: c.w - 6, align: c.align, lineBreak: false });
+        }
+        x += c.w;
+      });
+      y += mainH;
+
+      // ── Fila de info: responsables y fechas ────────────────────────────
+      const infoParts = [];
+      if (tr.solicitante)    infoParts.push(`Solicitado por: ${tr.solicitante}`);
+      if (tr.enviado_por)    infoParts.push(`Enviado por: ${tr.enviado_por}`);
+      if (tr.recibido_por)   infoParts.push(`Recibido por: ${tr.recibido_por}`);
+      if (tr.fecha_envio)    infoParts.push(`F. envío: ${tr.fecha_envio}`);
+      if (tr.fecha_recepcion) infoParts.push(`F. recepción: ${tr.fecha_recepcion}`);
+      if (tr.observaciones)  infoParts.push(`Obs: ${tr.observaciones}`);
+
+      if (infoParts.length > 0) {
+        doc.rect(ML, y, PW, 11).fill('#f1f5f9');
+        doc.font('Helvetica').fontSize(6).fillColor('#475569')
+           .text(infoParts.join('   ·   '), ML + 4, y + 3, { width: PW - 8, lineBreak: false });
+        y += 11;
+      }
+
+      // ── Sub-tabla de productos ─────────────────────────────────────────
+      if (dets.length > 0) {
+        drawHdrRow(COLS_D, '#e2e8f0', '#475569', 15);
+        dets.forEach(d => {
+          checkPage(11);
+          let dx = ML + 15;
+          doc.rect(dx, y, PW - 15, 11).fill('#fafafa');
+          COLS_D.forEach(c => {
+            let v   = d[c.key] ?? '';
+            let clr = '#374151';
+            if (c.key === 'diferencia') {
+              const n = Number(v);
+              clr = n > 0 ? '#dc2626' : n < 0 ? '#2563eb' : '#374151';
+              v = fmtN(v);
+            } else if (c.key === 'cantidad_enviada' || c.key === 'cantidad_recibida') {
+              v = fmtN(v);
+            }
+            doc.font('Helvetica').fontSize(6.5).fillColor(clr)
+               .text(String(v), dx + 2, y + 3, { width: c.w - 4, align: c.align, lineBreak: false });
+            dx += c.w;
+          });
+          y += 11;
+        });
+      }
+
+      // Separador entre transferencias
+      y += 3;
+      doc.moveTo(ML, y).lineTo(ML + PW, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+      y += 4;
+    });
+
+    // ── Fila total general ──────────────────────────────────────────────────
+    checkPage(18);
+    doc.rect(ML, y, PW, 18).fill('#0f172a');
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('white')
+       .text('TOTAL GENERAL', ML + 3, y + 5, { width: 180, lineBreak: false })
+       .text(
+         `${fmtN(transferencias.length)} transferencia${transferencias.length !== 1 ? 's' : ''}   ·   ${fmtN(totalUnidades)} unidades`,
+         ML + 183, y + 5, { width: PW - 186, align: 'right', lineBreak: false }
+       );
+    y += 18;
+
+    // ── Pie de página ───────────────────────────────────────────────────────
+    y += 8;
+    doc.font('Helvetica').fontSize(6.5).fillColor('#94a3b8')
+       .text(
+         `${empresa?.razon_social || ''}  ·  Documento generado por el sistema  ·  ${fechaGen}`,
+         ML, y, { width: PW, align: 'center' }
+       );
+
+    doc.end();
+  } catch (err) {
+    console.error('[exportarTransferenciasPDF]', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
 // ── Exportar reporte PDF ───────────────────────────────────────────────────
 async function exportarReporte(req, res) {
   try {
     const { tipo } = req.query;
-    if (tipo === 'stock') return exportarStockPDF(req, res);
+    if (tipo === 'stock')           return exportarStockPDF(req, res);
+    if (tipo === 'cuentas-cobrar')  return exportarCuentasCobrarPDF(req, res);
+    if (tipo === 'cuentas-pagar')   return exportarCuentasPagarPDF(req, res);
+    if (tipo === 'transferencias')  return exportarTransferenciasPDF(req, res);
     const desde = req.query.fecha_desde || inicioMes();
     const hasta = req.query.fecha_hasta || hoy();
 
@@ -983,24 +1664,6 @@ async function exportarReporte(req, res) {
         [desde, hasta]
       );
       columnas = ['numero','fecha_pedido','proveedor','sucursal','condicion_pago','total','saldo_pendiente','estado'];
-
-    } else if (tipo === 'cuentas-cobrar') {
-      titulo = 'Cuentas por Cobrar';
-      [rows] = await db.promise().query(
-        `SELECT c.codigo, COALESCE(c.razon_social,CONCAT(c.nombres,' ',c.apellidos)) AS cliente,
-          c.tipo_cliente, c.telefono, c.limite_credito, c.saldo_actual AS total_pendiente, c.dias_credito
-         FROM clientes c WHERE c.saldo_actual > 0 ORDER BY c.saldo_actual DESC`
-      );
-      columnas = ['codigo','cliente','tipo_cliente','telefono','limite_credito','total_pendiente','dias_credito'];
-
-    } else if (tipo === 'cuentas-pagar') {
-      titulo = 'Cuentas por Pagar';
-      [rows] = await db.promise().query(
-        `SELECT pr.codigo, pr.razon_social AS proveedor, pr.contacto_principal,
-          pr.telefono, pr.plazo_credito_dias, pr.saldo_actual AS total_pendiente
-         FROM proveedores pr WHERE pr.saldo_actual > 0 ORDER BY pr.saldo_actual DESC`
-      );
-      columnas = ['codigo','proveedor','contacto_principal','telefono','plazo_credito_dias','total_pendiente'];
 
     } else if (tipo === 'top-productos') {
       titulo = 'Top Productos';
@@ -1297,6 +1960,7 @@ module.exports = {
   getRentabilidad,
   getEstadoResultados,
   getBonosVendedores,
+  getBonosVendedoresDetalle,
   getStockConsolidado,
   getKardexProducto,
   getArqueosCaja,

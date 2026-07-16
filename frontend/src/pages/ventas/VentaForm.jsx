@@ -264,12 +264,14 @@ export default function VentaForm() {
   const [categorias,  setCategorias]  = useState([]);
   const [unidades,    setUnidades]    = useState([]);
   const [impuestos,   setImpuestos]   = useState([]);
+  const [vendedores,  setVendedores]  = useState([]);
 
   const [form, setForm] = useState({
     tipo_venta: 'MENOR', id_sucursal: '', id_deposito: '', id_cliente: '',
     id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0,
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
+    id_vendedor: '',
   });
   const [items, setItems] = useState([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0, numero_serie: '' }]);
   const [clienteInfo, setClienteInfo] = useState(null);
@@ -297,7 +299,8 @@ export default function VentaForm() {
     ventasService.formData().then(r => {
       const { sucursales: suc, depositos: deps, productos: prods,
               monedas: mons, impuestos: imps, categorias: cats,
-              unidades: uns, promociones: promos, clientes: clis } = r.data;
+              unidades: uns, promociones: promos, clientes: clis,
+              vendedores: vends } = r.data;
 
       setSucursales(suc ?? []);
       setDepositos(deps ?? []);
@@ -308,6 +311,7 @@ export default function VentaForm() {
       setCategorias(cats ?? []);
       setUnidades(uns ?? []);
       setPromociones(promos ?? []);
+      setVendedores(vends ?? []);
 
       if (!esEdicion) {
         const idSuc = usuario?.id_sucursal_default ?? usuario?.id_sucursal;
@@ -321,12 +325,18 @@ export default function VentaForm() {
 
         const tipoVentaDefault = puedeCrearMenor ? 'MENOR' : puedeCrearMayor ? 'MAYOR' : 'MENOR';
 
+        const usuarioEnVendedores = (vends ?? []).some(v => String(v.id_usuario) === String(usuario?.id_usuario));
+        const vendedorDefault = usuarioEnVendedores
+          ? String(usuario.id_usuario)
+          : ((vends ?? []).length === 1 ? String(vends[0].id_usuario) : '');
+
         setForm(p => ({
           ...p,
           tipo_venta: tipoVentaDefault,
           id_sucursal: sucId,
           id_deposito: depId,
           id_moneda: base ? String(base.id_moneda) : '',
+          id_vendedor: vendedorDefault,
         }));
       }
     }).catch(() => {});
@@ -345,6 +355,7 @@ export default function VentaForm() {
             direccion_entrega: v.direccion_entrega ?? '',
             fecha_entrega: v.fecha_entrega ? v.fecha_entrega.slice(0, 10) : '',
             observaciones: v.observaciones ?? '',
+            id_vendedor: v.id_vendedor ? String(v.id_vendedor) : '',
           });
           setItems((v.detalle ?? []).map(d => ({
             _key:          crypto.randomUUID(),
@@ -620,8 +631,8 @@ export default function VentaForm() {
       <SectionCard title="Datos de la venta">
         <div className="p-5 space-y-5">
 
-          {/* Fila 1: Tipo venta + Sucursal + Depósito */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Fila 1: Tipo venta + Sucursal + Depósito + Vendedor */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <FieldLabel>Tipo de venta</FieldLabel>
               {tiposPermitidos.length > 1 ? (
@@ -670,6 +681,19 @@ export default function VentaForm() {
                 {depositos
                   .filter(d => !form.id_sucursal || String(d.id_sucursal) === String(form.id_sucursal))
                   .map(d => <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <FieldLabel>Vendedor *</FieldLabel>
+              <select
+                value={form.id_vendedor} onChange={e => setF('id_vendedor', e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— seleccionar —</option>
+                {vendedores.map(v => (
+                  <option key={v.id_usuario} value={v.id_usuario}>{v.nombre_completo}</option>
+                ))}
               </select>
             </div>
           </div>
