@@ -732,8 +732,10 @@ const exportarCombos = async (req, res) => {
     const rangeCombos = doc.bufferedPageRange();
     for (let i = rangeCombos.start; i < rangeCombos.start + rangeCombos.count; i++) {
       doc.switchToPage(i);
+      // Se usa height - 55 para quedar dentro del área de contenido (< height - margin = height - 40)
+      // Evita que PDFKit agregue una página extra al detectar desbordamiento de margen
       doc.font('Helvetica').fontSize(7).fillColor(GRAY)
-         .text(footerText, margin, doc.page.height - margin + 10, { width: contentW, align: 'center' });
+         .text(footerText, margin, doc.page.height - 55, { width: contentW, align: 'center' });
     }
     doc.flushPages();
     doc.end();
@@ -1064,7 +1066,7 @@ const exportarPromociones = async (req, res) => {
     for (let i = rangePromos.start; i < rangePromos.start + rangePromos.count; i++) {
       doc.switchToPage(i);
       doc.font('Helvetica').fontSize(7).fillColor(GRAY)
-         .text(footerTextP, margin, doc.page.height - margin + 10, { width: contentW, align: 'center' });
+         .text(footerTextP, margin, doc.page.height - 55, { width: contentW, align: 'center' });
     }
     doc.flushPages();
     doc.end();

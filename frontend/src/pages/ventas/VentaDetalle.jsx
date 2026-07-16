@@ -88,6 +88,7 @@ export default function VentaDetalle() {
   const [modalSeries,      setModalSeries]      = useState(false);
   const [seriesUploading,  setSeriesUploading]  = useState({}); // {[id_detalle]: bool}
   const [seriesDone,       setSeriesDone]       = useState({}); // {[id_detalle]: bool}
+  const [previewSerie,     setPreviewSerie]     = useState(null); // { url, id_detalle }
   const serieInputRef = useRef(null);
   const serieDetalleRef = useRef(null);
   const backendBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
@@ -383,10 +384,20 @@ export default function VentaDetalle() {
                             Serie: {d.numero_serie}
                           </span>
                           {d.imagen_serie_url ? (
-                            <a href={`${backendBase}${d.imagen_serie_url}`} target="_blank" rel="noreferrer"
-                              className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
-                              ver foto
-                            </a>
+                            <>
+                              <button
+                                onClick={() => setPreviewSerie({ url: d.imagen_serie_url, id_detalle: d.id_detalle })}
+                                className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                                ver foto
+                              </button>
+                              <span className="text-[10px] text-zinc-300 dark:text-zinc-600">·</span>
+                              <button
+                                onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
+                                disabled={uploadingSerie === d.id_detalle}
+                                className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                                {uploadingSerie === d.id_detalle ? 'subiendo…' : 'cambiar'}
+                              </button>
+                            </>
                           ) : (
                             <button
                               onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
@@ -499,10 +510,20 @@ export default function VentaDetalle() {
                       Serie: {d.numero_serie}
                     </span>
                     {d.imagen_serie_url ? (
-                      <a href={`${backendBase}${d.imagen_serie_url}`} target="_blank" rel="noreferrer"
-                        className="text-[10px] text-yellow-600 hover:text-yellow-700 underline">
-                        ver foto
-                      </a>
+                      <>
+                        <button
+                          onClick={() => setPreviewSerie({ url: d.imagen_serie_url, id_detalle: d.id_detalle })}
+                          className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                          ver foto
+                        </button>
+                        <span className="text-[10px] text-zinc-300 dark:text-zinc-600">·</span>
+                        <button
+                          onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
+                          disabled={uploadingSerie === d.id_detalle}
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                          {uploadingSerie === d.id_detalle ? 'subiendo…' : 'cambiar'}
+                        </button>
+                      </>
                     ) : (
                       <button
                         onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
@@ -929,6 +950,37 @@ export default function VentaDetalle() {
         </Modal>
       )}
 
+      {previewSerie && (
+        <Modal titulo="Foto de número de serie" onClose={() => setPreviewSerie(null)}>
+          <div className="space-y-3">
+            <div className="rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center min-h-32">
+              <img
+                src={`${backendBase}${previewSerie.url}`}
+                alt="N° de serie"
+                className="max-h-72 w-full object-contain"
+              />
+            </div>
+            <label className="flex items-center justify-center gap-2 cursor-pointer w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    serieDetalleRef.current = previewSerie.id_detalle;
+                    handleSubirSerie(file);
+                    setPreviewSerie(null);
+                  }
+                  e.target.value = '';
+                }}
+              />
+              Cambiar foto
+            </label>
+          </div>
+        </Modal>
+      )}
+
       {modalSeries && (
         <Modal titulo="Fotos de número de serie" onClose={() => setModalSeries(false)}>
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
@@ -944,14 +996,28 @@ export default function VentaDetalle() {
                   </span>
                 </div>
                 {(d.imagen_serie_url || seriesDone[d.id_detalle]) ? (
-                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                    <span className="text-xs font-semibold">✓ Foto subida</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-green-600 dark:text-green-400">✓ Foto subida</span>
                     {d.imagen_serie_url && (
-                      <a href={`${backendBase}${d.imagen_serie_url}`} target="_blank" rel="noreferrer"
+                      <button
+                        onClick={() => setPreviewSerie({ url: d.imagen_serie_url, id_detalle: d.id_detalle })}
                         className="text-[11px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
                         ver foto
-                      </a>
+                      </button>
                     )}
+                    <label className="text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files[0];
+                          if (file) handleSubirSerieModal(d.id_detalle, file);
+                          e.target.value = '';
+                        }}
+                      />
+                      cambiar
+                    </label>
                   </div>
                 ) : (
                   <label className={`flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-lg border-2 border-dashed transition-colors ${
