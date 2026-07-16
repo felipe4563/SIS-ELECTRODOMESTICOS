@@ -524,7 +524,7 @@ const exportarCombos = async (req, res) => {
     const empresa = empresaRows[0] ?? {};
     const fecha   = new Date().toISOString().slice(0, 10);
 
-    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape', bufferPages: true });
 
     const chunks = [];
     doc.on('data', c => chunks.push(c));
@@ -602,16 +602,10 @@ const exportarCombos = async (req, res) => {
     const ORANGE   = '#F97316';
     const GREEN    = '#16A34A';
     const BLUE_D   = '#1D4ED8';
-
-    const drawPageFooter = () => {
-      doc.font('Helvetica').fontSize(7).fillColor(GRAY)
-         .text(`${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`,
-               margin, doc.page.height - 30, { width: contentW, align: 'center' });
-    };
+    const footerText = `${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`;
 
     const ensureSpace = (needed) => {
-      if (y + needed > doc.page.height - 50) {
-        drawPageFooter();
+      if (y + needed > doc.page.height - 65) {
         doc.addPage();
         y = margin;
       }
@@ -734,8 +728,14 @@ const exportarCombos = async (req, res) => {
       y += 8; // espacio entre combos
     });
 
-    // Borde total
-    drawPageFooter();
+    // Pie de página en todas las hojas
+    const rangeCombos = doc.bufferedPageRange();
+    for (let i = rangeCombos.start; i < rangeCombos.start + rangeCombos.count; i++) {
+      doc.switchToPage(i);
+      doc.font('Helvetica').fontSize(7).fillColor(GRAY)
+         .text(footerText, margin, doc.page.height - margin + 10, { width: contentW, align: 'center' });
+    }
+    doc.flushPages();
     doc.end();
   } catch (err) {
     console.error(err);
@@ -871,7 +871,7 @@ const exportarPromociones = async (req, res) => {
     const empresa = empresaRows[0] ?? {};
     const fecha   = new Date().toISOString().slice(0, 10);
 
-    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape', bufferPages: true });
     const chunks = [];
     doc.on('data', c => chunks.push(c));
     doc.on('end', () => {
@@ -923,15 +923,10 @@ const exportarPromociones = async (req, res) => {
       return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
     };
 
-    const drawPageFooter = () => {
-      doc.font('Helvetica').fontSize(7).fillColor(GRAY)
-         .text(`${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`,
-               margin, doc.page.height - 30, { width: contentW, align: 'center' });
-    };
+    const footerTextP = `${empresa.nombre_comercial || empresa.razon_social || ''} · Reporte generado el ${fecha}`;
 
     const ensureSpace = (needed) => {
-      if (y + needed > doc.page.height - 50) {
-        drawPageFooter();
+      if (y + needed > doc.page.height - 65) {
         doc.addPage();
         y = margin;
       }
@@ -1064,7 +1059,14 @@ const exportarPromociones = async (req, res) => {
       y += 8; // espacio entre promociones
     });
 
-    drawPageFooter();
+    // Pie de página en todas las hojas
+    const rangePromos = doc.bufferedPageRange();
+    for (let i = rangePromos.start; i < rangePromos.start + rangePromos.count; i++) {
+      doc.switchToPage(i);
+      doc.font('Helvetica').fontSize(7).fillColor(GRAY)
+         .text(footerTextP, margin, doc.page.height - margin + 10, { width: contentW, align: 'center' });
+    }
+    doc.flushPages();
     doc.end();
   } catch (err) {
     console.error(err);
