@@ -587,7 +587,8 @@ const exportarCombos = async (req, res) => {
 
     const fmtD = d => {
       if (!d) return '—';
-      return new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
+      const iso = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+      return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
     };
 
     // Header row
@@ -818,7 +819,11 @@ const exportarPromociones = async (req, res) => {
     const rowH = 20, headH = 22;
     let y = tableTop;
     const startX = margin;
-    const fmtD = d => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' }) : '—';
+    const fmtD = d => {
+      if (!d) return '—';
+      const iso = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+      return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    };
     const today = new Date().toISOString().slice(0, 10);
 
     const drawHeader = (yPos) => {
@@ -859,7 +864,7 @@ const exportarPromociones = async (req, res) => {
           ? `${parseFloat(r.valor_descuento).toFixed(0)}%`
           : `Bs. ${parseFloat(r.valor_descuento).toFixed(2)}`,
         r.aplica_a,
-        String(r.cantidad_minima ?? 1),
+        String(parseInt(r.cantidad_minima) || 1),
         fmtD(r.fecha_inicio),
         fmtD(r.fecha_fin),
         estado,
