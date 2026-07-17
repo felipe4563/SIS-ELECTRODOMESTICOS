@@ -4,6 +4,7 @@ import { api, imgUrl, fmtPrecio } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
+import ScrollReveal from '@/components/ScrollReveal';
 
 export const revalidate = 60;
 
@@ -463,28 +464,7 @@ export default async function HomePage() {
       </main>
       <Footer empresa={empresa} />
 
-      {/* ── Intersection Observer para scroll reveal ── */}
-      <script dangerouslySetInnerHTML={{ __html: `
-        (function(){
-          if(typeof IntersectionObserver==='undefined')return;
-          var io=new IntersectionObserver(function(entries){
-            entries.forEach(function(e){
-              if(e.isIntersecting){
-                e.target.classList.add('visible');
-                io.unobserve(e.target);
-              }
-            });
-          },{threshold:0.1,rootMargin:'0px 0px -48px 0px'});
-          function init(){
-            document.querySelectorAll('[data-scroll]').forEach(function(el){io.observe(el);});
-          }
-          if(document.readyState==='loading'){
-            document.addEventListener('DOMContentLoaded',init);
-          }else{
-            init();
-          }
-        })();
-      ` }} />
+      <ScrollReveal />
     </>
   );
 }
