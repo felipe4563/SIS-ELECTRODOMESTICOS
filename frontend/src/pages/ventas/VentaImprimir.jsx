@@ -42,7 +42,10 @@ function Ticket80({ data, logoUrl }) {
         <Row label="REC" value={data.numero} bold />
         {data.numero_factura && <Row label="N° Factura:" value={data.numero_factura} />}
         <Row label="Fecha:" value={fmtFecha(data.fecha)} />
-        <Row label="Usuario:" value={data.vendedor_nombre} />
+        {data.usuario_registro_nombre && data.usuario_registro_nombre !== data.vendedor_nombre && (
+          <Row label="Usuario:" value={data.usuario_registro_nombre} />
+        )}
+        <Row label="Vendedor:" value={data.vendedor_nombre} bold />
       </div>
 
       <Divisor />
@@ -112,12 +115,15 @@ function Ticket110({ data, logoUrl }) {
 
         {/* Columna derecha: datos del comprobante */}
         <div style={{ borderLeft: '1px dashed #999', paddingLeft: '8px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 'bold', textAlign: 'center', marginBottom: '3px', letterSpacing: '0.5px' }}>RECIBO</div>
+          <div style={{ fontSize: '12px', fontWeight: 'bold', textAlign: 'center', marginBottom: '3px', letterSpacing: '0.5px' }}>REC</div>
           <Row label="N°:" value={data.numero} />
           {data.numero_factura && <Row label="Fact.:" value={data.numero_factura} />}
           <Row label="Fecha:" value={fmtFechaCorta(data.fecha)} />
           <Row label="Hora:" value={data.fecha ? new Date(data.fecha).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' }) : '—'} />
-          <Row label="Usuario:" value={data.vendedor_nombre} />
+          {data.usuario_registro_nombre && data.usuario_registro_nombre !== data.vendedor_nombre && (
+            <Row label="Usuario:" value={data.usuario_registro_nombre} />
+          )}
+          <Row label="Vendedor:" value={data.vendedor_nombre} bold />
         </div>
       </div>
 

@@ -231,6 +231,7 @@ const createVenta = async (req, res) => {
       tipo_cambio = 1, condicion_pago = 'CONTADO', dias_credito = 0,
       descuento_porc = 0, impuesto = 0, requiere_entrega = 0,
       direccion_entrega, fecha_entrega, observaciones, items = [],
+      id_vendedor,
     } = req.body;
 
     if (!id_sucursal || !id_deposito || !id_cliente) {
@@ -298,12 +299,15 @@ const createVenta = async (req, res) => {
 
     const [ins] = await db.promise().query(
       `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
+        id_usuario_registro,
         id_moneda, tipo_cambio, condicion_pago, dias_credito, fecha_vencimiento,
         subtotal, descuento_porc, descuento_monto, impuesto, total, saldo_pendiente,
         estado, requiere_entrega, direccion_entrega, fecha_entrega, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
       [
-        numero, tipo_venta, id_sucursal, id_deposito, id_cliente, req.user.id_usuario,
+        numero, tipo_venta, id_sucursal, id_deposito, id_cliente,
+        id_vendedor || req.user.id_usuario,
+        req.user.id_usuario,
         id_moneda, tipo_cambio, condicion_pago, dias_credito,
         condicion_pago === 'CREDITO' && dias_credito > 0
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
@@ -362,7 +366,7 @@ const updateVenta = async (req, res) => {
     const {
       id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito,
       descuento_porc = 0, impuesto = 0, requiere_entrega, direccion_entrega,
-      fecha_entrega, observaciones, items = [],
+      fecha_entrega, observaciones, items = [], id_vendedor,
     } = req.body;
 
     if (!items.length) return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
@@ -394,7 +398,8 @@ const updateVenta = async (req, res) => {
     await db.promise().query(
       `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, dias_credito=?,
         fecha_vencimiento=?, subtotal=?, descuento_porc=?, descuento_monto=?, impuesto=?, total=?,
-        requiere_entrega=?, direccion_entrega=?, fecha_entrega=?, observaciones=?
+        requiere_entrega=?, direccion_entrega=?, fecha_entrega=?, observaciones=?,
+        id_vendedor=COALESCE(?,id_vendedor)
        WHERE id_venta = ?`,
       [
         id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito,
@@ -406,6 +411,7 @@ const updateVenta = async (req, res) => {
         limpiaDireccionEntrega,
         limpiaFechaEntrega,
         observaciones ?? null,
+        id_vendedor || null,
         id,
       ]
     );
@@ -1027,7 +1033,8 @@ const getTicket = async (req, res) => {
               s.nombre AS sucursal_nombre, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono,
               d.nombre AS deposito_nombre,
               mon.codigo AS moneda_codigo, mon.simbolo AS moneda_simbolo,
-              CONCAT(u.nombres,' ',u.apellidos) AS vendedor_nombre,
+              CONCAT(uv.nombres,' ',uv.apellidos) AS vendedor_nombre,
+              CONCAT(ur.nombres,' ',ur.apellidos) AS usuario_registro_nombre,
               e.razon_social AS empresa_razon, e.nombre_comercial AS empresa_comercial, e.nit AS empresa_nit,
               e.telefono AS empresa_telefono, e.direccion AS empresa_direccion
        FROM ventas v
@@ -1035,7 +1042,8 @@ const getTicket = async (req, res) => {
        JOIN sucursales s   ON s.id_sucursal  = v.id_sucursal
        JOIN depositos  d   ON d.id_deposito  = v.id_deposito
        JOIN monedas    mon ON mon.id_moneda  = v.id_moneda
-       JOIN usuarios   u   ON u.id_usuario   = v.id_vendedor
+       JOIN usuarios   uv  ON uv.id_usuario  = v.id_vendedor
+       LEFT JOIN usuarios ur ON ur.id_usuario = v.id_usuario_registro
        LEFT JOIN empresas e ON e.activo = 1
        WHERE v.id_venta = ?`, [id]
     );

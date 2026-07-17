@@ -6,7 +6,7 @@ export default function Footer({ empresa }: { empresa?: Empresa | null }) {
   const year   = new Date().getFullYear();
 
   return (
-    <footer style={{ background: 'var(--color-surface-deep)', borderTop: '1px solid var(--color-border)', marginTop: 'auto' }}>
+    <footer style={{ background: 'var(--color-surface-deep)', borderTop: '1px solid var(--color-border-2)', marginTop: 'auto' }}>
       <div className="container-max footer-inner">
 
         <div className="footer-grid">
@@ -17,7 +17,7 @@ export default function Footer({ empresa }: { empresa?: Empresa | null }) {
               fontFamily:    'var(--font-headline)',
               fontWeight:     800,
               fontSize:      '1.1rem',
-              color:          '#fff',
+              color:          'var(--color-txt)',
               marginBottom:   12,
               letterSpacing: '-0.01em',
             }}>
@@ -85,7 +85,7 @@ export default function Footer({ empresa }: { empresa?: Empresa | null }) {
           margin-bottom: 8px;
           transition: color 0.15s;
         }
-        .fl:hover { color: #fff; }
+        .fl:hover { color: var(--color-txt); }
         .footer-bottom {
           border-top: 1px solid var(--color-border);
           padding-top: 1.25rem;
