@@ -59,7 +59,7 @@ export default async function CatalogoPage({ searchParams }: Props) {
               <a href="/" style={{ textDecoration: 'none', color: 'var(--color-muted)', transition: 'color 0.15s' }}
                 className="nav-link">Inicio</a>
               <span>/</span>
-              <span style={{ color: '#fff' }}>Catálogo</span>
+              <span style={{ color: 'var(--color-txt)' }}>Catálogo</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>

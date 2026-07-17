@@ -32,7 +32,7 @@ export default async function HomePage() {
         <section style={{
           position:   'relative',
           overflow:   'hidden',
-          background: 'linear-gradient(135deg, #080a0e 0%, #0f1117 40%, #130b10 100%)',
+          background: 'var(--hero-bg)',
           minHeight:  '70vh',
           display:    'flex',
           alignItems: 'center',
@@ -123,7 +123,7 @@ export default async function HomePage() {
                       flexShrink:   0,
                     }} />
                     <span style={{ fontSize: '0.72rem', color: 'var(--color-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                      {s.label}: <span style={{ color: '#fff', fontWeight: 600 }}>{s.value}</span>
+                      {s.label}: <span style={{ color: 'var(--color-txt)', fontWeight: 600 }}>{s.value}</span>
                     </span>
                   </div>
                 ))}
@@ -173,7 +173,7 @@ export default async function HomePage() {
                       transition:    'border-color 0.2s, transform 0.2s, box-shadow 0.2s',
                       cursor:        'pointer',
                     }} className="cat-card">
-<p style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff', marginBottom: 4, letterSpacing: '-0.01em' }}>
+<p style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-txt)', marginBottom: 4, letterSpacing: '-0.01em' }}>
                         {cat.nombre}
                       </p>
                       <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', letterSpacing: '0.04em' }}>
@@ -262,18 +262,18 @@ export default async function HomePage() {
                     transition:   'border-color 0.2s, transform 0.2s',
                   }} className="cat-card">
                     {combo.imagen_url ? (
-                      <div style={{ position: 'relative', width: '100%', height: 160, background: '#0d0f14' }}>
+                      <div style={{ position: 'relative', width: '100%', height: 160, background: 'var(--color-img-bg)' }}>
                         <Image src={imgUrl(combo.imagen_url)} alt={combo.nombre} fill style={{ objectFit: 'cover' }} />
                       </div>
                     ) : (
-                      <div style={{ height: 160, background: 'linear-gradient(135deg, #0d0f14, #1a1d24)',
+                      <div style={{ height: 160, background: 'var(--combo-placeholder-bg)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontSize: '2.5rem' }}>📦</span>
                       </div>
                     )}
                     <div style={{ padding: '1.25rem 1.25rem 1.5rem' }}>
                       <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
-                                   marginBottom: 6, color: '#fff' }}>{combo.nombre}</h3>
+                                   marginBottom: 6, color: 'var(--color-txt)' }}>{combo.nombre}</h3>
                       {combo.descripcion && (
                         <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', lineHeight: 1.55, marginBottom: 12 }}>
                           {combo.descripcion}
@@ -298,7 +298,7 @@ export default async function HomePage() {
         {/* ── Únete a la Vanguardia ─────────────────── */}
         <section style={{
           padding:    '5rem 0',
-          background: 'linear-gradient(135deg, #0a0608 0%, #130b10 50%, #0a0608 100%)',
+          background: 'var(--cta-bg)',
           position:   'relative',
           overflow:   'hidden',
         }}>

@@ -116,20 +116,36 @@ export default function EtiquetasImprimir() {
               <img
                 src={qrUrls[item.codigo_interno]}
                 alt={item.codigo_interno}
-                style={{ width: '34mm', height: '34mm', display: 'block' }}
+                style={{ width: '26mm', height: '26mm', display: 'block' }}
               />
             )}
             <p style={{
-              fontSize: '7pt',
+              fontSize: '5.5pt',
               textAlign: 'center',
-              margin: '1mm 0 0 0',
-              maxWidth: '38mm',
+              margin: '0.8mm 0 0 0',
+              maxWidth: '36mm',
               overflow: 'hidden',
               whiteSpace: 'nowrap',
               textOverflow: 'ellipsis',
               fontFamily: 'sans-serif',
+              color: '#444',
             }}>
               {item.nombre}
+            </p>
+            <p style={{
+              fontSize: '7pt',
+              fontWeight: 'bold',
+              textAlign: 'center',
+              margin: '0.5mm 0 0 0',
+              maxWidth: '36mm',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              fontFamily: 'monospace',
+              color: '#000',
+              letterSpacing: '0.02em',
+            }}>
+              {item.codigo_interno}
             </p>
           </div>
         ))}

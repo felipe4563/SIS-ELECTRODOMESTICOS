@@ -56,7 +56,7 @@ export default async function ProductoPage({ params }: Props) {
                 </>
               )}
               <span>/</span>
-              <span style={{ color: '#fff' }}>{producto.producto}</span>
+              <span style={{ color: 'var(--color-txt)' }}>{producto.producto}</span>
             </nav>
             <BackButton />
           </div>
@@ -72,7 +72,7 @@ export default async function ProductoPage({ params }: Props) {
               <div style={{
                 position:     'relative',
                 aspectRatio:  '1',
-                background:   '#080a0e',
+                background:   'var(--color-img-bg)',
                 borderRadius: 'var(--radius-lg)',
                 overflow:     'hidden',
                 border:       '1px solid var(--color-border)',
@@ -278,7 +278,7 @@ export default async function ProductoPage({ params }: Props) {
                                        width: '40%', fontSize: '0.8rem', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
                             {row.label}
                           </td>
-                          <td style={{ padding: '0.75rem 1.5rem', color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>
+                          <td style={{ padding: '0.75rem 1.5rem', color: 'var(--color-txt)', fontWeight: 600, fontSize: '0.85rem' }}>
                             {row.value}
                           </td>
                         </tr>
@@ -316,7 +316,7 @@ export default async function ProductoPage({ params }: Props) {
                       ⚡
                     </div>
                     <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
-                                 marginBottom: 10, color: '#fff' }}>Características</h3>
+                                 marginBottom: 10, color: 'var(--color-txt)' }}>Características</h3>
                     <p style={{ fontSize: '0.83rem', color: 'var(--color-muted)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                       {producto.caracteristicas}
                     </p>
@@ -336,7 +336,7 @@ export default async function ProductoPage({ params }: Props) {
                       🛡
                     </div>
                     <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
-                                 marginBottom: 10, color: '#fff' }}>Descripción</h3>
+                                 marginBottom: 10, color: 'var(--color-txt)' }}>Descripción</h3>
                     <p style={{ fontSize: '0.83rem', color: 'var(--color-muted)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                       {producto.detalle}
                     </p>
@@ -367,7 +367,7 @@ export default async function ProductoPage({ params }: Props) {
                     transition:   'border-color 0.2s',
                   }} className="cat-card">
                     <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
-                                 marginBottom: 6, color: '#fff' }}>
+                                 marginBottom: 6, color: 'var(--color-txt)' }}>
                       {combo.nombre}
                     </h3>
                     {combo.descripcion && (

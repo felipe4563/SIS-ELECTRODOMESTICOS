@@ -32,7 +32,7 @@ export default async function PromocionesPage() {
                           background: 'var(--color-card)', border: '1px solid var(--color-border)',
                           borderRadius: 'var(--radius-md)' }}>
               <p style={{ fontSize: '2rem', marginBottom: '1rem' }}>🏷️</p>
-              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-txt)', marginBottom: 6 }}>
                 Sin promociones activas
               </p>
               <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)' }}>Vuelve pronto para ver nuevas ofertas.</p>
@@ -49,7 +49,7 @@ export default async function PromocionesPage() {
                   transition:   'border-color 0.2s, box-shadow 0.2s',
                 }} className="cat-card">
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                    <h2 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '1.05rem', lineHeight: 1.3, color: '#fff' }}>
+                    <h2 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '1.05rem', lineHeight: 1.3, color: 'var(--color-txt)' }}>
                       {promo.nombre}
                     </h2>
                     <span className="badge badge-oferta" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>

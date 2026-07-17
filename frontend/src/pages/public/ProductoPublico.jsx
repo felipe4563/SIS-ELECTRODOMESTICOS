@@ -12,7 +12,24 @@ export default function ProductoPublico() {
   const [cargando,  setCargando]  = useState(true);
   const [estado,    setEstado]    = useState('ok');
   const [imgFailed, setImgFailed] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('pp-theme');
+    if (saved !== null) return saved === 'dark';
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pp-theme', dark ? 'dark' : 'light');
+  }, [dark]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('pp-theme');
+    if (saved !== null) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e) => setDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     axios.get(`${API_BASE}/public/producto/${encodeURIComponent(codigo)}`)

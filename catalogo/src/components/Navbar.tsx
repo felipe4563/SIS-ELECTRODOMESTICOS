@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { imgUrl } from '@/lib/api';
 import type { Empresa } from '@/lib/api';
+import { useTheme } from '@/components/ThemeProvider';
 
 interface Props {
   empresa?: Empresa | null;
@@ -18,15 +19,17 @@ const navLinks = [
   { href: '/catalogo?buscar=lavadora',       label: 'Lavadoras' },
   { href: '/catalogo?buscar=cocina',         label: 'Cocinas' },
   { href: '/catalogo?buscar=refrigerador',   label: 'Refrigeradores' },
-  { href: '/catalogo?buscar=horno',      label: 'Hornos' },
+  { href: '/catalogo?buscar=horno',          label: 'Hornos' },
   { href: '/catalogo?buscar=aire',           label: 'Aires Acondicionados' },
-  { href: '/promociones',                    label: 'Ofertas', accent: true },
+  { href: '/promociones',                    label: 'Ofertas',  accent: true },
+  { href: '/combos',                         label: 'Combos',   accent: true },
 ];
 
 export default function Navbar({ empresa }: Props) {
   const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState('');
   const pathname            = usePathname();
+  const { theme, toggle }   = useTheme();
   const nombre = empresa?.nombre_comercial ?? empresa?.razon_social ?? 'Mega Electra';
   const logo   = empresa?.logo_url ? imgUrl(empresa.logo_url) : null;
 
@@ -36,8 +39,8 @@ export default function Navbar({ empresa }: Props) {
       {/* ── Barra de contacto superior ── */}
       {(empresa?.telefono || empresa?.email || empresa?.direccion) && (
         <div style={{
-          background:    '#0a0c10',
-          borderBottom:  '1px solid rgba(255,255,255,0.08)',
+          background:    'var(--color-surface-deep)',
+          borderBottom:  '1px solid var(--color-border)',
           fontSize:      '0.8rem',
           color:         'var(--color-muted)',
         }}>
@@ -112,7 +115,7 @@ export default function Navbar({ empresa }: Props) {
         borderBottom:  '1px solid var(--color-border)',
       }}>
       <div className="container-max">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', height: 64 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', height: 84 }}>
 
           {/* Logo */}
           <Link href="/" style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -120,12 +123,12 @@ export default function Navbar({ empresa }: Props) {
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logo} alt={nombre}
-                  style={{ height: 40, maxWidth: 140, objectFit: 'contain', display: 'block' }} />
+                  style={{ height: 70, maxWidth: 220, objectFit: 'contain', display: 'block' }} />
                 <span style={{
                   fontFamily:    'var(--font-headline)',
                   fontWeight:     800,
                   fontSize:      '1rem',
-                  color:          '#fff',
+                  color:          'var(--color-txt)',
                   letterSpacing: '-0.01em',
                   lineHeight:     1.2,
                 }}>
@@ -153,7 +156,7 @@ export default function Navbar({ empresa }: Props) {
             flex:            1,
           }} className="nav-desktop">
             {navLinks.map(l => {
-              const isActive = pathname?.startsWith('/promociones') && l.href === '/promociones';
+              const isActive = pathname ? pathname.startsWith(l.href.split('?')[0]) && !l.href.includes('buscar') : false;
               return (
                 <Link key={l.href} href={l.href} style={{
                   fontFamily:   'var(--font-body)',
@@ -164,7 +167,7 @@ export default function Navbar({ empresa }: Props) {
                   color:         l.accent ? 'var(--color-primary)' : isActive ? '#fff' : 'var(--color-muted)',
                   textDecoration: 'none',
                   padding:       '0 0.75rem',
-                  height:        64,
+                  height:        84,
                   display:       'flex',
                   alignItems:    'center',
                   borderBottom:  isActive ? '2px solid var(--color-primary)' : '2px solid transparent',
@@ -220,6 +223,30 @@ export default function Navbar({ empresa }: Props) {
                 <path d="M16 10a4 4 0 0 1-8 0"/>
               </svg>
             </Link>
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggle}
+              aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer',
+                       color: 'var(--color-muted)', padding: 6, borderRadius: 'var(--radius-sm)',
+                       display: 'flex', alignItems: 'center', justifyContent: 'center',
+                       width: 36, height: 36, transition: 'color 0.15s, border-color 0.15s' }}
+              className="nav-link">
+              {theme === 'dark' ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+              )}
+            </button>
 
             {/* Hamburger */}
             <button onClick={() => setOpen(!open)} aria-label="Menú"

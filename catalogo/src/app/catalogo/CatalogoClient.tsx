@@ -33,10 +33,10 @@ function CardSelectable({
         transition:    'border-color 0.2s, box-shadow 0.2s, background 0.2s',
         display:       'flex',
         flexDirection: 'column',
-        cursor:        agotado ? 'default' : 'pointer',
+        cursor:        'pointer',
         boxShadow:     selected ? '0 0 0 2px rgba(225,29,72,0.2)' : 'none',
       }}
-      onClick={() => !agotado && onToggle(p)}
+      onClick={() => onToggle(p)}
     >
       {/* Checkbox top-right */}
       <span style={{
@@ -47,8 +47,8 @@ function CardSelectable({
         width:           20,
         height:          20,
         borderRadius:   '4px',
-        border:         `2px solid ${selected ? 'var(--color-primary)' : 'rgba(255,255,255,0.25)'}`,
-        background:      selected ? 'var(--color-primary)' : 'rgba(0,0,0,0.5)',
+        border:         `2px solid ${selected ? 'var(--color-primary)' : 'var(--color-border-2)'}`,
+        background:      selected ? 'var(--color-primary)' : 'var(--color-card)',
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
@@ -63,22 +63,13 @@ function CardSelectable({
 
       {/* Image */}
       <div style={{
-        position:   'relative',
-        width:      '100%',
+        position:    'relative',
+        width:       '100%',
         aspectRatio: '4/3',
-        background: '#0d0f14',
-        overflow:   'hidden',
+        background:  'var(--color-card-2)',
+        overflow:    'hidden',
+        borderBottom: '1px solid var(--color-border)',
       }}>
-        {agotado && (
-          <span className="badge badge-sin-stock" style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
-            Sin stock
-          </span>
-        )}
-        {!agotado && p.stock_total <= 5 && (
-          <span className="badge badge-limitado" style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
-            Últimas unidades
-          </span>
-        )}
         <Image
           src={img}
           alt={p.producto}
@@ -87,7 +78,7 @@ function CardSelectable({
           style={{
             objectFit: 'contain',
             padding:   '1rem',
-            filter:     agotado ? 'grayscale(0.6) brightness(0.7)' : 'none',
+            filter:     'none',
           }}
           onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
         />
@@ -120,21 +111,21 @@ function CardSelectable({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
           {p.modelo && (
             <span style={{ fontSize: '0.65rem', color: 'var(--color-muted)',
-                           background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)',
+                           background: 'var(--color-bg)', border: '1px solid var(--color-border)',
                            borderRadius: '3px', padding: '1px 6px' }}>
               {p.modelo}
             </span>
           )}
           {p.color && (
             <span style={{ fontSize: '0.65rem', color: 'var(--color-muted)',
-                           background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)',
+                           background: 'var(--color-bg)', border: '1px solid var(--color-border)',
                            borderRadius: '3px', padding: '1px 6px' }}>
               {p.color}
             </span>
           )}
           {p.capacidad && (
             <span style={{ fontSize: '0.65rem', color: 'var(--color-muted)',
-                           background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)',
+                           background: 'var(--color-bg)', border: '1px solid var(--color-border)',
                            borderRadius: '3px', padding: '1px 6px' }}>
               {p.capacidad}
             </span>
@@ -146,13 +137,9 @@ function CardSelectable({
           marginTop:      8,
           width:          '100%',
           padding:        '0.5rem',
-          background:     agotado
-            ? 'rgba(107,114,128,0.15)'
-            : selected
-            ? 'rgba(225,29,72,0.2)'
-            : 'rgba(225,29,72,0.1)',
-          border:         `1px solid ${agotado ? 'transparent' : selected ? 'rgba(225,29,72,0.5)' : 'rgba(225,29,72,0.25)'}`,
-          color:          agotado ? 'var(--color-muted)' : selected ? '#fff' : 'var(--color-primary)',
+          background:     selected ? 'rgba(225,29,72,0.2)' : 'rgba(225,29,72,0.1)',
+          border:         `1px solid ${selected ? 'rgba(225,29,72,0.5)' : 'rgba(225,29,72,0.25)'}`,
+          color:          selected ? '#fff' : 'var(--color-primary)',
           fontSize:       '0.68rem',
           fontWeight:      700,
           letterSpacing:  '0.07em',
@@ -162,7 +149,7 @@ function CardSelectable({
           transition:     'all 0.15s',
           userSelect:     'none',
         }}>
-          {agotado ? 'Sin stock' : selected ? '✓ Agregado a cotizar' : '+ Agregar a cotizar'}
+          {selected ? '✓ Agregado a cotizar' : '+ Agregar a cotizar'}
         </div>
 
         {/* Ver detalle botón */}
@@ -245,7 +232,7 @@ export default function CatalogoClient({ productos, telefono }: Props) {
       }}>
         <p style={{ fontSize: '2rem', marginBottom: '1rem' }}>🔍</p>
         <p style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '1.1rem',
-                    marginBottom: 8, color: '#fff' }}>
+                    marginBottom: 8, color: 'var(--color-txt)' }}>
           Sin resultados
         </p>
         <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)', marginBottom: '1.5rem' }}>
@@ -282,7 +269,7 @@ export default function CatalogoClient({ productos, telefono }: Props) {
           left:        0,
           right:       0,
           zIndex:      200,
-          background: '#0e1017',
+          background: 'var(--color-surface-deep)',
           borderTop:  '1px solid rgba(225,29,72,0.4)',
           padding:    '0.85rem 1.5rem',
           display:    'flex',
@@ -302,7 +289,7 @@ export default function CatalogoClient({ productos, telefono }: Props) {
                 borderRadius: '4px',
                 padding:      '0.2rem 0.55rem',
                 fontSize:     '0.7rem',
-                color:        '#fff',
+                color:        'var(--color-txt)',
                 maxWidth:      180,
                 overflow:     'hidden',
                 textOverflow: 'ellipsis',

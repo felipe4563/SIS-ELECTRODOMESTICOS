@@ -39,7 +39,7 @@ function Ticket80({ data, logoUrl }) {
 
       {/* Info venta */}
       <div style={{ marginBottom: '4px' }}>
-        <Row label="FACTURA / RECIBO" value={data.numero} bold />
+        <Row label="REC" value={data.numero} bold />
         {data.numero_factura && <Row label="N° Factura:" value={data.numero_factura} />}
         <Row label="Fecha:" value={fmtFecha(data.fecha)} />
         <Row label="Usuario:" value={data.vendedor_nombre} />
@@ -228,7 +228,7 @@ const Row = ({ label, value, bold }) => (
 const Nota = () => (
   <div style={{ textAlign: 'center', fontSize: '11px', fontWeight: 'bold', padding: '4px 0', lineHeight: '1.4' }}>
     NOTA: NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES.<br />
-    VERIFIQUE ANTES DE RETIRAR.
+    VERIFIQUE ANTES DE RETIRAR EL PRODUCTO.
   </div>
 );
 

@@ -33,7 +33,7 @@ export default async function CombosPage() {
                           background: 'var(--color-card)', border: '1px solid var(--color-border)',
                           borderRadius: 'var(--radius-md)' }}>
               <p style={{ fontSize: '2rem', marginBottom: '1rem' }}>📦</p>
-              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: 6 }}>Sin combos disponibles</p>
+              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-txt)', marginBottom: 6 }}>Sin combos disponibles</p>
               <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)' }}>Pronto habrá paquetes exclusivos.</p>
             </div>
           ) : (
@@ -47,18 +47,18 @@ export default async function CombosPage() {
                   transition:   'border-color 0.2s, box-shadow 0.2s',
                 }} className="cat-card">
                   {combo.imagen_url ? (
-                    <div style={{ position: 'relative', width: '100%', height: 180, background: '#080a0e' }}>
+                    <div style={{ position: 'relative', width: '100%', height: 180, background: 'var(--color-img-bg)' }}>
                       <Image src={imgUrl(combo.imagen_url)} alt={combo.nombre} fill style={{ objectFit: 'cover' }} />
                     </div>
                   ) : (
-                    <div style={{ height: 140, background: 'linear-gradient(135deg, #080a0e, #1a1d24)',
+                    <div style={{ height: 140, background: 'var(--combo-placeholder-bg)',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem' }}>
                       📦
                     </div>
                   )}
                   <div style={{ padding: '1.5rem' }}>
                     <h2 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '1.05rem',
-                                 marginBottom: 8, color: '#fff' }}>
+                                 marginBottom: 8, color: 'var(--color-txt)' }}>
                       {combo.nombre}
                     </h2>
                     {combo.descripcion && (
@@ -79,7 +79,7 @@ export default async function CombosPage() {
                               {prod.imagen_url && (
                                 <Image src={imgUrl(prod.imagen_url)} alt={prod.producto} width={36} height={36}
                                   style={{ objectFit: 'contain', borderRadius: 'var(--radius-sm)',
-                                           background: '#0d0f14', padding: 4, border: '1px solid var(--color-border)' }} />
+                                           background: 'var(--color-img-bg)', padding: 4, border: '1px solid var(--color-border)' }} />
                               )}
                               <div style={{ flex: 1 }}>
                                 <p style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-txt-2)' }}>{prod.producto}</p>

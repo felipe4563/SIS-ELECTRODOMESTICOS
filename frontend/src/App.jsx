@@ -54,7 +54,7 @@ import AjusteDetalle       from './pages/inventario/AjusteDetalle';
 import Compras           from './pages/compras/Compras';
 import CompraForm        from './pages/compras/CompraForm';
 import CompraDetalle     from './pages/compras/CompraDetalle';
-import EtiquetasImprimir from './pages/compras/EtiquetasImprimir';
+import EtiquetasImprimir from './pages/productos/EtiquetasImprimir';
 
 // ── Gastos ────────────────────────────────────────────────────────────────────
 import Gastos from './pages/gastos/Gastos';

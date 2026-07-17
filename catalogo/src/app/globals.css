@@ -245,3 +245,44 @@ input:focus, select:focus {
 .nav-link { transition: color 0.15s; }
 .nav-link:hover { color: var(--color-txt) !important; }
 .nav-link-active { color: var(--color-txt) !important; border-bottom: 2px solid var(--color-primary); }
+
+/* ── Extra tokens (dark defaults) ───────────────── */
+:root {
+  --color-surface-deep:   #07090d;
+  --color-img-bg:         #0d0f14;
+  --hero-bg:              linear-gradient(135deg, #080a0e 0%, #0f1117 40%, #130b10 100%);
+  --cta-bg:               linear-gradient(135deg, #0a0608 0%, #130b10 50%, #0a0608 100%);
+  --combo-placeholder-bg: linear-gradient(135deg, #0d0f14, #1a1d24);
+  --shadow-hover-card:    0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Light theme ─────────────────────────────────── */
+[data-theme="light"] {
+  --color-bg:           #f3f4f8;
+  --color-bg-2:         #ffffff;
+  --color-card:         #ffffff;
+  --color-card-2:       #f8f9fc;
+  --color-txt:          #0f1117;
+  --color-txt-2:        #374151;
+  --color-muted:        #6b7280;
+  --color-border:       rgba(0, 0, 0, 0.08);
+  --color-border-2:     rgba(0, 0, 0, 0.14);
+  --shadow-card:        0 2px 12px rgba(0, 0, 0, 0.07);
+  --shadow-hover:       0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-glow:        0 0 30px rgba(225, 29, 72, 0.1);
+  --color-surface-deep: #e2e5ef;
+  --color-img-bg:       #f0f2f5;
+  --hero-bg:            linear-gradient(135deg, #edf0f7 0%, #f4f5fa 40%, #ede8f0 100%);
+  --cta-bg:             linear-gradient(135deg, #f0ecf4 0%, #f5f0f7 50%, #f0ecf4 100%);
+  --combo-placeholder-bg: linear-gradient(135deg, #e8ebf2, #f0f2f8);
+  --shadow-hover-card:  0 12px 32px rgba(0, 0, 0, 0.13);
+}
+
+/* ── Light badge color overrides ────────────────── */
+[data-theme="light"] .badge-oferta    { color: #be123c; }
+[data-theme="light"] .badge-nuevo     { color: #15803d; }
+[data-theme="light"] .badge-limitado  { color: #b45309; }
+[data-theme="light"] .badge-sin-stock { color: #4b5563; }
+
+/* ── Light cat-card hover ────────────────────────── */
+[data-theme="light"] .cat-card:hover { box-shadow: var(--shadow-hover-card) !important; }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Montserrat, Inter } from 'next/font/google';
 import './globals.css';
+import ThemeProvider from '@/components/ThemeProvider';
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -28,8 +29,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${montserrat.variable} ${inter.variable}`} data-scroll-behavior="smooth">
-      <body className="min-h-screen flex flex-col">{children}</body>
+    <html lang="es" className={`${montserrat.variable} ${inter.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        {/* Anti-FOUC: apply saved theme before first paint */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('me-theme')||(window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}` }} />
+      </head>
+      <body className="min-h-screen flex flex-col">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

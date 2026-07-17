@@ -23,31 +23,19 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
 
         {/* Image */}
         <div style={{
-          position:   'relative',
-          width:      '100%',
+          position:    'relative',
+          width:       '100%',
           aspectRatio: '4/3',
-          background: '#0d0f14',
-          overflow:   'hidden',
+          background:  'var(--color-card-2)',
+          overflow:    'hidden',
+          borderBottom: '1px solid var(--color-border)',
         }}>
-          {/* Badge */}
-          {agotado ? (
-            <span className="badge badge-sin-stock" style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
-              Sin stock
-            </span>
-          ) : p.stock_total <= 5 ? (
-            <span className="badge badge-limitado" style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
-              Stock limitado
-            </span>
-          ) : (
-            <span className="badge badge-nuevo" style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
-              Disponible
-            </span>
-          )}
 
           <Image
             src={img}
             alt={p.producto}
             fill
+            loading="eager"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             style={{
               objectFit: 'contain',
@@ -100,7 +88,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
                 fontFamily: 'var(--font-headline)',
                 fontWeight:  700,
                 fontSize:   '1.05rem',
-                color:       agotado ? 'var(--color-muted)' : '#fff',
+                color:       agotado ? 'var(--color-muted)' : 'var(--color-txt)',
               }}>
                 {fmtPrecio(p.precio_publico)}
               </p>
@@ -126,7 +114,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
       </article>
 
       <style>{`
-        .product-card:hover { border-color: rgba(225,29,72,0.3); box-shadow: 0 8px 32px rgba(0,0,0,0.5); transform: translateY(-4px); }
+        .product-card:hover { border-color: rgba(225,29,72,0.3); box-shadow: var(--shadow-hover-card); transform: translateY(-4px); }
         .product-card:hover .card-btn { background: #b80035; }
       `}</style>
     </Link>

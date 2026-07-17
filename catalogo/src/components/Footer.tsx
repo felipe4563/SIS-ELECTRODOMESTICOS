@@ -6,7 +6,7 @@ export default function Footer({ empresa }: { empresa?: Empresa | null }) {
   const year   = new Date().getFullYear();
 
   return (
-    <footer style={{ background: '#080a0e', borderTop: '1px solid var(--color-border)', marginTop: 'auto' }}>
+    <footer style={{ background: 'var(--color-surface-deep)', borderTop: '1px solid var(--color-border)', marginTop: 'auto' }}>
       <div className="container-max footer-inner">
 
         <div className="footer-grid">
