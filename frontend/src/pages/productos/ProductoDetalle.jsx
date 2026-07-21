@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen, FaCamera } from 'react-icons/fa';
+import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen, FaStar, FaTrash, FaPlus } from 'react-icons/fa';
 import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../api/axios';
@@ -464,16 +464,131 @@ const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const buildImgUrl = (url) =>
   !url ? null : url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
 
+// ── Galería de imágenes ───────────────────────────────────────────────────
+function GaleriaImagenes({ idProducto, puedeEditar }) {
+  const imgRef         = useRef(null);
+  const [imagenes,     setImagenes]    = useState([]);
+  const [seleccionada, setSeleccionada] = useState(null);
+  const [subiendo,     setSubiendo]    = useState(false);
+
+  const cargar = useCallback(() => {
+    productosService.getImagenes(idProducto)
+      .then(({ data }) => {
+        setImagenes(data.imagenes);
+        const principal = data.imagenes.find(i => i.es_principal) ?? data.imagenes[0] ?? null;
+        setSeleccionada(principal);
+      })
+      .catch(() => {});
+  }, [idProducto]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const handleSubir = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setSubiendo(true);
+    try {
+      await productosService.uploadImagen(idProducto, file);
+      cargar();
+    } catch { /* silencioso */ }
+    finally { setSubiendo(false); }
+  };
+
+  const handlePrincipal = async (img) => {
+    try {
+      await productosService.setPrincipalImagen(idProducto, img.id_imagen);
+      cargar();
+    } catch { /* silencioso */ }
+  };
+
+  const handleEliminar = async (img) => {
+    if (!window.confirm('¿Eliminar esta imagen?')) return;
+    try {
+      await productosService.deleteImagen(idProducto, img.id_imagen);
+      cargar();
+    } catch { /* silencioso */ }
+  };
+
+  const imgSel = seleccionada ? buildImgUrl(seleccionada.imagen_url) : null;
+
+  return (
+    <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-shrink-0">
+      {/* Imagen principal */}
+      <div className="relative w-full sm:w-48 h-36 rounded-xl overflow-hidden border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800 flex items-center justify-center">
+        {imgSel
+          ? <img src={imgSel} alt="principal" className="w-full h-full object-cover" />
+          : <FaBoxOpen className="h-10 w-10 text-gray-300 dark:text-zinc-600" />
+        }
+      </div>
+
+      {/* Miniaturas + botón agregar */}
+      <div className="flex gap-1.5 flex-wrap">
+        {imagenes.map(img => {
+          const url    = buildImgUrl(img.imagen_url);
+          const activa = seleccionada?.id_imagen === img.id_imagen;
+          return (
+            <div
+              key={img.id_imagen}
+              className={`relative group w-12 h-12 rounded-lg overflow-hidden border-2 cursor-pointer flex-shrink-0 transition-all ${activa ? 'border-amber-400' : 'border-gray-200 dark:border-zinc-700'}`}
+              onClick={() => setSeleccionada(img)}
+            >
+              {url
+                ? <img src={url} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full bg-gray-200 dark:bg-zinc-700" />
+              }
+              {/* Badge estrella */}
+              {img.es_principal === 1 && (
+                <span className="absolute top-0.5 left-0.5 text-amber-400 text-[9px]"><FaStar /></span>
+              )}
+              {/* Acciones en hover */}
+              {puedeEditar && (
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-0.5 items-center justify-center">
+                  {img.es_principal !== 1 && (
+                    <button
+                      title="Marcar como principal"
+                      onClick={e => { e.stopPropagation(); handlePrincipal(img); }}
+                      className="text-amber-300 hover:text-amber-200 text-[10px]"
+                    ><FaStar /></button>
+                  )}
+                  <button
+                    title="Eliminar imagen"
+                    onClick={e => { e.stopPropagation(); handleEliminar(img); }}
+                    className="text-red-400 hover:text-red-300 text-[10px]"
+                  ><FaTrash /></button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Botón agregar */}
+        {puedeEditar && (
+          <>
+            <input ref={imgRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleSubir} />
+            <button
+              onClick={() => imgRef.current?.click()}
+              disabled={subiendo}
+              className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 dark:border-zinc-600 flex items-center justify-center text-gray-400 dark:text-zinc-500 hover:border-amber-400 hover:text-amber-400 transition-colors disabled:opacity-50 flex-shrink-0"
+              title="Agregar imagen"
+            >
+              {subiendo ? <FaSpinner className="animate-spin h-3.5 w-3.5" /> : <FaPlus className="h-3.5 w-3.5" />}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── ProductoDetalle ───────────────────────────────────────────────────────
 export default function ProductoDetalle() {
   const { id }      = useParams();
   const navigate    = useNavigate();
   const { puede }   = usePermission();
-  const imgRef      = useRef(null);
   const [producto,   setProducto]  = useState(null);
   const [cargando,   setCargando]  = useState(true);
   const [tabActivo,  setTabActivo] = useState(0);
-  const [subiendoImg, setSubiendoImg] = useState(false);
 
   const TABS = ['Datos Generales', 'Stock', 'Histórico Precios'];
 
@@ -485,21 +600,6 @@ export default function ProductoDetalle() {
   }, [id, navigate]);
 
   useEffect(() => { cargarProducto(); }, [cargarProducto]);
-
-  const handleImgChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    setSubiendoImg(true);
-    try {
-      const { data } = await productosService.uploadImagen(id, file);
-      setProducto(prev => ({ ...prev, imagen_url: data.imagen_url }));
-    } catch {
-      // error silencioso — el usuario verá que la imagen no cambió
-    } finally {
-      setSubiendoImg(false);
-    }
-  };
 
   if (cargando) {
     return (
@@ -525,37 +625,9 @@ export default function ProductoDetalle() {
         </button>
 
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 p-6">
-          <div className="flex items-start gap-4">
-            {/* Imagen del producto */}
-            <div className="relative w-24 h-24 flex-shrink-0 group">
-              {buildImgUrl(producto.imagen_url) ? (
-                <img
-                  src={buildImgUrl(producto.imagen_url)}
-                  alt={producto.producto}
-                  className="w-full h-full object-cover rounded-xl border border-gray-200 dark:border-zinc-700"
-                />
-              ) : (
-                <div className="w-full h-full rounded-xl bg-gray-100 dark:bg-zinc-800 flex items-center justify-center border border-gray-200 dark:border-zinc-700">
-                  <FaBoxOpen className="h-8 w-8 text-gray-300 dark:text-zinc-600" />
-                </div>
-              )}
-              {puede('editar', 'productos') && (
-                <>
-                  <input ref={imgRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImgChange} />
-                  <button
-                    onClick={() => imgRef.current?.click()}
-                    disabled={subiendoImg}
-                    className="absolute inset-0 w-full h-full rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 disabled:cursor-not-allowed"
-                    title="Cambiar imagen"
-                  >
-                    {subiendoImg
-                      ? <FaSpinner className="animate-spin h-5 w-5 text-white" />
-                      : <><FaCamera className="h-4 w-4 text-white" /><span className="text-white text-[10px] font-medium">Cambiar</span></>
-                    }
-                  </button>
-                </>
-              )}
-            </div>
+          <div className="flex items-start gap-4 flex-wrap">
+            {/* Galería de imágenes */}
+            <GaleriaImagenes idProducto={id} puedeEditar={puede('editar', 'productos')} />
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-3 flex-wrap mb-2">

@@ -832,7 +832,8 @@ const crearDevolucion = async (req, res) => {
     if (!items.length) return res.status(400).json({ mensaje: 'Debe incluir al menos un producto a devolver' });
 
     const [[venta]] = await db.promise().query(
-      `SELECT id_venta, estado, id_deposito, numero FROM ventas WHERE id_venta = ?`, [id]
+      `SELECT id_venta, estado, id_deposito, id_cliente, numero, saldo_pendiente
+       FROM ventas WHERE id_venta = ?`, [id]
     );
     if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
     if (!['EMITIDA', 'PARCIAL', 'PAGADA'].includes(venta.estado)) {
@@ -857,12 +858,15 @@ const crearDevolucion = async (req, res) => {
       total += it._subtotal;
     }
 
+    const tm = await tipoMov('DEVOLUCION_VTA');
+    if (!tm) return res.status(500).json({ mensaje: 'Falta tipo_movimiento DEVOLUCION_VTA en la BD' });
+
     const numero = await generarNumero('DEV', 'devoluciones_venta');
 
     const [ins] = await db.promise().query(
       `INSERT INTO devoluciones_venta (numero, id_venta, id_deposito, motivo, total, estado, id_usuario)
        VALUES (?,?,?,?,?,?,?)`,
-      [numero, id, venta.id_deposito, motivo ?? null, +total.toFixed(2), 'PENDIENTE', req.user.id_usuario]
+      [numero, id, venta.id_deposito, motivo ?? null, +total.toFixed(2), 'APROBADA', req.user.id_usuario]
     );
     const id_devolucion = ins.insertId;
 
@@ -872,10 +876,54 @@ const crearDevolucion = async (req, res) => {
          VALUES (?,?,?,?,?,?)`,
         [id_devolucion, it.id_producto, it.cantidad, it._precio, it._subtotal, it.motivo ?? null]
       );
+
+      // Reintegrar stock
+      await db.promise().query(
+        `INSERT INTO stock (id_producto, id_deposito, cantidad, costo_promedio, fecha_ult_movimiento)
+         VALUES (?,?,?,0,NOW())
+         ON DUPLICATE KEY UPDATE cantidad = cantidad + ?, fecha_ult_movimiento = NOW()`,
+        [it.id_producto, venta.id_deposito, it.cantidad, it.cantidad]
+      );
+
+      const [[nuevoStock]] = await db.promise().query(
+        `SELECT COALESCE(cantidad, 0) AS cant, COALESCE(costo_promedio, 0) AS costo
+         FROM stock WHERE id_producto = ? AND id_deposito = ?`,
+        [it.id_producto, venta.id_deposito]
+      );
+
+      // Registrar en kardex
+      await db.promise().query(
+        `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad, costo_unitario,
+          saldo_cantidad, saldo_costo, documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          it.id_producto, venta.id_deposito, tm.id_tipo_movimiento,
+          it.cantidad, it._precio,
+          Number(nuevoStock?.cant ?? 0), Number(nuevoStock?.costo ?? 0),
+          'DEVOLUCION', id, venta.numero, req.user.id_usuario,
+          motivo ? `Devolución: ${motivo}` : 'Devolución de venta',
+        ]
+      );
     }
 
+    // Actualizar saldo y estado de la venta
+    const totalDev = +total.toFixed(2);
+    const nuevoSaldo = Math.max(0, Number(venta.saldo_pendiente) - totalDev);
+    await db.promise().query(
+      `UPDATE ventas SET saldo_pendiente = ?,
+        estado = CASE WHEN ? <= 0 AND estado != 'BORRADOR' THEN 'DEVUELTA' ELSE estado END
+       WHERE id_venta = ?`,
+      [nuevoSaldo, nuevoSaldo, id]
+    );
+
+    // Reducir saldo del cliente
+    await db.promise().query(
+      `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
+      [totalDev, venta.id_cliente]
+    );
+
     await auditLog(req.user.id_usuario, 'devoluciones_venta', id_devolucion, 'INSERT', getIp(req));
-    res.status(201).json({ id_devolucion, numero, mensaje: 'Devolución creada' });
+    res.status(201).json({ id_devolucion, numero, mensaje: 'Devolución registrada y stock reintegrado' });
   } catch (err) {
     console.error('[crearDevolucion]', err);
     res.status(500).json({ error: 'Error al crear devolución' });

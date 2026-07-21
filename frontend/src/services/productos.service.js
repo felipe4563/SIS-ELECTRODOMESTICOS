@@ -19,10 +19,14 @@ export const productosService = {
     });
   },
 
+  getImagenes:        (id)          => api.get(`/productos/${id}/imagenes`),
+  setPrincipalImagen: (id, idImg)   => api.put(`/productos/${id}/imagenes/${idImg}/principal`),
+  deleteImagen:       (id, idImg)   => api.delete(`/productos/${id}/imagenes/${idImg}`),
+
   uploadImagen: (id, file) => {
     const form = new FormData();
     form.append('imagen', file);
-    return api.post(`/productos/${id}/imagen`, form, {
+    return api.post(`/productos/${id}/imagenes`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },

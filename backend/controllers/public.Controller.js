@@ -92,10 +92,19 @@ exports.getProductoPorCodigo = async (req, res) => {
     else if (stockTotal > 0) disponibilidad = 'Stock limitado';
     else                     disponibilidad = 'Sin stock';
 
+    const [imagenes] = await db.promise().query(
+      `SELECT imagen_url, es_principal
+       FROM producto_imagenes
+       WHERE id_producto = ?
+       ORDER BY es_principal DESC, orden ASC, id_imagen ASC`,
+      [producto.id_producto]
+    ).catch(() => [[]]);
+
     const { id_producto, id_categoria, id_marca, stock_total, ...datos } = producto;
     res.json({
       ...datos,
       disponibilidad,
+      imagenes,
       empresa: empresa ? {
         logo_url:         empresa.logo_url,
         nombre:           empresa.nombre,

@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { api, imgUrl, fmtPrecio } from '@/lib/api';
+import { api, fmtPrecio } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import BackButton from '@/components/BackButton';
+import GaleriaProducto from '@/components/GaleriaProducto';
 
 export const revalidate = 60;
 
@@ -28,8 +28,13 @@ export default async function ProductoPage({ params }: Props) {
   try { producto = await api.producto(codigoDecoded); }
   catch { notFound(); }
 
-  const img     = imgUrl(producto.imagen_url);
   const agotado = producto.disponibilidad === 'Sin stock';
+  // Construir lista de imágenes: preferir producto_imagenes, fallback a imagen_url
+  const imagenes = producto.imagenes?.length
+    ? producto.imagenes
+    : producto.imagen_url
+      ? [{ imagen_url: producto.imagen_url, es_principal: 1 }]
+      : [];
   const empresa = producto.empresa ?? (await api.empresa().catch(() => null));
 
   return (
@@ -68,27 +73,13 @@ export default async function ProductoPage({ params }: Props) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'start' }}
               className="product-grid">
 
-              {/* Imagen */}
-              <div style={{
-                position:     'relative',
-                aspectRatio:  '1',
-                background:   'var(--color-img-bg)',
-                borderRadius: 'var(--radius-lg)',
-                overflow:     'hidden',
-                border:       '1px solid var(--color-border)',
-              }}>
-                {agotado && (
-                  <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2 }}>
-                    <span className="badge badge-sin-stock">Sin stock</span>
-                  </div>
-                )}
-                {!agotado && producto.stock_total <= 5 && (
-                  <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2 }}>
-                    <span className="badge badge-limitado">Stock limitado</span>
-                  </div>
-                )}
-
-                {/* Corner tag */}
+              {/* Galería de imágenes */}
+              <div style={{ position: 'relative' }}>
+                {/* Badges sobre la galería */}
+                <div style={{ position: 'absolute', top: 14, left: 14, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {agotado && <span className="badge badge-sin-stock">Sin stock</span>}
+                  {!agotado && producto.stock_total <= 5 && <span className="badge badge-limitado">Stock limitado</span>}
+                </div>
                 <div style={{
                   position:    'absolute',
                   top:          14,
@@ -106,36 +97,11 @@ export default async function ProductoPage({ params }: Props) {
                 }}>
                   {producto.categoria ?? 'Serie X'}
                 </div>
-
-                <Image src={img} alt={producto.producto} fill
-                  style={{ objectFit: 'contain', padding: '2.5rem', filter: agotado ? 'grayscale(0.4) brightness(0.7)' : 'none' }}
-                  priority />
-
-                {/* Energy label visual */}
-                <div style={{
-                  position:   'absolute',
-                  bottom:      14,
-                  left:        14,
-                  display:    'flex',
-                  flexDirection:'column',
-                  gap:         4,
-                }}>
-                  {producto.modelo && (
-                    <div style={{
-                      background:   'rgba(0,0,0,0.7)',
-                      backdropFilter:'blur(4px)',
-                      border:       '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding:      '0.25rem 0.6rem',
-                      fontSize:     '0.65rem',
-                      fontWeight:    600,
-                      color:        'var(--color-muted)',
-                      letterSpacing:'0.05em',
-                    }}>
-                      MOD: {producto.modelo}
-                    </div>
-                  )}
-                </div>
+                <GaleriaProducto
+                  imagenes={imagenes}
+                  nombre={producto.producto}
+                  agotado={agotado}
+                />
               </div>
 
               {/* Info */}

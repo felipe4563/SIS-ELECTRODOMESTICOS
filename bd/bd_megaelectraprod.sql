@@ -903,6 +903,21 @@ CREATE TABLE `productos` (
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `producto_imagenes`
+--
+
+CREATE TABLE `producto_imagenes` (
+  `id_imagen` int(11) NOT NULL,
+  `id_producto` int(11) NOT NULL,
+  `imagen_url` varchar(255) NOT NULL,
+  `orden` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `es_principal` tinyint(1) NOT NULL DEFAULT 0,
+  `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `producto_precio_historico`
 --
 
@@ -1996,6 +2011,13 @@ ALTER TABLE `productos`
   ADD KEY `fk_prod_proveedor` (`id_proveedor_default`);
 
 --
+-- Indices de la tabla `producto_imagenes`
+--
+ALTER TABLE `producto_imagenes`
+  ADD PRIMARY KEY (`id_imagen`),
+  ADD KEY `idx_pi_producto` (`id_producto`);
+
+--
 -- Indices de la tabla `producto_precio_historico`
 --
 ALTER TABLE `producto_precio_historico`
@@ -2402,6 +2424,12 @@ ALTER TABLE `permisos`
   MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=226;
 
 --
+-- AUTO_INCREMENT de la tabla `producto_imagenes`
+--
+ALTER TABLE `producto_imagenes`
+  MODIFY `id_imagen` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `productos`
 --
 ALTER TABLE `productos`
@@ -2716,6 +2744,12 @@ ALTER TABLE `pagos_venta`
 --
 ALTER TABLE `permisos`
   ADD CONSTRAINT `fk_permiso_modulo` FOREIGN KEY (`id_modulo`) REFERENCES `modulos` (`id_modulo`);
+
+--
+-- Filtros para la tabla `producto_imagenes`
+--
+ALTER TABLE `producto_imagenes`
+  ADD CONSTRAINT `fk_pi_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Filtros para la tabla `productos`

@@ -61,10 +61,16 @@ export interface Producto {
   disponible: boolean;
 }
 
+export interface ProductoImagen {
+  imagen_url: string;
+  es_principal: number;
+}
+
 export interface ProductoDetalle extends Producto {
   caracteristicas: string | null;
   detalle: string | null;
   disponibilidad: string;
+  imagenes: ProductoImagen[];
   promociones: Promocion[];
   combos: Combo[];
   empresa: Empresa | null;

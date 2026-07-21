@@ -575,12 +575,14 @@ async function getKardexProducto(req, res) {
     const hasta = defaultHasta(req.query);
 
     let sql = `
-      SELECT DATE_FORMAT(k.fecha,'%Y-%m-%d %H:%i') AS fecha,
+      SELECT k.id_kardex,
+        DATE_FORMAT(k.fecha,'%Y-%m-%d %H:%i') AS fecha,
         tm.nombre AS tipo_movimiento, tm.efecto,
         d.nombre AS deposito,
         k.cantidad, k.costo_unitario,
         k.saldo_cantidad, k.saldo_costo,
         k.documento_tipo, k.documento_numero,
+        k.observaciones,
         CONCAT(u.nombres,' ',u.apellidos) AS usuario
       FROM kardex k
       JOIN tipos_movimiento tm ON tm.id_tipo_movimiento=k.id_tipo_movimiento

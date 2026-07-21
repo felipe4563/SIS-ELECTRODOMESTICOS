@@ -52,12 +52,24 @@ router.get('/:id/historico-precios',
 router.get('/:id/stock',
   authMiddleware, checkPermission('ver', 'productos'), ctrl.getStock);
 
-// ── Imagen de producto ────────────────────────────────────────────────────
-router.post('/:id/imagen',
+// ── Imágenes de producto (múltiples) ─────────────────────────────────────
+router.get('/:id/imagenes',
+  authMiddleware, checkPermission('ver', 'productos'),
+  ctrl.getImagenes);
+
+router.post('/:id/imagenes',
   authMiddleware, checkPermission('editar', 'productos'),
   uploadImg.single('imagen'),
   validateMagic(IMAGES_ONLY),
   ctrl.uploadImagen);
+
+router.put('/:id/imagenes/:idImagen/principal',
+  authMiddleware, checkPermission('editar', 'productos'),
+  ctrl.setPrincipalImagen);
+
+router.delete('/:id/imagenes/:idImagen',
+  authMiddleware, checkPermission('editar', 'productos'),
+  ctrl.deleteImagen);
 
 
 module.exports = router;

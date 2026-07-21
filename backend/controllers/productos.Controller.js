@@ -284,7 +284,22 @@ const deleteProducto = async (req, res) => {
   }
 };
 
-// ── Imagen de producto ────────────────────────────────────────────────────
+// ── Imágenes de producto (múltiples) ─────────────────────────────────────
+
+const getImagenes = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await db.promise().query(
+      `SELECT id_imagen, imagen_url, orden, es_principal, fecha_creacion
+       FROM producto_imagenes WHERE id_producto = ? ORDER BY orden ASC, id_imagen ASC`,
+      [id]
+    );
+    return res.json({ imagenes: rows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al obtener imágenes' });
+  }
+};
 
 const uploadImagen = async (req, res) => {
   try {
@@ -292,13 +307,85 @@ const uploadImagen = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
 
     const imagenUrl = `/uploads/productos/${req.file.filename}`;
-    await db.promise().query(`UPDATE productos SET imagen_url = ? WHERE id_producto = ?`, [imagenUrl, id]);
-    await auditLog(req.user.id_usuario, 'productos', id, 'UPDATE', getIp(req));
 
-    return res.json({ imagen_url: imagenUrl });
+    // Determinar si es la primera imagen (será principal automáticamente)
+    const [[{ total }]] = await db.promise().query(
+      `SELECT COUNT(*) AS total FROM producto_imagenes WHERE id_producto = ?`, [id]
+    );
+    const esPrincipal = total === 0 ? 1 : 0;
+
+    const [result] = await db.promise().query(
+      `INSERT INTO producto_imagenes (id_producto, imagen_url, orden, es_principal) VALUES (?, ?, ?, ?)`,
+      [id, imagenUrl, total, esPrincipal]
+    );
+
+    if (esPrincipal) {
+      await db.promise().query(`UPDATE productos SET imagen_url = ? WHERE id_producto = ?`, [imagenUrl, id]);
+    }
+
+    await auditLog(req.user.id_usuario, 'productos', id, 'UPDATE', getIp(req));
+    return res.json({ id_imagen: result.insertId, imagen_url: imagenUrl, es_principal: esPrincipal });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Error al subir imagen' });
+  }
+};
+
+const setPrincipalImagen = async (req, res) => {
+  try {
+    const { id, idImagen } = req.params;
+    const [[img]] = await db.promise().query(
+      `SELECT imagen_url FROM producto_imagenes WHERE id_imagen = ? AND id_producto = ?`,
+      [idImagen, id]
+    );
+    if (!img) return res.status(404).json({ error: 'Imagen no encontrada' });
+
+    await db.promise().query(`UPDATE producto_imagenes SET es_principal = 0 WHERE id_producto = ?`, [id]);
+    await db.promise().query(`UPDATE producto_imagenes SET es_principal = 1 WHERE id_imagen = ?`, [idImagen]);
+    await db.promise().query(`UPDATE productos SET imagen_url = ? WHERE id_producto = ?`, [img.imagen_url, id]);
+
+    await auditLog(req.user.id_usuario, 'productos', id, 'UPDATE', getIp(req));
+    return res.json({ ok: true, imagen_url: img.imagen_url });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al establecer imagen principal' });
+  }
+};
+
+const deleteImagen = async (req, res) => {
+  try {
+    const { id, idImagen } = req.params;
+    const [[img]] = await db.promise().query(
+      `SELECT imagen_url, es_principal FROM producto_imagenes WHERE id_imagen = ? AND id_producto = ?`,
+      [idImagen, id]
+    );
+    if (!img) return res.status(404).json({ error: 'Imagen no encontrada' });
+
+    await db.promise().query(`DELETE FROM producto_imagenes WHERE id_imagen = ?`, [idImagen]);
+
+    // Si era principal, asignar la siguiente imagen disponible como principal
+    if (img.es_principal) {
+      const [[next]] = await db.promise().query(
+        `SELECT id_imagen, imagen_url FROM producto_imagenes WHERE id_producto = ? ORDER BY orden ASC, id_imagen ASC LIMIT 1`,
+        [id]
+      );
+      if (next) {
+        await db.promise().query(`UPDATE producto_imagenes SET es_principal = 1 WHERE id_imagen = ?`, [next.id_imagen]);
+        await db.promise().query(`UPDATE productos SET imagen_url = ? WHERE id_producto = ?`, [next.imagen_url, id]);
+      } else {
+        await db.promise().query(`UPDATE productos SET imagen_url = NULL WHERE id_producto = ?`, [id]);
+      }
+    }
+
+    // Eliminar archivo físico si es local
+    const filePath = require('path').join(__dirname, '..', img.imagen_url);
+    require('fs').unlink(filePath, () => {});
+
+    await auditLog(req.user.id_usuario, 'productos', id, 'UPDATE', getIp(req));
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al eliminar imagen' });
   }
 };
 
@@ -347,5 +434,5 @@ module.exports = {
   getFormData,
   getProductos, getProducto, createProducto, updateProducto, deleteProducto,
   getHistoricoPrecios, getStock,
-  uploadImagen,
+  getImagenes, uploadImagen, setPrincipalImagen, deleteImagen,
 };

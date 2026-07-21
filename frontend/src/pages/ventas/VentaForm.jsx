@@ -5,6 +5,7 @@ import { cajaService } from '../../services/caja.service';
 import api from '../../api/axios';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
+import EscanerQR from '../../components/EscanerQR';
 
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 
@@ -280,8 +281,9 @@ export default function VentaForm() {
   const [error,        setError]        = useState('');
   const [arqueoActual, setArqueoActual] = useState(undefined);
 
-  const [qrInput, setQrInput] = useState('');
-  const [qrError, setQrError] = useState('');
+  const [qrInput,       setQrInput]       = useState('');
+  const [qrError,       setQrError]       = useState('');
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
   const qrTimerRef = useRef(null);
 
   const [modalRapido, setModalRapido] = useState(false);
@@ -429,48 +431,49 @@ export default function VentaForm() {
     }
   }, [form.id_moneda, monedas]); // eslint-disable-line
 
+  const procesarCodigo = useCallback((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    const match  = trimmed.match(/\/p\/([^/?#\s]+)$/);
+    const codigo = match ? decodeURIComponent(match[1]) : trimmed;
+
+    const prod = productos.find(p => p.codigo_interno === codigo || p.codigo_barras === codigo);
+    if (!prod) {
+      setQrError(`No encontrado: ${codigo}`);
+      setTimeout(() => setQrError(''), 3000);
+      setQrInput('');
+      return;
+    }
+
+    const precio = resolverPrecio(prod, form.tipo_venta);
+    setItems(prev => {
+      const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
+        return next;
+      }
+      const impDef = prod.id_impuesto_default
+        ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
+        : impuestos.find(i => i.es_default);
+      return [...prev, {
+        _key:            crypto.randomUUID(),
+        id_producto:     String(prod.id_producto),
+        cantidad:        1,
+        precio_unitario: precio,
+        descuento_porc:  0,
+        id_impuesto:    impDef ? String(impDef.id_impuesto) : '',
+        impuesto_porc:  impDef ? Number(impDef.porcentaje) : 0,
+      }];
+    });
+    setQrInput('');
+    setQrError('');
+  }, [productos, form.tipo_venta, impuestos]); // eslint-disable-line
+
   const handleQrScan = (val) => {
     clearTimeout(qrTimerRef.current);
-    qrTimerRef.current = setTimeout(() => {
-      const trimmed = val.trim();
-      if (!trimmed) return;
-
-      const match   = trimmed.match(/\/p\/([^/?#\s]+)$/);
-      const codigo  = match ? decodeURIComponent(match[1]) : trimmed;
-
-      const prod = productos.find(p => p.codigo_interno === codigo || p.codigo_barras === codigo);
-      if (!prod) {
-        setQrError(`No encontrado: ${codigo}`);
-        setTimeout(() => setQrError(''), 3000);
-        setQrInput('');
-        return;
-      }
-
-      const precio = resolverPrecio(prod, form.tipo_venta);
-
-      setItems(prev => {
-        const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
-          return next;
-        }
-        const impDef = prod.id_impuesto_default
-          ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
-          : impuestos.find(i => i.es_default);
-        return [...prev, {
-          _key:            crypto.randomUUID(),
-          id_producto:     String(prod.id_producto),
-          cantidad:        1,
-          precio_unitario: precio,
-          descuento_porc:  0,
-          id_impuesto:    impDef ? String(impDef.id_impuesto) : '',
-          impuesto_porc:  impDef ? Number(impDef.porcentaje) : 0,
-        }];
-      });
-      setQrInput('');
-      setQrError('');
-    }, 300);
+    qrTimerRef.current = setTimeout(() => procesarCodigo(val), 300);
   };
 
   const addItem    = () => setItems(p => [...p, { _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
@@ -847,10 +850,21 @@ export default function VentaForm() {
             value={qrInput}
             onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
             onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-            placeholder="Escanee un código de barras o QR…"
+            placeholder="Escanee un código o escriba manualmente…"
             className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
           />
           {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
+          <button
+            type="button"
+            onClick={() => setMostrarEscaner(true)}
+            title="Escanear con cámara"
+            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-500 transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
         </div>
 
         {/* Tabla */}
@@ -958,6 +972,14 @@ export default function VentaForm() {
           {guardando ? 'Guardando…' : esEdicion ? 'Guardar' : 'Crear venta'}
         </button>
       </div>
+
+      {/* ── Escáner de cámara ── */}
+      {mostrarEscaner && (
+        <EscanerQR
+          onScan={(val) => { setMostrarEscaner(false); procesarCodigo(val); }}
+          onClose={() => setMostrarEscaner(false)}
+        />
+      )}
 
       {/* ── Modal producto rápido ── */}
       {modalRapido && (

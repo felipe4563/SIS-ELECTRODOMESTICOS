@@ -29,6 +29,8 @@ const DEV_BADGE = {
   RECHAZADA: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 };
 
+const DEV_LABEL = { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada' };
+
 function SectionCard({ title, badge, children }) {
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -198,17 +200,6 @@ export default function VentaDetalle() {
       await cargar();
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al crear devolución');
-    } finally { setProcesando(false); }
-  };
-
-  const accionDevolucionEstado = async (id_devolucion, accion) => {
-    setProcesando(true);
-    try {
-      if (accion === 'aprobar') await ventasService.aprobarDevolucion(id_devolucion);
-      else await ventasService.rechazarDevolucion(id_devolucion);
-      await cargar();
-    } catch (err) {
-      setPageError(err.response?.data?.mensaje ?? 'Error al procesar la devolución');
     } finally { setProcesando(false); }
   };
 
@@ -686,7 +677,7 @@ export default function VentaDetalle() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-                  {['Número', 'Fecha', 'Total', 'Motivo', 'Estado', ''].map(h => (
+                  {['Número', 'Fecha', 'Total', 'Motivo', 'Estado'].map(h => (
                     <th key={h} className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{h}</th>
                   ))}
                 </tr>
@@ -700,22 +691,8 @@ export default function VentaDetalle() {
                     <td className="px-4 py-2.5 text-zinc-500 dark:text-zinc-400 text-xs max-w-[150px] truncate">{d.motivo || '—'}</td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${DEV_BADGE[d.estado] ?? ''}`}>
-                        {d.estado}
+                        {DEV_LABEL[d.estado] ?? d.estado}
                       </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {d.estado === 'PENDIENTE' && puede('devolucion_aprobar', 'ventas') && (
-                        <div className="flex gap-3">
-                          <button onClick={() => accionDevolucionEstado(d.id_devolucion, 'aprobar')} disabled={procesando}
-                            className="text-xs text-green-600 hover:text-green-700 font-semibold disabled:opacity-50 transition-colors">
-                            Aprobar
-                          </button>
-                          <button onClick={() => accionDevolucionEstado(d.id_devolucion, 'rechazar')} disabled={procesando}
-                            className="text-xs text-red-500 hover:text-red-600 font-semibold disabled:opacity-50 transition-colors">
-                            Rechazar
-                          </button>
-                        </div>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -735,24 +712,12 @@ export default function VentaDetalle() {
                   <div className="text-right shrink-0">
                     <p className="font-mono font-semibold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(d.total)}</p>
                     <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold ${DEV_BADGE[d.estado] ?? ''}`}>
-                      {d.estado}
+                      {DEV_LABEL[d.estado] ?? d.estado}
                     </span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] text-zinc-400">{fmtFecha(d.fecha)}</p>
-                  {d.estado === 'PENDIENTE' && puede('devolucion_aprobar', 'ventas') && (
-                    <div className="flex gap-3">
-                      <button onClick={() => accionDevolucionEstado(d.id_devolucion, 'aprobar')} disabled={procesando}
-                        className="text-xs text-green-600 font-semibold disabled:opacity-50">
-                        Aprobar
-                      </button>
-                      <button onClick={() => accionDevolucionEstado(d.id_devolucion, 'rechazar')} disabled={procesando}
-                        className="text-xs text-red-500 font-semibold disabled:opacity-50">
-                        Rechazar
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
