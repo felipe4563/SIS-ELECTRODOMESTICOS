@@ -1620,6 +1620,742 @@ async function exportarTransferenciasPDF(req, res) {
   }
 }
 
+// ── Top Productos PDF ─────────────────────────────────────────────────────
+async function exportarTopProductosPDF(req, res) {
+  try {
+    const empresa = await getEmpresaData();
+    const desde   = req.query.fecha_desde || inicioMes();
+    const hasta   = req.query.fecha_hasta || hoy();
+    const limit   = Math.min(parseInt(req.query.limit || 10, 10), 100);
+    const { id_sucursal } = req.query;
+
+    let sql = `
+      SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
+        SUM(vd.cantidad) AS cantidad_vendida,
+        SUM(vd.subtotal) AS monto_total,
+        COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos,
+        AVG(vd.precio_unitario) AS precio_promedio
+      FROM venta_detalle vd
+      JOIN ventas v      ON v.id_venta = vd.id_venta
+      JOIN productos p   ON p.id_producto = vd.id_producto
+      JOIN marcas m      ON m.id_marca = p.id_marca
+      JOIN categorias cat ON cat.id_categoria = p.id_categoria
+      WHERE DATE(v.fecha) BETWEEN ? AND ?
+        AND v.estado NOT IN ('ANULADA','BORRADOR')
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND v.id_sucursal = ?'; params.push(id_sucursal); }
+    sql += ` GROUP BY vd.id_producto ORDER BY cantidad_vendida DESC LIMIT ${limit}`;
+
+    const [rows] = await db.promise().query(sql, params);
+
+    const N  = (n, d = 2) => Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtBs = n => `Bs ${N(n)}`;
+    const fechaGen = new Date().toLocaleString('es-BO');
+
+    const totalUnidades = rows.reduce((s, r) => s + Number(r.cantidad_vendida), 0);
+    const totalMonto    = rows.reduce((s, r) => s + Number(r.monto_total), 0);
+    const totalBonos    = rows.reduce((s, r) => s + Number(r.total_bonos), 0);
+    const maxQty        = rows.length > 0 ? Number(rows[0].cantidad_vendida) : 1;
+
+    const doc  = new PDFDocument({ margin: 0, size: 'A4' });
+    const ML   = 36, MR = 36;
+    const PW   = doc.page.width - ML - MR;   // 523
+    const GOLD = '#FACC15';
+    const DARK = '#18181B';
+    const SLATE = '#64748B';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Top-Productos_${desde}_${hasta}.pdf"`);
+    doc.pipe(res);
+
+    // ── CABECERA ──────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 88).fill(DARK);
+
+    let logoW = 0;
+    if (empresa?.logo_url && empresa.logo_url.startsWith('/uploads/')) {
+      const logoFile = path.join(__dirname, '..', empresa.logo_url);
+      if (fs.existsSync(logoFile)) {
+        try {
+          doc.image(logoFile, ML, 18, { height: 48, fit: [90, 48] });
+          logoW = 98;
+        } catch (_) {}
+      }
+    }
+
+    const nombreEm = empresa?.nombre_comercial || empresa?.razon_social || 'MEGAELECTRA';
+    doc.font('Helvetica-Bold').fontSize(15).fillColor('white')
+       .text(nombreEm, ML + logoW, 20, { width: PW - logoW - 110 });
+    let infoY = 39;
+    doc.font('Helvetica').fontSize(7.5).fillColor('#A1A1AA');
+    if (empresa?.nit)       { doc.text(`NIT: ${empresa.nit}`, ML + logoW, infoY, { width: PW - logoW - 110 }); infoY += 10; }
+    if (empresa?.direccion) { doc.text(empresa.direccion,      ML + logoW, infoY, { width: PW - logoW - 110 }); infoY += 10; }
+    const contacto = [empresa?.telefono, empresa?.email].filter(Boolean).join('  ·  ');
+    if (contacto)           { doc.text(contacto,               ML + logoW, infoY, { width: PW - logoW - 110 }); }
+
+    // Badge "TOP PRODUCTOS" alineado a la derecha dentro de la cabecera
+    const badgeW = 108, badgeH = 24, badgeX = doc.page.width - MR - badgeW, badgeY = 20;
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 4).fill(GOLD);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
+       .text('TOP PRODUCTOS', badgeX, badgeY + 8, { width: badgeW, align: 'center' });
+
+    // Período
+    doc.font('Helvetica').fontSize(7.5).fillColor('#D4D4D8')
+       .text(`Período: ${desde}  al  ${hasta}`, doc.page.width - MR - badgeW, badgeY + 28, { width: badgeW, align: 'center' });
+
+    // Línea dorada inferior de cabecera
+    doc.rect(0, 88, doc.page.width, 3).fill(GOLD);
+
+    let y = 103;
+
+    // ── TARJETAS DE RESUMEN ────────────────────────────────────────────────
+    const cards = [
+      { label: 'Total unidades vendidas', value: N(totalUnidades, 0), sub: `${rows.length} producto${rows.length !== 1 ? 's' : ''}` },
+      { label: 'Ingresos totales',         value: fmtBs(totalMonto),   sub: 'período seleccionado' },
+      { label: 'Total bonos vendedor',     value: fmtBs(totalBonos),   sub: 'acumulado' },
+    ];
+    const cw = Math.floor(PW / cards.length) - 6;
+    cards.forEach((c, i) => {
+      const cx = ML + i * (cw + 9);
+      doc.roundedRect(cx, y, cw, 52, 5).fill('#F4F4F5');
+      doc.font('Helvetica').fontSize(7).fillColor(SLATE)
+         .text(c.label.toUpperCase(), cx + 10, y + 10, { width: cw - 20 });
+      doc.font('Helvetica-Bold').fontSize(14).fillColor(DARK)
+         .text(c.value, cx + 10, y + 21, { width: cw - 20 });
+      doc.font('Helvetica').fontSize(7).fillColor('#A1A1AA')
+         .text(c.sub, cx + 10, y + 39, { width: cw - 20 });
+      doc.rect(cx, y, 3, 52).fill(GOLD);
+    });
+    y += 64;
+
+    // ── RANKING VISUAL ─────────────────────────────────────────────────────
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(SLATE)
+       .text('RANKING POR UNIDADES VENDIDAS', ML, y, { width: PW });
+    y += 14;
+
+    const barMaxW = PW - 170;
+    rows.slice(0, Math.min(rows.length, 10)).forEach((row, i) => {
+      const pct     = Number(row.cantidad_vendida) / maxQty;
+      const barW    = Math.max(4, Math.round(barMaxW * pct));
+      const rowY    = y + i * 17;
+      const isFirst = i === 0;
+
+      // Número de posición
+      doc.font('Helvetica-Bold').fontSize(8)
+         .fillColor(isFirst ? GOLD : SLATE)
+         .text(String(i + 1), ML, rowY + 3, { width: 14, align: 'right' });
+
+      // Barra
+      doc.rect(ML + 18, rowY + 4, barMaxW, 9).fill('#F4F4F5');
+      doc.rect(ML + 18, rowY + 4, barW, 9).fill(isFirst ? GOLD : '#D4D4D8');
+
+      // Nombre producto
+      doc.font(isFirst ? 'Helvetica-Bold' : 'Helvetica').fontSize(7.5)
+         .fillColor(DARK)
+         .text(row.producto, ML + 18, rowY, { width: barMaxW, lineBreak: false });
+
+      // Cantidad a la derecha
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
+         .text(`${N(row.cantidad_vendida, 0)} u.`, ML + 18 + barMaxW + 6, rowY + 3, { width: 60, align: 'right' });
+
+      // % del total
+      const pctTotal = totalUnidades > 0 ? ((Number(row.cantidad_vendida) / totalUnidades) * 100).toFixed(1) : '0.0';
+      doc.font('Helvetica').fontSize(7).fillColor(SLATE)
+         .text(`${pctTotal}%`, ML + 18 + barMaxW + 70, rowY + 4, { width: 30, align: 'right' });
+    });
+    y += Math.min(rows.length, 10) * 17 + 16;
+
+    // ── TABLA DETALLADA ────────────────────────────────────────────────────
+    const tCols = [
+      { label: '#',          w: 16,  align: 'right',  key: null },
+      { label: 'Código',     w: 52,  align: 'left',   key: 'codigo_interno' },
+      { label: 'Producto',   w: 148, align: 'left',   key: 'producto' },
+      { label: 'Marca',      w: 58,  align: 'left',   key: 'marca' },
+      { label: 'Categoría',  w: 62,  align: 'left',   key: 'categoria' },
+      { label: 'Unidades',   w: 44,  align: 'right',  key: 'cantidad_vendida' },
+      { label: 'P. Prom Bs', w: 54,  align: 'right',  key: 'precio_promedio' },
+      { label: 'Total Bs',   w: 58,  align: 'right',  key: 'monto_total' },
+      { label: '% Total',    w: 36,  align: 'right',  key: null },
+    ];
+    // Ajuste proporcional si excede PW
+    const tTotalW = tCols.reduce((s, c) => s + c.w, 0);
+    const tScale  = PW / tTotalW;
+    tCols.forEach(c => { c.w = Math.floor(c.w * tScale); });
+
+    // Verificar espacio restante en página
+    if (y + 14 + rows.length * 13 + 20 > doc.page.height - 40) {
+      if (y + 40 > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', margin: 0 });
+        y = 36;
+      }
+    }
+
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(SLATE)
+       .text('DETALLE COMPLETO', ML, y, { width: PW });
+    y += 10;
+
+    const drawTHead = () => {
+      doc.rect(ML, y, PW, 14).fill(DARK);
+      let cx = ML + 2;
+      tCols.forEach(col => {
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor('white')
+           .text(col.label, cx, y + 4, { width: col.w - 2, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+      y += 14;
+    };
+
+    const drawTRow = (row, idx, rankNum) => {
+      const bg = idx % 2 === 0 ? '#FAFAFA' : 'white';
+      doc.rect(ML, y, PW, 13).fill(bg);
+
+      const pctTotal = totalUnidades > 0
+        ? ((Number(row.cantidad_vendida) / totalUnidades) * 100).toFixed(1) + '%'
+        : '—';
+
+      const vals = [
+        rankNum,
+        row.codigo_interno,
+        row.producto,
+        row.marca,
+        row.categoria,
+        N(row.cantidad_vendida, 0),
+        N(row.precio_promedio),
+        N(row.monto_total),
+        pctTotal,
+      ];
+
+      let cx = ML + 2;
+      tCols.forEach((col, ci) => {
+        const isBold = ci === 2 || ci === 0;
+        doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica').fontSize(7)
+           .fillColor(ci === 0 && rankNum <= 3 ? GOLD : DARK)
+           .text(String(vals[ci] ?? ''), cx, y + 3, { width: col.w - 4, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+
+      // Highlight primer puesto
+      if (rankNum === 1) {
+        doc.rect(ML, y, 3, 13).fill(GOLD);
+      }
+
+      y += 13;
+    };
+
+    const drawTFooter = () => {
+      doc.rect(ML, y, PW, 14).fill('#1E293B');
+      const totals = ['', '', 'TOTALES', '', '', N(totalUnidades, 0), '', N(totalMonto), '100%'];
+      let cx = ML + 2;
+      tCols.forEach((col, ci) => {
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
+           .text(String(totals[ci] ?? ''), cx, y + 4, { width: col.w - 4, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+      y += 14;
+    };
+
+    drawTHead();
+
+    rows.forEach((row, i) => {
+      if (y > doc.page.height - 50) {
+        drawTFooter();
+        doc.addPage({ size: 'A4', margin: 0 });
+        y = 36;
+        drawTHead();
+      }
+      drawTRow(row, i, i + 1);
+    });
+
+    drawTFooter();
+
+    // ── PIE DE PÁGINA ──────────────────────────────────────────────────────
+    y += 10;
+    doc.moveTo(ML, y).lineTo(ML + PW, y).strokeColor('#E4E4E7').lineWidth(0.5).stroke();
+    y += 6;
+    doc.font('Helvetica').fontSize(6.5).fillColor('#A1A1AA')
+       .text(`${nombreEm}  ·  Reporte Top Productos  ·  Período: ${desde} al ${hasta}`, ML, y, { width: PW, align: 'left' })
+       .text(`Generado el ${fechaGen}`, ML, y, { width: PW, align: 'right' });
+
+    doc.end();
+  } catch (err) {
+    console.error('[exportarTopProductosPDF]', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Ventas PDF ────────────────────────────────────────────────────────────
+async function exportarVentasPDF(req, res) {
+  try {
+    const empresa  = await getEmpresaData();
+    const desde    = req.query.fecha_desde || inicioMes();
+    const hasta    = req.query.fecha_hasta || hoy();
+    const { id_sucursal } = req.query;
+
+    let sql = `
+      SELECT v.numero, DATE_FORMAT(v.fecha,'%d/%m/%Y %H:%i') AS fecha, v.tipo_venta,
+        COALESCE(c.razon_social, CONCAT(c.nombres,' ',c.apellidos)) AS cliente,
+        CONCAT(u.nombres,' ',u.apellidos) AS vendedor,
+        s.nombre AS sucursal,
+        v.total, v.descuento_monto, v.saldo_pendiente, v.estado, v.condicion_pago
+      FROM ventas v
+      JOIN clientes c ON c.id_cliente = v.id_cliente
+      JOIN usuarios u ON u.id_usuario = v.id_vendedor
+      JOIN sucursales s ON s.id_sucursal = v.id_sucursal
+      WHERE DATE(v.fecha) BETWEEN ? AND ? AND v.estado != 'BORRADOR'
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal) { sql += ' AND v.id_sucursal = ?'; params.push(id_sucursal); }
+    sql += ' ORDER BY v.fecha DESC LIMIT 5000';
+
+    const [rows] = await db.promise().query(sql, params);
+
+    const N      = (n, d = 2) => Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fechaGen = new Date().toLocaleString('es-BO');
+
+    // ── Totales para resumen ────────────────────────────────────────────────
+    const pagadas      = rows.filter(r => r.estado === 'PAGADA');
+    const emitidas     = rows.filter(r => r.estado === 'EMITIDA' || r.estado === 'PARCIAL');
+    const anuladas     = rows.filter(r => r.estado === 'ANULADA' || r.estado === 'DEVUELTA');
+    const totalPagado  = pagadas.reduce((s, r) => s + Number(r.total), 0);
+    const totalContado = pagadas.filter(r => r.condicion_pago === 'CONTADO').reduce((s, r) => s + Number(r.total), 0);
+    const totalCredito = pagadas.filter(r => r.condicion_pago === 'CREDITO').reduce((s, r) => s + Number(r.total), 0);
+    const totalSaldo   = emitidas.reduce((s, r) => s + Number(r.saldo_pendiente), 0);
+    const totalDesc    = rows.reduce((s, r) => s + Number(r.descuento_monto || 0), 0);
+    const totalGeneral = rows.filter(r => r.estado !== 'ANULADA' && r.estado !== 'DEVUELTA')
+                             .reduce((s, r) => s + Number(r.total), 0);
+
+    const ESTADO_COLOR = {
+      PAGADA:   { bg: '#DCFCE7', txt: '#15803D', label: 'Pagada' },
+      EMITIDA:  { bg: '#DBEAFE', txt: '#1D4ED8', label: 'Emitida' },
+      PARCIAL:  { bg: '#FEF3C7', txt: '#B45309', label: 'Parcial' },
+      ANULADA:  { bg: '#FEE2E2', txt: '#DC2626', label: 'Anulada' },
+      DEVUELTA: { bg: '#F3E8FF', txt: '#7C3AED', label: 'Devuelta' },
+    };
+
+    const doc  = new PDFDocument({ margin: 0, size: 'A4', layout: 'landscape' });
+    const ML   = 32, MR = 32;
+    const PW   = doc.page.width - ML - MR;
+    const GOLD = '#FACC15';
+    const DARK = '#18181B';
+    const SLATE = '#64748B';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Ventas_${desde}_${hasta}.pdf"`);
+    doc.pipe(res);
+
+    // ── CABECERA ──────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 82).fill(DARK);
+
+    let logoW = 0;
+    if (empresa?.logo_url && empresa.logo_url.startsWith('/uploads/')) {
+      const logoFile = path.join(__dirname, '..', empresa.logo_url);
+      if (fs.existsSync(logoFile)) {
+        try {
+          doc.image(logoFile, ML, 15, { height: 44, fit: [84, 44] });
+          logoW = 92;
+        } catch (_) {}
+      }
+    }
+
+    const nombreEm = empresa?.nombre_comercial || empresa?.razon_social || 'MEGAELECTRA';
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('white')
+       .text(nombreEm, ML + logoW, 16, { width: PW - logoW - 140 });
+    let infoY = 34;
+    doc.font('Helvetica').fontSize(7).fillColor('#A1A1AA');
+    if (empresa?.nit)       { doc.text(`NIT: ${empresa.nit}`, ML + logoW, infoY, { width: PW - logoW - 140 }); infoY += 9; }
+    if (empresa?.direccion) { doc.text(empresa.direccion,      ML + logoW, infoY, { width: PW - logoW - 140 }); infoY += 9; }
+    const ctc = [empresa?.telefono, empresa?.email].filter(Boolean).join('  ·  ');
+    if (ctc)                { doc.text(ctc,                    ML + logoW, infoY, { width: PW - logoW - 140 }); }
+
+    // Badge derecho
+    const badgeW = 130, badgeX = doc.page.width - MR - badgeW;
+    doc.roundedRect(badgeX, 16, badgeW, 22, 3).fill(GOLD);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
+       .text('REPORTE DE VENTAS', badgeX, 24, { width: badgeW, align: 'center' });
+    doc.font('Helvetica').fontSize(7).fillColor('#D4D4D8')
+       .text(`Período: ${desde}  al  ${hasta}`, badgeX, 42, { width: badgeW, align: 'center' });
+    doc.font('Helvetica').fontSize(7).fillColor('#A1A1AA')
+       .text(`${rows.length} registro${rows.length !== 1 ? 's' : ''}`, badgeX, 55, { width: badgeW, align: 'center' });
+
+    doc.rect(0, 82, doc.page.width, 3).fill(GOLD);
+    let y = 97;
+
+    // ── TARJETAS RESUMEN ──────────────────────────────────────────────────
+    const cards = [
+      { label: 'Total facturado',  value: `Bs ${N(totalGeneral)}`,  sub: `${rows.length - anuladas.length} ventas activas` },
+      { label: 'Total cobrado',    value: `Bs ${N(totalPagado)}`,   sub: `${pagadas.length} pagadas` },
+      { label: 'Contado',          value: `Bs ${N(totalContado)}`,  sub: 'ventas al contado' },
+      { label: 'Crédito',          value: `Bs ${N(totalCredito)}`,  sub: 'ventas a crédito' },
+      { label: 'Saldo pendiente',  value: `Bs ${N(totalSaldo)}`,    sub: `${emitidas.length} por cobrar` },
+      { label: 'Descuentos',       value: `Bs ${N(totalDesc)}`,     sub: 'total descontado' },
+    ];
+    const cw = Math.floor(PW / cards.length) - 5;
+    cards.forEach((c, i) => {
+      const cx = ML + i * (cw + 6);
+      doc.roundedRect(cx, y, cw, 48, 4).fill('#F4F4F5');
+      doc.font('Helvetica').fontSize(6).fillColor(SLATE)
+         .text(c.label.toUpperCase(), cx + 8, y + 8, { width: cw - 16 });
+      doc.font('Helvetica-Bold').fontSize(i < 2 ? 11 : 10).fillColor(DARK)
+         .text(c.value, cx + 8, y + 18, { width: cw - 16 });
+      doc.font('Helvetica').fontSize(6).fillColor('#A1A1AA')
+         .text(c.sub, cx + 8, y + 35, { width: cw - 16 });
+      doc.rect(cx, y, 3, 48).fill(i === 4 && totalSaldo > 0 ? '#EF4444' : GOLD);
+    });
+    y += 60;
+
+    // ── DISTRIBUCIÓN POR ESTADO ───────────────────────────────────────────
+    const porEstado = Object.entries(
+      rows.reduce((acc, r) => { acc[r.estado] = (acc[r.estado] || 0) + 1; return acc; }, {})
+    ).sort((a, b) => b[1] - a[1]);
+
+    if (porEstado.length > 0) {
+      doc.font('Helvetica-Bold').fontSize(7).fillColor(SLATE)
+         .text('DISTRIBUCIÓN POR ESTADO', ML, y, { width: PW });
+      y += 10;
+      const chipW = 90, chipH = 20, gap = 8;
+      porEstado.forEach(([ estado, cnt ], i) => {
+        const ec = ESTADO_COLOR[estado] || { bg: '#F4F4F5', txt: SLATE, label: estado };
+        const cx = ML + i * (chipW + gap);
+        if (cx + chipW > ML + PW) return;
+        doc.roundedRect(cx, y, chipW, chipH, 3).fill(ec.bg);
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(ec.txt)
+           .text(ec.label, cx + 6, y + 4, { width: chipW - 12 });
+        doc.font('Helvetica').fontSize(7).fillColor(ec.txt)
+           .text(`${cnt} venta${cnt !== 1 ? 's' : ''}`, cx + 6, y + 12, { width: chipW - 12 });
+      });
+      y += 30;
+    }
+
+    // ── TABLA ─────────────────────────────────────────────────────────────
+    doc.font('Helvetica-Bold').fontSize(7).fillColor(SLATE)
+       .text('DETALLE DE VENTAS', ML, y, { width: PW });
+    y += 10;
+
+    const tCols = [
+      { label: 'N° Venta',   w: 70,  align: 'left',  key: 'numero' },
+      { label: 'Fecha',      w: 72,  align: 'left',  key: 'fecha' },
+      { label: 'Cliente',    w: 150, align: 'left',  key: 'cliente' },
+      { label: 'Vendedor',   w: 100, align: 'left',  key: 'vendedor' },
+      { label: 'Sucursal',   w: 72,  align: 'left',  key: 'sucursal' },
+      { label: 'Condición',  w: 52,  align: 'center',key: 'condicion_pago' },
+      { label: 'Descuento',  w: 56,  align: 'right', key: 'descuento_monto' },
+      { label: 'Total Bs',   w: 62,  align: 'right', key: 'total' },
+      { label: 'Saldo Bs',   w: 62,  align: 'right', key: 'saldo_pendiente' },
+      { label: 'Estado',     w: 52,  align: 'center',key: 'estado' },
+    ];
+    const tTotal = tCols.reduce((s, c) => s + c.w, 0);
+    const tScale = PW / tTotal;
+    tCols.forEach(c => { c.w = Math.floor(c.w * tScale); });
+
+    const ROW_H = 13;
+
+    const drawHead = () => {
+      doc.rect(ML, y, PW, 14).fill(DARK);
+      let cx = ML + 2;
+      tCols.forEach(col => {
+        doc.font('Helvetica-Bold').fontSize(6.5).fillColor('white')
+           .text(col.label, cx, y + 4, { width: col.w - 3, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+      y += 14;
+    };
+
+    const drawRow = (row, idx) => {
+      const ec  = ESTADO_COLOR[row.estado] || { bg: '#F4F4F5', txt: SLATE };
+      const bg  = idx % 2 === 0 ? '#FAFAFA' : 'white';
+      doc.rect(ML, y, PW, ROW_H).fill(bg);
+
+      const saldo = Number(row.saldo_pendiente);
+      const desc  = Number(row.descuento_monto || 0);
+
+      const vals = [
+        row.numero,
+        row.fecha,
+        row.cliente,
+        row.vendedor,
+        row.sucursal,
+        row.condicion_pago,
+        desc > 0 ? N(desc) : '—',
+        N(row.total),
+        saldo > 0 ? N(saldo) : 'Pagado',
+        (ESTADO_COLOR[row.estado]?.label || row.estado),
+      ];
+
+      let cx = ML + 2;
+      tCols.forEach((col, ci) => {
+        let color = DARK;
+        if (ci === 0) color = '#1D4ED8';
+        if (ci === 8) color = saldo > 0 ? '#DC2626' : '#15803D';
+        if (ci === 9) color = ec.txt;
+
+        doc.font(ci === 0 || ci === 7 ? 'Helvetica-Bold' : 'Helvetica').fontSize(7)
+           .fillColor(color)
+           .text(String(vals[ci] ?? ''), cx, y + 3, { width: col.w - 4, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+      y += ROW_H;
+    };
+
+    const drawFoot = () => {
+      doc.rect(ML, y, PW, 14).fill('#1E293B');
+      const tots = ['', `${rows.length} reg.`, 'TOTALES', '', '', '', `Bs ${N(totalDesc)}`, `Bs ${N(totalGeneral)}`, `Bs ${N(totalSaldo)}`, ''];
+      let cx = ML + 2;
+      tCols.forEach((col, ci) => {
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
+           .text(String(tots[ci] ?? ''), cx, y + 4, { width: col.w - 4, align: col.align, lineBreak: false });
+        cx += col.w;
+      });
+      y += 14;
+    };
+
+    drawHead();
+
+    rows.forEach((row, i) => {
+      if (y > doc.page.height - 48) {
+        drawFoot();
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+        y = 32;
+        drawHead();
+      }
+      drawRow(row, i);
+    });
+
+    drawFoot();
+
+    // ── PIE ───────────────────────────────────────────────────────────────
+    y += 8;
+    if (y < doc.page.height - 30) {
+      doc.moveTo(ML, y).lineTo(ML + PW, y).strokeColor('#E4E4E7').lineWidth(0.5).stroke();
+      y += 5;
+      doc.font('Helvetica').fontSize(6).fillColor('#A1A1AA')
+         .text(`${nombreEm}  ·  Reporte de Ventas  ·  Período: ${desde} al ${hasta}`, ML, y, { width: PW, align: 'left' })
+         .text(`Generado el ${fechaGen}`, ML, y, { width: PW, align: 'right' });
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('[exportarVentasPDF]', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
+// ── Compras PDF detallado ─────────────────────────────────────────────────
+async function exportarComprasPDF(req, res) {
+  try {
+    const empresa   = await getEmpresaData();
+    const desde     = req.query.fecha_desde || inicioMes();
+    const hasta     = req.query.fecha_hasta || hoy();
+    const { id_sucursal, id_proveedor, estado } = req.query;
+
+    let sql = `
+      SELECT c.numero, DATE_FORMAT(c.fecha_pedido,'%d/%m/%Y') AS fecha_pedido,
+        pr.razon_social AS proveedor, s.nombre AS sucursal,
+        c.total, c.saldo_pendiente, c.estado, c.condicion_pago
+      FROM compras c
+      JOIN proveedores pr ON pr.id_proveedor = c.id_proveedor
+      JOIN sucursales s   ON s.id_sucursal   = c.id_sucursal
+      WHERE c.fecha_pedido BETWEEN ? AND ? AND c.estado != 'ANULADO'
+    `;
+    const params = [desde, hasta];
+    if (id_sucursal)  { sql += ' AND c.id_sucursal=?';  params.push(id_sucursal); }
+    if (id_proveedor) { sql += ' AND c.id_proveedor=?'; params.push(id_proveedor); }
+    if (estado)       { sql += ' AND c.estado=?';        params.push(estado); }
+    sql += ' ORDER BY c.fecha_pedido DESC LIMIT 5000';
+
+    const [rows] = await db.promise().query(sql, params);
+
+    const N       = (n, d = 2) => Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fechaGen = new Date().toLocaleString('es-BO');
+
+    // ── Totales ───────────────────────────────────────────────────────────
+    const activas      = rows.filter(r => r.estado !== 'ANULADO');
+    const recibidas    = rows.filter(r => r.estado === 'RECIBIDO');
+    const pendientes   = rows.filter(r => r.estado === 'POR_LLEGAR' || r.estado === 'PARCIAL');
+    const totalGeneral = activas.reduce((s, r) => s + Number(r.total), 0);
+    const totalPagado  = recibidas.reduce((s, r) => s + (Number(r.total) - Number(r.saldo_pendiente)), 0);
+    const totalSaldo   = pendientes.reduce((s, r) => s + Number(r.saldo_pendiente), 0);
+    const totalContado = activas.filter(r => r.condicion_pago === 'CONTADO').reduce((s, r) => s + Number(r.total), 0);
+    const totalCredito = activas.filter(r => r.condicion_pago === 'CREDITO').reduce((s, r) => s + Number(r.total), 0);
+
+    const ESTADO_COLOR = {
+      RECIBIDO:   { bg: '#DCFCE7', txt: '#15803D', label: 'Recibido' },
+      POR_LLEGAR: { bg: '#DBEAFE', txt: '#1D4ED8', label: 'Por llegar' },
+      PARCIAL:    { bg: '#FEF3C7', txt: '#B45309', label: 'Parcial' },
+      ANULADO:    { bg: '#FEE2E2', txt: '#DC2626', label: 'Anulado' },
+    };
+
+    const doc   = new PDFDocument({ margin: 0, size: 'A4', layout: 'landscape' });
+    const ML    = 32, MR = 32;
+    const PW    = doc.page.width - ML - MR;
+    const GOLD  = '#FACC15';
+    const DARK  = '#18181B';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Compras_${desde}_${hasta}.pdf"`);
+    doc.pipe(res);
+
+    // ── CABECERA ──────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 82).fill(DARK);
+
+    let logoW = 0;
+    if (empresa?.logo_url && empresa.logo_url.startsWith('/uploads/')) {
+      const logoFile = path.join(__dirname, '..', empresa.logo_url);
+      if (fs.existsSync(logoFile)) {
+        try { doc.image(logoFile, ML, 15, { height: 44, fit: [84, 44] }); logoW = 92; } catch (_) {}
+      }
+    }
+
+    const nombreEm = empresa?.nombre_comercial || empresa?.razon_social || 'EMPRESA';
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('white')
+       .text(nombreEm, ML + logoW, 16, { width: PW - logoW - 140 });
+    let infoY = 34;
+    doc.font('Helvetica').fontSize(7).fillColor('#A1A1AA');
+    if (empresa?.nit)       { doc.text(`NIT: ${empresa.nit}`, ML + logoW, infoY, { width: PW - logoW - 140 }); infoY += 9; }
+    if (empresa?.direccion) { doc.text(empresa.direccion,      ML + logoW, infoY, { width: PW - logoW - 140 }); infoY += 9; }
+    const ctc = [empresa?.telefono, empresa?.email].filter(Boolean).join('  ·  ');
+    if (ctc)                { doc.text(ctc,                    ML + logoW, infoY, { width: PW - logoW - 140 }); }
+
+    const badgeW = 130, badgeX = doc.page.width - MR - badgeW;
+    doc.roundedRect(badgeX, 16, badgeW, 22, 3).fill(GOLD);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(DARK)
+       .text('REPORTE DE COMPRAS', badgeX, 24, { width: badgeW, align: 'center' });
+    doc.font('Helvetica').fontSize(7).fillColor('#D4D4D8')
+       .text(`Período: ${desde}  al  ${hasta}`, badgeX, 42, { width: badgeW, align: 'center' });
+    doc.font('Helvetica').fontSize(7).fillColor('#A1A1AA')
+       .text(`${rows.length} registro${rows.length !== 1 ? 's' : ''}`, badgeX, 55, { width: badgeW, align: 'center' });
+
+    doc.rect(0, 82, doc.page.width, 3).fill(GOLD);
+    let y = 97;
+
+    // ── TARJETAS RESUMEN ──────────────────────────────────────────────────
+    const cards = [
+      { label: 'Total facturado', value: `Bs ${N(totalGeneral)}`,  sub: `${activas.length} órdenes activas` },
+      { label: 'Total pagado',    value: `Bs ${N(totalPagado)}`,   sub: `${recibidas.length} recibidas` },
+      { label: 'Contado',         value: `Bs ${N(totalContado)}`,  sub: `${activas.filter(r => r.condicion_pago === 'CONTADO').length} pedidos` },
+      { label: 'Crédito',         value: `Bs ${N(totalCredito)}`,  sub: `${activas.filter(r => r.condicion_pago === 'CREDITO').length} pedidos` },
+      { label: 'Saldo pendiente', value: `Bs ${N(totalSaldo)}`,    sub: `${pendientes.length} por completar`, warn: totalSaldo > 0 },
+    ];
+    const cardW = Math.floor((PW - 16) / cards.length);
+    cards.forEach((c, i) => {
+      const cx = ML + i * (cardW + 4);
+      doc.roundedRect(cx, y, cardW, 50, 4).fill(c.warn ? '#FFF1F2' : '#FAFAFA');
+      doc.rect(cx, y, 3, 50).fill(c.warn ? '#DC2626' : GOLD);
+      doc.font('Helvetica').fontSize(7).fillColor('#71717A').text(c.label, cx + 8, y + 8, { width: cardW - 12 });
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(c.warn ? '#DC2626' : DARK).text(c.value, cx + 8, y + 19, { width: cardW - 12 });
+      doc.font('Helvetica').fontSize(6.5).fillColor('#A1A1AA').text(c.sub, cx + 8, y + 34, { width: cardW - 12 });
+    });
+    y += 62;
+
+    // ── CHIPS DE DISTRIBUCIÓN ─────────────────────────────────────────────
+    const byEstado = {};
+    rows.forEach(r => { byEstado[r.estado] = (byEstado[r.estado] || 0) + 1; });
+    let cx2 = ML;
+    Object.entries(byEstado).forEach(([est, cnt]) => {
+      const ec = ESTADO_COLOR[est] || { bg: '#F4F4F5', txt: '#52525B', label: est };
+      const chipW = Math.max(70, doc.widthOfString(`${ec.label}: ${cnt}`, { fontSize: 7 }) + 16);
+      doc.roundedRect(cx2, y, chipW, 16, 8).fill(ec.bg);
+      doc.font('Helvetica-Bold').fontSize(7).fillColor(ec.txt)
+         .text(`${ec.label}: ${cnt}`, cx2 + 6, y + 4.5, { width: chipW - 12 });
+      cx2 += chipW + 6;
+    });
+    y += 26;
+
+    // ── TABLA ─────────────────────────────────────────────────────────────
+    const COLS = [
+      { label: 'N° Orden',   w: 62,  align: 'left'  },
+      { label: 'Fecha',      w: 66,  align: 'left'  },
+      { label: 'Proveedor',  w: 0,   align: 'left'  },   // flex
+      { label: 'Sucursal',   w: 80,  align: 'left'  },
+      { label: 'Condición',  w: 62,  align: 'center'},
+      { label: 'Total Bs',   w: 72,  align: 'right' },
+      { label: 'Saldo Bs',   w: 72,  align: 'right' },
+      { label: 'Estado',     w: 72,  align: 'center'},
+    ];
+    const fixedW = COLS.reduce((s, c) => s + c.w, 0);
+    COLS[2].w = PW - fixedW;
+
+    const drawHeader = () => {
+      doc.rect(ML, y, PW, 18).fill(DARK);
+      let cx = ML;
+      COLS.forEach(col => {
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
+           .text(col.label, cx + 4, y + 5, { width: col.w - 8, align: col.align });
+        cx += col.w;
+      });
+      y += 18;
+    };
+    drawHeader();
+
+    const ROW_H = 16;
+    rows.forEach((r, idx) => {
+      if (y + ROW_H > doc.page.height - 40) {
+        doc.addPage({ margin: 0, size: 'A4', layout: 'landscape' });
+        doc.rect(0, 0, doc.page.width, 3).fill(GOLD);
+        y = 14;
+        drawHeader();
+      }
+      if (idx % 2 === 0) doc.rect(ML, y, PW, ROW_H).fill('#F9FAFB');
+
+      let cx = ML;
+      const cells = [
+        { v: r.numero,         align: 'left',   color: '#2563EB', bold: true  },
+        { v: r.fecha_pedido,   align: 'left',   color: '#52525B', bold: false },
+        { v: r.proveedor,      align: 'left',   color: DARK,      bold: false },
+        { v: r.sucursal,       align: 'left',   color: '#52525B', bold: false },
+        { v: r.condicion_pago, align: 'center', color: '#52525B', bold: false },
+        { v: `Bs ${N(r.total)}`,                           align: 'right',  color: DARK, bold: true  },
+        { v: Number(r.saldo_pendiente) > 0 ? `Bs ${N(r.saldo_pendiente)}` : 'Pagado',
+           align: 'right', color: Number(r.saldo_pendiente) > 0 ? '#DC2626' : '#15803D', bold: Number(r.saldo_pendiente) === 0 },
+        { v: null,             align: 'center', color: null,      bold: false },  // estado badge handled below
+      ];
+
+      cells.forEach((cell, ci) => {
+        const col = COLS[ci];
+        if (ci === 7) {
+          const ec = ESTADO_COLOR[r.estado] || { bg: '#F4F4F5', txt: '#52525B', label: r.estado };
+          const bw = Math.min(col.w - 10, 64), bh = 11;
+          const bx = cx + (col.w - bw) / 2, by = y + (ROW_H - bh) / 2;
+          doc.roundedRect(bx, by, bw, bh, 3).fill(ec.bg);
+          doc.font('Helvetica-Bold').fontSize(6).fillColor(ec.txt)
+             .text(ec.label, bx + 2, by + 2.5, { width: bw - 4, align: 'center' });
+        } else {
+          doc.font(cell.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(7).fillColor(cell.color)
+             .text(String(cell.v ?? ''), cx + 4, y + 4.5, { width: col.w - 8, align: cell.align, lineBreak: false });
+        }
+        cx += col.w;
+      });
+      y += ROW_H;
+    });
+
+    // ── FILA TOTALES ──────────────────────────────────────────────────────
+    if (y + ROW_H > doc.page.height - 40) {
+      doc.addPage({ margin: 0, size: 'A4', layout: 'landscape' });
+      y = 14;
+    }
+    doc.rect(ML, y, PW, ROW_H + 2).fill(DARK);
+    let cx3 = ML;
+    const totRow = ['TOTALES', '', '', '', `${activas.length} pedidos`, `Bs ${N(totalGeneral)}`, `Bs ${N(totalSaldo)}`, ''];
+    totRow.forEach((v, ci) => {
+      doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
+         .text(v, cx3 + 4, y + 5, { width: COLS[ci].w - 8, align: COLS[ci].align });
+      cx3 += COLS[ci].w;
+    });
+    y += ROW_H + 10;
+
+    // ── PIE DE PÁGINA ─────────────────────────────────────────────────────
+    doc.rect(ML, y, PW, 0.5).fill('#E4E4E7');
+    y += 6;
+    doc.font('Helvetica').fontSize(6).fillColor('#A1A1AA')
+       .text(`${nombreEm}  ·  Reporte de Compras  ·  Período: ${desde} al ${hasta}`, ML, y, { width: PW, align: 'left' })
+       .text(`Generado el ${fechaGen}`, ML, y, { width: PW, align: 'right' });
+
+    doc.end();
+  } catch (err) {
+    console.error('[exportarComprasPDF]', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+}
+
 // ── Exportar reporte PDF ───────────────────────────────────────────────────
 async function exportarReporte(req, res) {
   try {
@@ -1628,6 +2364,9 @@ async function exportarReporte(req, res) {
     if (tipo === 'cuentas-cobrar')  return exportarCuentasCobrarPDF(req, res);
     if (tipo === 'cuentas-pagar')   return exportarCuentasPagarPDF(req, res);
     if (tipo === 'transferencias')  return exportarTransferenciasPDF(req, res);
+    if (tipo === 'top-productos')   return exportarTopProductosPDF(req, res);
+    if (tipo === 'ventas')          return exportarVentasPDF(req, res);
+    if (tipo === 'compras')         return exportarComprasPDF(req, res);
     const desde = req.query.fecha_desde || inicioMes();
     const hasta = req.query.fecha_hasta || hoy();
 

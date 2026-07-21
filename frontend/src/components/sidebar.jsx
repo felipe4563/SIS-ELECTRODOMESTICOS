@@ -141,6 +141,13 @@ const MENU = [
     ],
   },
   {
+    label: 'Servicio Técnico',
+    items: [
+      { label: 'Servicio Técnico', path: '/servicio-tecnico',          icon: 'wrench', anyOf: [['ver','servicio_tecnico'],['ver_todas','servicio_tecnico']] },
+      { label: 'Técnicos externos', path: '/servicio-tecnico/tecnicos', icon: 'tool',   anyOf: [['ver','servicio_tecnico'],['ver_todas','servicio_tecnico'],['gestionar_tecnicos','servicio_tecnico']] },
+    ],
+  },
+  {
     label: 'Gastos',
     items: [
       { label: 'Gastos', path: '/gastos', icon: 'cash', action: 'ver', subject: 'gastos' },

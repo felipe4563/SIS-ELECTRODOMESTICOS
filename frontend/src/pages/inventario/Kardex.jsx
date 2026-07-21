@@ -12,7 +12,7 @@ const EFECTO_BADGE = {
   AJUSTE:        { label: 'Ajuste',        cls: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
 };
 
-const DOC_TIPOS = ['COMPRA', 'VENTA', 'TRANSFERENCIA', 'AJUSTE', 'DEVOLUCION', 'APERTURA'];
+const DOC_TIPOS = ['COMPRA', 'VENTA', 'TRANSFERENCIA', 'AJUSTE', 'DEVOLUCION', 'APERTURA', 'SERVICIO_TECNICO'];
 
 const HOY   = new Date().toISOString().slice(0, 10);
 const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);

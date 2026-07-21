@@ -89,6 +89,12 @@ import CotizacionPDF      from './pages/cotizaciones/CotizacionPDF';
 import Cobros      from './pages/cobros/Cobros';
 import CobroRecibo from './pages/cobros/CobroRecibo';
 
+// ── Servicio Técnico ─────────────────────────────────────────────────────────
+import ServicioTecnico         from './pages/servicioTecnico/ServicioTecnico';
+import ServicioTecnicoForm     from './pages/servicioTecnico/ServicioTecnicoForm';
+import ServicioTecnicoDetalle  from './pages/servicioTecnico/ServicioTecnicoDetalle';
+import TecnicosExternos        from './pages/servicioTecnico/TecnicosExternos';
+
 // ── Ventas ────────────────────────────────────────────────────────────────────
 import Ventas        from './pages/ventas/Ventas';
 import VentaForm     from './pages/ventas/VentaForm';
@@ -376,6 +382,33 @@ export default function App() {
               } />
               <Route path="/ventas/:id/imprimir" element={
                 <PageRoute action="imprimir" subject="ventas"><VentaImprimir /></PageRoute>
+              } />
+
+              {/* ── Servicio Técnico ─────────────────────────────────── */}
+              <Route path="/servicio-tecnico" element={
+                <PageRoute anyOf={[['ver','servicio_tecnico'],['ver_todas','servicio_tecnico']]}>
+                  <ServicioTecnico />
+                </PageRoute>
+              } />
+              <Route path="/servicio-tecnico/nueva" element={
+                <PageRoute action="crear" subject="servicio_tecnico">
+                  <ServicioTecnicoForm />
+                </PageRoute>
+              } />
+              <Route path="/servicio-tecnico/tecnicos" element={
+                <PageRoute anyOf={[['ver','servicio_tecnico'],['ver_todas','servicio_tecnico'],['gestionar_tecnicos','servicio_tecnico']]}>
+                  <TecnicosExternos />
+                </PageRoute>
+              } />
+              <Route path="/servicio-tecnico/:id" element={
+                <PageRoute anyOf={[['ver','servicio_tecnico'],['ver_todas','servicio_tecnico']]}>
+                  <ServicioTecnicoDetalle />
+                </PageRoute>
+              } />
+              <Route path="/servicio-tecnico/:id/editar" element={
+                <PageRoute action="editar" subject="servicio_tecnico">
+                  <ServicioTecnicoForm />
+                </PageRoute>
               } />
 
               {/* ── Gastos ───────────────────────────────────────────── */}

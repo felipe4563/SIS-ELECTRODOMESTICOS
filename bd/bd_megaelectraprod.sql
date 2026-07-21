@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 10-07-2026 a las 13:43:14
+-- Tiempo de generación: 19-07-2026 a las 16:51:40
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -506,7 +506,7 @@ CREATE TABLE `kardex` (
   `costo_unitario` decimal(14,4) DEFAULT 0.0000,
   `saldo_cantidad` decimal(14,2) NOT NULL DEFAULT 0.00,
   `saldo_costo` decimal(14,4) NOT NULL DEFAULT 0.0000,
-  `documento_tipo` enum('COMPRA','VENTA','TRANSFERENCIA','AJUSTE','DEVOLUCION','APERTURA') NOT NULL,
+  `documento_tipo` enum('COMPRA','VENTA','TRANSFERENCIA','AJUSTE','DEVOLUCION','APERTURA','SERVICIO_TECNICO') NOT NULL,
   `documento_id` bigint(20) DEFAULT NULL,
   `documento_numero` varchar(40) DEFAULT NULL,
   `id_usuario` int(11) DEFAULT NULL,
@@ -565,7 +565,8 @@ INSERT INTO `modulos` (`id_modulo`, `codigo`, `nombre`, `icono`, `orden`) VALUES
 (17, 'PROMOCIONES', 'Promociones', 'tag', 17),
 (18, 'BANCOS', 'Bancos', 'briefcase', 18),
 (19, 'IMPUESTOS', 'Impuestos', 'percent', 19),
-(20, 'HERRAMIENTAS', 'Herramientas', 'tool', 20);
+(20, 'HERRAMIENTAS', 'Herramientas', 'tool', 20),
+(21, 'SERVICIO_TECNICO', 'Servicio Técnico', 'wrench', 21);
 
 -- --------------------------------------------------------
 
@@ -846,7 +847,18 @@ INSERT INTO `permisos` (`id_permiso`, `id_modulo`, `codigo`, `nombre`, `descripc
 (205, 20, 'backup.descargar', 'Descargar Backups', 'Descargar archivos de backup'),
 (208, 20, 'excel.importar_productos', 'Importar Productos desde Excel', 'Cargar productos masivamente'),
 (211, 20, 'catalogo.generar_pdf', 'Generar Catálogo PDF', 'Generar catálogo de productos en PDF'),
-(214, 3, 'roles.ver_permisos', 'Ver Permisos de Rol', 'Consultar los permisos asignados a un rol sin modificarlos');
+(214, 3, 'roles.ver_permisos', 'Ver Permisos de Rol', 'Consultar los permisos asignados a un rol sin modificarlos'),
+(215, 21, 'servicio_tecnico.ver', 'Ver Órdenes de Servicio', 'Listar y consultar órdenes de servicio técnico de su sucursal'),
+(216, 21, 'servicio_tecnico.ver_todas', 'Ver Órdenes de Todas las Sucursales', 'Acceder a órdenes de cualquier sucursal'),
+(217, 21, 'servicio_tecnico.crear', 'Crear Orden de Servicio', 'Registrar nuevo ingreso de equipo a servicio técnico'),
+(218, 21, 'servicio_tecnico.editar', 'Editar Orden de Servicio', 'Modificar datos de una orden (mientras no esté ENTREGADO/ANULADO)'),
+(219, 21, 'servicio_tecnico.cambiar_estado', 'Cambiar Estado de Orden', 'Registrar avances: diagnóstico, en reparación, reparado, etc.'),
+(220, 21, 'servicio_tecnico.entregar', 'Registrar Entrega al Cliente', 'Marcar orden como ENTREGADO y cerrarla'),
+(221, 21, 'servicio_tecnico.anular', 'Anular Orden de Servicio', 'Cancelar una orden de servicio técnico'),
+(222, 21, 'servicio_tecnico.imprimir', 'Imprimir Recibo de Servicio', 'Generar PDF del recibo de ingreso o entrega'),
+(223, 21, 'servicio_tecnico.ver_costos', 'Ver Costos de Reparación', 'Visualizar costo estimado y costo final de reparación'),
+(224, 21, 'servicio_tecnico.gestionar_tecnicos', 'Gestionar Técnicos Externos', 'Crear, editar y desactivar talleres/técnicos externos'),
+(225, 12, 'reportes.servicio_tecnico', 'Reporte Servicio Técnico', 'Ver reportes de órdenes por estado, período, técnico y cliente');
 
 -- --------------------------------------------------------
 
@@ -1226,6 +1238,17 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (1, 208),
 (1, 211),
 (1, 214),
+(1, 215),
+(1, 216),
+(1, 217),
+(1, 218),
+(1, 219),
+(1, 220),
+(1, 221),
+(1, 222),
+(1, 223),
+(1, 224),
+(1, 225),
 (2, 1),
 (2, 32),
 (2, 42),
@@ -1276,6 +1299,11 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (2, 181),
 (2, 183),
 (2, 188),
+(2, 215),
+(2, 217),
+(2, 218),
+(2, 220),
+(2, 222),
 (3, 1),
 (3, 32),
 (3, 42),
@@ -1302,7 +1330,68 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (3, 146),
 (3, 152),
 (3, 154),
-(3, 183);
+(3, 183),
+(3, 215),
+(3, 217),
+(3, 219),
+(3, 222);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `servicios_tecnicos`
+--
+
+CREATE TABLE `servicios_tecnicos` (
+  `id_servicio` bigint(20) NOT NULL,
+  `numero` varchar(30) NOT NULL COMMENT 'Ej: ST-2026-00001',
+  `tipo_origen` enum('CLIENTE','INVENTARIO') NOT NULL DEFAULT 'CLIENTE',
+  `id_cliente` int(11) DEFAULT NULL COMMENT 'Si tipo_origen = CLIENTE',
+  `id_venta_origen` bigint(20) DEFAULT NULL COMMENT 'Venta donde se compró el equipo (opcional)',
+  `id_producto` int(11) DEFAULT NULL COMMENT 'Si el equipo está en el catálogo',
+  `descripcion_producto` varchar(200) NOT NULL COMMENT 'Nombre/descripción del equipo (siempre requerido)',
+  `marca_producto` varchar(80) DEFAULT NULL,
+  `modelo_producto` varchar(80) DEFAULT NULL,
+  `numero_serie` varchar(80) DEFAULT NULL,
+  `color_producto` varchar(40) DEFAULT NULL,
+  `id_sucursal` int(11) NOT NULL,
+  `id_usuario_recibe` int(11) NOT NULL,
+  `fecha_recepcion` datetime NOT NULL DEFAULT current_timestamp(),
+  `falla_reportada` text NOT NULL COMMENT 'Lo que el cliente o tienda describe como problema',
+  `accesorios_recibidos` varchar(255) DEFAULT NULL COMMENT 'Ej: control, cables, tapa, manual',
+  `condicion_fisica` varchar(255) DEFAULT NULL COMMENT 'Golpes, rayones, daños visibles al recibir',
+  `garantia` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = bajo garantía del fabricante o tienda',
+  `prioridad` enum('BAJA','NORMAL','ALTA','URGENTE') NOT NULL DEFAULT 'NORMAL',
+  `id_tecnico_externo` int(11) DEFAULT NULL COMMENT 'Taller o técnico al que se envía (puede ser NULL si es interno)',
+  `fecha_envio_tecnico` datetime DEFAULT NULL COMMENT 'Cuando salió físicamente al taller',
+  `fecha_estimada_entrega` date DEFAULT NULL COMMENT 'Fecha prometida al cliente',
+  `diagnostico` text DEFAULT NULL COMMENT 'Diagnóstico técnico',
+  `trabajo_realizado` text DEFAULT NULL COMMENT 'Descripción de la reparación efectuada',
+  `repuestos_usados` varchar(255) DEFAULT NULL,
+  `costo_estimado` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `costo_final` decimal(14,2) NOT NULL DEFAULT 0.00,
+  `estado` enum('RECIBIDO','EN_DIAGNOSTICO','ESPERANDO_REPUESTO','EN_REPARACION','REPARADO','LISTO_ENTREGA','ENTREGADO','SIN_REPARACION','ANULADO') NOT NULL DEFAULT 'RECIBIDO',
+  `fecha_real_entrega` datetime DEFAULT NULL,
+  `id_usuario_cierre` int(11) DEFAULT NULL COMMENT 'Quien registró la entrega o cierre',
+  `observaciones` text DEFAULT NULL,
+  `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `servicio_tecnico_seguimiento`
+--
+
+CREATE TABLE `servicio_tecnico_seguimiento` (
+  `id_seguimiento` bigint(20) NOT NULL,
+  `id_servicio` bigint(20) NOT NULL,
+  `estado_anterior` enum('RECIBIDO','EN_DIAGNOSTICO','ESPERANDO_REPUESTO','EN_REPARACION','REPARADO','LISTO_ENTREGA','ENTREGADO','SIN_REPARACION','ANULADO') DEFAULT NULL,
+  `estado_nuevo` enum('RECIBIDO','EN_DIAGNOSTICO','ESPERANDO_REPUESTO','EN_REPARACION','REPARADO','LISTO_ENTREGA','ENTREGADO','SIN_REPARACION','ANULADO') NOT NULL,
+  `observacion` text DEFAULT NULL,
+  `id_usuario` int(11) NOT NULL,
+  `fecha` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -1363,6 +1452,23 @@ CREATE TABLE `sucursales` (
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `tecnicos_externos`
+--
+
+CREATE TABLE `tecnicos_externos` (
+  `id_tecnico` int(11) NOT NULL,
+  `nombre` varchar(150) NOT NULL COMMENT 'Nombre del taller / técnico',
+  `contacto` varchar(120) DEFAULT NULL COMMENT 'Persona de contacto',
+  `telefono` varchar(30) DEFAULT NULL,
+  `direccion` varchar(255) DEFAULT NULL,
+  `especialidad` varchar(120) DEFAULT NULL COMMENT 'Ej: Samsung, Refrigeración, Electrónica',
+  `notas` text DEFAULT NULL,
+  `activo` tinyint(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `tipos_cambio`
 --
 
@@ -1410,7 +1516,9 @@ INSERT INTO `tipos_movimiento` (`id_tipo_movimiento`, `codigo`, `nombre`, `efect
 (7, 'AJUSTE_POS', 'Ajuste Positivo de Inventario', 'AJUSTE', 1),
 (8, 'AJUSTE_NEG', 'Ajuste Negativo de Inventario', 'AJUSTE', 1),
 (9, 'APERTURA', 'Apertura/Inventario Inicial', 'ENTRADA', 1),
-(10, 'MERMA', 'Salida por Merma o Pérdida', 'SALIDA', 1);
+(10, 'MERMA', 'Salida por Merma o Pérdida', 'SALIDA', 1),
+(11, 'SERV_TECNICO_SAL', 'Salida a Servicio Técnico', 'SALIDA', 0),
+(12, 'SERV_TECNICO_ENT', 'Retorno de Servicio Técnico', 'ENTRADA', 0);
 
 -- --------------------------------------------------------
 
@@ -1518,6 +1626,7 @@ CREATE TABLE `ventas` (
   `id_deposito` int(11) NOT NULL COMMENT 'Depósito desde donde se descarga el stock',
   `id_cliente` int(11) NOT NULL,
   `id_vendedor` int(11) NOT NULL,
+  `id_usuario_registro` int(11) DEFAULT NULL COMMENT 'Usuario que registró la venta (puede diferir del vendedor)',
   `fecha` datetime NOT NULL DEFAULT current_timestamp(),
   `id_moneda` int(11) NOT NULL,
   `tipo_cambio` decimal(18,6) DEFAULT 1.000000,
@@ -1950,6 +2059,30 @@ ALTER TABLE `rol_permiso`
   ADD KEY `fk_rp_permiso` (`id_permiso`);
 
 --
+-- Indices de la tabla `servicios_tecnicos`
+--
+ALTER TABLE `servicios_tecnicos`
+  ADD PRIMARY KEY (`id_servicio`),
+  ADD UNIQUE KEY `uk_st_numero` (`numero`),
+  ADD KEY `fk_st_cliente` (`id_cliente`),
+  ADD KEY `fk_st_producto` (`id_producto`),
+  ADD KEY `fk_st_venta` (`id_venta_origen`),
+  ADD KEY `fk_st_sucursal` (`id_sucursal`),
+  ADD KEY `fk_st_usuario_recibe` (`id_usuario_recibe`),
+  ADD KEY `fk_st_tecnico` (`id_tecnico_externo`),
+  ADD KEY `fk_st_usuario_cierre` (`id_usuario_cierre`),
+  ADD KEY `idx_st_estado` (`estado`),
+  ADD KEY `idx_st_fecha` (`fecha_recepcion`);
+
+--
+-- Indices de la tabla `servicio_tecnico_seguimiento`
+--
+ALTER TABLE `servicio_tecnico_seguimiento`
+  ADD PRIMARY KEY (`id_seguimiento`),
+  ADD KEY `fk_seg_servicio` (`id_servicio`),
+  ADD KEY `fk_seg_usuario` (`id_usuario`);
+
+--
 -- Indices de la tabla `sesiones`
 --
 ALTER TABLE `sesiones`
@@ -1972,6 +2105,12 @@ ALTER TABLE `sucursales`
   ADD PRIMARY KEY (`id_sucursal`),
   ADD UNIQUE KEY `codigo` (`codigo`),
   ADD KEY `fk_sucursal_empresa` (`id_empresa`);
+
+--
+-- Indices de la tabla `tecnicos_externos`
+--
+ALTER TABLE `tecnicos_externos`
+  ADD PRIMARY KEY (`id_tecnico`);
 
 --
 -- Indices de la tabla `tipos_cambio`
@@ -2045,7 +2184,8 @@ ALTER TABLE `ventas`
   ADD KEY `fk_venta_deposito` (`id_deposito`),
   ADD KEY `fk_venta_moneda` (`id_moneda`),
   ADD KEY `idx_ventas_sucursal` (`id_sucursal`),
-  ADD KEY `idx_ventas_vendedor` (`id_vendedor`);
+  ADD KEY `idx_ventas_vendedor` (`id_vendedor`),
+  ADD KEY `fk_venta_usuario_reg` (`id_usuario_registro`);
 
 --
 -- Indices de la tabla `venta_cuotas`
@@ -2235,7 +2375,7 @@ ALTER TABLE `marcas`
 -- AUTO_INCREMENT de la tabla `modulos`
 --
 ALTER TABLE `modulos`
-  MODIFY `id_modulo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id_modulo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT de la tabla `monedas`
@@ -2259,7 +2399,7 @@ ALTER TABLE `pagos_venta`
 -- AUTO_INCREMENT de la tabla `permisos`
 --
 ALTER TABLE `permisos`
-  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=215;
+  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=226;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`
@@ -2310,6 +2450,18 @@ ALTER TABLE `roles`
   MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
+-- AUTO_INCREMENT de la tabla `servicios_tecnicos`
+--
+ALTER TABLE `servicios_tecnicos`
+  MODIFY `id_servicio` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `servicio_tecnico_seguimiento`
+--
+ALTER TABLE `servicio_tecnico_seguimiento`
+  MODIFY `id_seguimiento` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `sesiones`
 --
 ALTER TABLE `sesiones`
@@ -2328,6 +2480,12 @@ ALTER TABLE `sucursales`
   MODIFY `id_sucursal` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `tecnicos_externos`
+--
+ALTER TABLE `tecnicos_externos`
+  MODIFY `id_tecnico` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `tipos_cambio`
 --
 ALTER TABLE `tipos_cambio`
@@ -2337,7 +2495,7 @@ ALTER TABLE `tipos_cambio`
 -- AUTO_INCREMENT de la tabla `tipos_movimiento`
 --
 ALTER TABLE `tipos_movimiento`
-  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id_tipo_movimiento` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT de la tabla `transferencias`
@@ -2606,6 +2764,25 @@ ALTER TABLE `proveedor_cuentas_pago`
 ALTER TABLE `rol_permiso`
   ADD CONSTRAINT `fk_rp_permiso` FOREIGN KEY (`id_permiso`) REFERENCES `permisos` (`id_permiso`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_rp_rol` FOREIGN KEY (`id_rol`) REFERENCES `roles` (`id_rol`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `servicios_tecnicos`
+--
+ALTER TABLE `servicios_tecnicos`
+  ADD CONSTRAINT `fk_st_cliente` FOREIGN KEY (`id_cliente`) REFERENCES `clientes` (`id_cliente`),
+  ADD CONSTRAINT `fk_st_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`),
+  ADD CONSTRAINT `fk_st_sucursal` FOREIGN KEY (`id_sucursal`) REFERENCES `sucursales` (`id_sucursal`),
+  ADD CONSTRAINT `fk_st_tecnico` FOREIGN KEY (`id_tecnico_externo`) REFERENCES `tecnicos_externos` (`id_tecnico`),
+  ADD CONSTRAINT `fk_st_usuario_cierre` FOREIGN KEY (`id_usuario_cierre`) REFERENCES `usuarios` (`id_usuario`),
+  ADD CONSTRAINT `fk_st_usuario_recibe` FOREIGN KEY (`id_usuario_recibe`) REFERENCES `usuarios` (`id_usuario`),
+  ADD CONSTRAINT `fk_st_venta` FOREIGN KEY (`id_venta_origen`) REFERENCES `ventas` (`id_venta`);
+
+--
+-- Filtros para la tabla `servicio_tecnico_seguimiento`
+--
+ALTER TABLE `servicio_tecnico_seguimiento`
+  ADD CONSTRAINT `fk_seg_servicio` FOREIGN KEY (`id_servicio`) REFERENCES `servicios_tecnicos` (`id_servicio`),
+  ADD CONSTRAINT `fk_seg_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`);
 
 --
 -- Filtros para la tabla `sesiones`
