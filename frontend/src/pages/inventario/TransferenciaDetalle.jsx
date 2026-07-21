@@ -163,7 +163,43 @@ export default function TransferenciaDetalle() {
         <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800">
           <p className="text-sm font-semibold text-zinc-900 dark:text-white">Productos</p>
         </div>
-        <div className="overflow-x-auto">
+
+        {/* ── Tarjetas — móvil < md ── */}
+        <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {(trf.detalle ?? []).map(d => {
+            const pendiente = Number(d.cantidad_enviada) - Number(d.cantidad_recibida);
+            return (
+              <div key={d.id_detalle} className="px-4 py-3 space-y-2">
+                <div>
+                  <p className="font-medium text-sm text-zinc-900 dark:text-white">{d.producto_nombre}</p>
+                  <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                </div>
+                {d.unidad_nombre && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Unidad: {d.unidad_nombre}</p>
+                )}
+                <div className="flex items-center gap-4 text-xs flex-wrap">
+                  <div>
+                    <span className="text-zinc-400 dark:text-zinc-500">Enviado </span>
+                    <span className="font-mono font-semibold text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 dark:text-zinc-500">Recibido </span>
+                    <span className="font-mono font-semibold text-green-600 dark:text-green-400">{fmtCant(d.cantidad_recibida)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 dark:text-zinc-500">Pendiente </span>
+                    <span className={`font-mono font-semibold ${pendiente > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-zinc-400'}`}>
+                      {fmtCant(pendiente)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Tabla — desktop md+ ── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800">

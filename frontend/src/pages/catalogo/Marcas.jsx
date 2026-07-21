@@ -114,48 +114,84 @@ export default function Marcas() {
               <p className="text-sm">{busqueda ? 'Sin resultados' : 'No hay marcas registradas'}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-zinc-800">
-                    {['Nombre', 'País de origen', 'Estado', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
+            <>
+              {/* ── Tabla — sm+ ── */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-zinc-800">
+                      {['Nombre', 'País de origen', 'Estado', ''].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
+                    {visibles.map(m => (
+                      <tr key={m.id_marca} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{m.nombre}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">{m.pais_origen || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${m.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
+                            {m.activo ? 'Activa' : 'Inactiva'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            {puedeGestionar && (
+                              <>
+                                <button onClick={() => abrirEditar(m)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
+                                  <FaEdit className="h-3.5 w-3.5" />
+                                </button>
+                                {m.activo && (
+                                  <button onClick={() => setConfirm(m)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                                    <FaTrash className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-                  {visibles.map(m => (
-                    <tr key={m.id_marca} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{m.nombre}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">{m.pais_origen || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${m.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── Tarjetas — móvil < sm ── */}
+              <div className="sm:hidden divide-y divide-gray-100 dark:divide-zinc-800">
+                {visibles.map(m => (
+                  <div key={m.id_marca} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{m.nombre}</span>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${m.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
                           {m.activo ? 'Activa' : 'Inactiva'}
                         </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end">
-                          {puedeGestionar && (
-                            <>
-                              <button onClick={() => abrirEditar(m)}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
-                                <FaEdit className="h-3.5 w-3.5" />
-                              </button>
-                              {m.activo ? (
-                                <button onClick={() => setConfirm(m)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                                  <FaTrash className="h-3.5 w-3.5" />
-                                </button>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                      {m.pais_origen && (
+                        <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{m.pais_origen}</p>
+                      )}
+                    </div>
+                    {puedeGestionar && (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button onClick={() => abrirEditar(m)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
+                          <FaEdit className="h-3.5 w-3.5" />
+                        </button>
+                        {m.activo && (
+                          <button onClick={() => setConfirm(m)}
+                            className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                            <FaTrash className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

@@ -448,58 +448,89 @@ export default function Caja() {
         ) : arqueos.length === 0 ? (
           <div className="py-12 text-center text-zinc-400">Sin arqueos en el período</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-zinc-50 dark:bg-zinc-800/60">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Caja / Sucursal</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:table-cell">Cajero</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden md:table-cell">Apertura</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Cierre</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden md:table-cell">Apertura Bs</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Sistema Bs</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Real Bs</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Diferencia</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {arqueos.map(aq => (
-                  <tr key={aq.id_arqueo} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-zinc-900 dark:text-white">{aq.caja}</p>
+          <>
+            {/* ── Tarjetas — móvil < md ── */}
+            <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {arqueos.map(aq => (
+                <Link key={aq.id_arqueo} to={`/caja/arqueos/${aq.id_arqueo}`}
+                  className="flex flex-col gap-1.5 px-4 py-3 active:bg-zinc-50 dark:active:bg-zinc-800/40">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-sm text-zinc-900 dark:text-white">{aq.caja}</p>
                       <p className="text-xs text-zinc-400">{aq.sucursal}</p>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 hidden sm:table-cell">{aq.usuario}</td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs hidden md:table-cell">{fmtFecha(aq.fecha_apertura)}</td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs hidden lg:table-cell">{fmtFecha(aq.fecha_cierre)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden md:table-cell">{fmt(aq.monto_apertura)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden lg:table-cell">
-                      {aq.monto_cierre_sistema != null ? fmt(aq.monto_cierre_sistema) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden lg:table-cell">
-                      {aq.monto_cierre_real != null ? fmt(aq.monto_cierre_real) : '—'}
-                    </td>
-                    <td className={`px-4 py-3 text-right font-mono font-semibold ${difColor(aq.diferencia)}`}>
+                    </div>
+                    {estadoBadge(aq.estado)}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <span>{aq.usuario}</span>
+                    <span>{fmtFecha(aq.fecha_apertura)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={`font-mono font-semibold text-sm ${difColor(aq.diferencia)}`}>
                       {aq.diferencia != null
-                        ? `${Number(aq.diferencia) >= 0 ? '+' : ''}${fmt(aq.diferencia)}`
+                        ? `${Number(aq.diferencia) >= 0 ? '+' : ''}Bs ${fmt(aq.diferencia)}`
                         : '—'}
-                    </td>
-                    <td className="px-4 py-3">{estadoBadge(aq.estado)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        to={`/caja/arqueos/${aq.id_arqueo}`}
-                        className="text-xs font-medium text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300"
-                      >
-                        Ver
-                      </Link>
-                    </td>
+                    </span>
+                    <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">Ver →</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* ── Tabla — desktop md+ ── */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-zinc-50 dark:bg-zinc-800/60">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Caja / Sucursal</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden sm:table-cell">Cajero</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden md:table-cell">Apertura</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Cierre</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden md:table-cell">Apertura Bs</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Sistema Bs</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hidden lg:table-cell">Real Bs</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Diferencia</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
+                    <th className="px-4 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {arqueos.map(aq => (
+                    <tr key={aq.id_arqueo} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-zinc-900 dark:text-white">{aq.caja}</p>
+                        <p className="text-xs text-zinc-400">{aq.sucursal}</p>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300 hidden sm:table-cell">{aq.usuario}</td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs hidden md:table-cell">{fmtFecha(aq.fecha_apertura)}</td>
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400 text-xs hidden lg:table-cell">{fmtFecha(aq.fecha_cierre)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden md:table-cell">{fmt(aq.monto_apertura)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden lg:table-cell">
+                        {aq.monto_cierre_sistema != null ? fmt(aq.monto_cierre_sistema) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300 hidden lg:table-cell">
+                        {aq.monto_cierre_real != null ? fmt(aq.monto_cierre_real) : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-mono font-semibold ${difColor(aq.diferencia)}`}>
+                        {aq.diferencia != null
+                          ? `${Number(aq.diferencia) >= 0 ? '+' : ''}${fmt(aq.diferencia)}`
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3">{estadoBadge(aq.estado)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          to={`/caja/arqueos/${aq.id_arqueo}`}
+                          className="text-xs font-medium text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300"
+                        >
+                          Ver
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

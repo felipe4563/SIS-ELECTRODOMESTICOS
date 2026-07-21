@@ -120,7 +120,31 @@ export default function Ajustes() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* ── Tarjetas — móvil < md ── */}
+            <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {ajustes.map(a => {
+                const badge = ESTADO_BADGE[a.estado] ?? { label: a.estado, cls: 'bg-zinc-100 text-zinc-600' };
+                return (
+                  <div key={a.id_ajuste}
+                    onClick={() => navigate(`/inventario/ajustes/${a.id_ajuste}`)}
+                    className="px-4 py-3 active:bg-zinc-50 dark:active:bg-zinc-800/40 cursor-pointer space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-sm text-zinc-900 dark:text-white">{a.numero}</span>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.cls}`}>{badge.label}</span>
+                    </div>
+                    <div className="text-sm text-zinc-700 dark:text-zinc-300">{a.deposito_nombre}</div>
+                    <div className="flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500 flex-wrap">
+                      <span>{fmtFecha(a.fecha)}</span>
+                      {a.motivo && <span>· {a.motivo}</span>}
+                      <span>· {a.num_items} ítem{a.num_items !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Tabla — desktop md+ ── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">

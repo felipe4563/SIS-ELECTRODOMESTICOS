@@ -193,7 +193,76 @@ export default function Alertas() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* ── Tarjetas — móvil < md ── */}
+            <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {alertasFiltradas.map(a => {
+                const diferencia = Number(a.cantidad_actual) - Number(a.stock_minimo);
+                const sinStock   = Number(a.cantidad_actual) === 0;
+                return (
+                  <div key={a.id_alerta} className={`px-4 py-3 space-y-2 ${sinStock ? 'bg-red-50/40 dark:bg-red-900/5' : ''}`}>
+                    {/* Fila 1: producto + badge estado */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug">{a.producto_nombre}</p>
+                        <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{a.codigo_interno}</p>
+                      </div>
+                      <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        sinStock
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                      }`}>
+                        {sinStock ? 'Sin stock' : 'Bajo mínimo'}
+                      </span>
+                    </div>
+                    {/* Fila 2: marca · depósito */}
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 flex-wrap">
+                      <span>{a.marca_nombre}</span>
+                      <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                      <span>{a.deposito_nombre}</span>
+                      {a.deposito_codigo && <span className="font-mono text-zinc-400">({a.deposito_codigo})</span>}
+                    </div>
+                    {/* Fila 3: cantidades */}
+                    <div className="flex items-center gap-4 text-xs">
+                      <div>
+                        <span className="text-zinc-400 dark:text-zinc-500">Actual </span>
+                        <span className={`font-mono font-bold ${sinStock ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                          {fmtNum(a.cantidad_actual)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-400 dark:text-zinc-500">Mín. </span>
+                        <span className="font-mono text-zinc-600 dark:text-zinc-400">{fmtNum(a.stock_minimo)}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-400 dark:text-zinc-500">Dif. </span>
+                        <span className="font-mono font-semibold text-red-600 dark:text-red-400">{fmtNum(diferencia)}</span>
+                      </div>
+                    </div>
+                    {/* Fila 4: fecha + estado atendida (si aplica) */}
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+                      <span>{fmtFecha(a.fecha_generada)}</span>
+                      {tab !== 'pendientes' && (
+                        a.atendida
+                          ? <span className="text-green-600 dark:text-green-400 font-medium">Atendida {fmtFecha(a.fecha_atendida)}</span>
+                          : <span className="text-orange-500 font-medium">Pendiente</span>
+                      )}
+                    </div>
+                    {/* Botón atender */}
+                    {puedeAtender && tab === 'pendientes' && (
+                      <button
+                        onClick={() => setModal(a)}
+                        className="w-full mt-1 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs font-semibold transition-colors"
+                      >
+                        Marcar como atendida
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Tabla — desktop md+ ── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">
@@ -273,6 +342,7 @@ export default function Alertas() {
                 </tbody>
               </table>
             </div>
+
             <div className="px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-400 dark:text-zinc-600">
               {alertasFiltradas.length} alerta{alertasFiltradas.length !== 1 ? 's' : ''}
               {busqueda && alertasFiltradas.length !== alertas.length && ` (filtrado de ${alertas.length})`}

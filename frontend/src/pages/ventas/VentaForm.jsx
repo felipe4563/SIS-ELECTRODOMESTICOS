@@ -201,6 +201,157 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
   );
 }
 
+function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, onChange, onRemove }) {
+  const [busqueda, setBusqueda] = useState('');
+
+  const filtrados = productos.filter(p =>
+    !busqueda ||
+    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
+    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
+    (p.codigo_barras || '').includes(busqueda)
+  );
+
+  const prod      = productos.find(p => String(p.id_producto) === String(fila.id_producto));
+  const precioBase = resolverPrecio(prod, tipoVenta);
+  const disponible = fila.id_producto ? (stockMap[fila.id_producto] ?? 0) : null;
+  const base      = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
+  const desc      = base * (Number(fila.descuento_porc ?? 0) / 100);
+  const imp       = (base - desc) * (Number(fila.impuesto_porc ?? 0) / 100);
+  const subtotal  = +(base - desc + imp).toFixed(2);
+  const promoPorc = prod ? resolverPromo(prod, promociones) : 0;
+
+  return (
+    <div className="px-4 py-3 space-y-3 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Producto {index + 1}</span>
+          <button onClick={onRemove} className="text-zinc-400 hover:text-red-500 text-xl leading-none transition-colors">×</button>
+        </div>
+        <input
+          type="text" placeholder="Filtrar…" value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        />
+        <select
+          value={fila.id_producto}
+          onChange={e => {
+            const id = e.target.value;
+            const p  = productos.find(x => String(x.id_producto) === id);
+            const precio    = resolverPrecio(p, tipoVenta);
+            const descPromo = resolverPromo(p, promociones);
+            const impDef = p?.id_impuesto_default
+              ? impuestos.find(i => String(i.id_impuesto) === String(p.id_impuesto_default))
+              : impuestos.find(i => i.es_default);
+            onChange({
+              id_producto: id, precio_unitario: precio, descuento_porc: descPromo,
+              id_impuesto: impDef ? String(impDef.id_impuesto) : '',
+              impuesto_porc: impDef ? Number(impDef.porcentaje) : 0,
+            });
+          }}
+          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        >
+          <option value="">— seleccionar producto —</option>
+          {filtrados.slice(0, 50).map(p => (
+            <option key={p.id_producto} value={p.id_producto}>
+              [{p.codigo_interno}] {p.producto}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {disponible !== null && (
+            <span className={`text-[10px] font-medium ${disponible <= 0 ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
+              Stock: {fmtMonto(disponible)}
+            </span>
+          )}
+          {promoPorc > 0 && fila.id_producto && (
+            <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
+              Promo −{promoPorc}%
+            </span>
+          )}
+        </div>
+        {fila.id_producto && (
+          <input
+            type="text"
+            placeholder="N° de serie (opcional)"
+            value={fila.numero_serie ?? ''}
+            onChange={e => onChange({ numero_serie: e.target.value })}
+            className="w-full px-2.5 py-1.5 text-[11px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+          />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Cantidad</p>
+          <input
+            type="number" min={1} step="1" value={fila.cantidad}
+            onChange={e => onChange({ cantidad: Math.max(1, parseInt(e.target.value) || 1) })}
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
+          />
+        </div>
+        <div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Precio unit.</p>
+          <input
+            type="number" min={0} step="0.01" value={fila.precio_unitario}
+            onChange={e => onChange({ precio_unitario: e.target.value })}
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
+          />
+          <div className="flex items-center justify-between mt-0.5">
+            <span className={`text-[10px] px-1 py-0.5 rounded font-semibold ${
+              tipoVenta === 'MAYOR'
+                ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
+            }`}>
+              {tipoVenta === 'MAYOR' ? 'MAYOR' : 'PVP'}
+            </span>
+            {precioBase > 0 && (
+              <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
+            )}
+          </div>
+        </div>
+        <div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Desc %</p>
+          <input
+            type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
+            onChange={e => onChange({ descuento_porc: e.target.value })}
+            className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
+              Number(fila.descuento_porc) > 0
+                ? 'border-green-400 focus:ring-green-400 text-green-700 dark:text-green-400 font-semibold'
+                : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
+            }`}
+          />
+          {Number(fila.descuento_porc) > 0 && promoPorc > 0 && (
+            <p className="text-[10px] text-green-600 dark:text-green-400 text-center mt-0.5">auto</p>
+          )}
+        </div>
+        <div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Impuesto</p>
+          <select
+            value={fila.id_impuesto ?? ''}
+            onChange={e => {
+              const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
+              onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
+            }}
+            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+          >
+            <option value="">Sin imp.</option>
+            {impuestos.map(i => (
+              <option key={i.id_impuesto} value={i.id_impuesto}>
+                {i.codigo} ({Number(i.porcentaje).toFixed(0)}%)
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800">
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">Subtotal</span>
+        <span className="font-mono font-bold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(subtotal)}</span>
+      </div>
+    </div>
+  );
+}
+
 function Modal({ titulo, onClose, children, maxW = 'max-w-md' }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -823,19 +974,19 @@ export default function VentaForm() {
           <>
             <button
               onClick={() => setModalRapido(true)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
+              className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
             >
               + Producto rápido
             </button>
             <button
               onClick={limpiarItems}
-              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
             >
               Limpiar
             </button>
             <button
               onClick={addItem}
-              className="text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors"
+              className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors"
             >
               + Agregar fila
             </button>
@@ -867,8 +1018,45 @@ export default function VentaForm() {
           </button>
         </div>
 
-        {/* Tabla */}
-        <div className="overflow-x-auto">
+        {/* ── Tarjetas — móvil < md ── */}
+        <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {items.map((fila, i) => (
+            <FilaItemCard
+              key={fila._key} fila={fila} index={i}
+              productos={productos} stockMap={stockMap}
+              tipoVenta={form.tipo_venta}
+              promociones={promociones}
+              impuestos={impuestos}
+              onChange={patch => updateItem(i, patch)}
+              onRemove={() => removeItem(i)}
+            />
+          ))}
+          <div className="px-4 py-3 space-y-2">
+            <button
+              onClick={addItem}
+              className="w-full py-2 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs text-zinc-400 hover:border-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
+            >
+              + Agregar fila
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setModalRapido(true)}
+                className="flex-1 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
+              >
+                + Producto rápido
+              </button>
+              <button
+                onClick={limpiarItems}
+                className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Tabla — desktop md+ ── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">

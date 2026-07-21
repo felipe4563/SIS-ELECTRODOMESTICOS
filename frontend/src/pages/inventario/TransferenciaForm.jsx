@@ -96,6 +96,78 @@ function FilaItem({ fila, productos, stockOrigen, onChange, onRemove }) {
   );
 }
 
+// ── Fila de producto (tarjeta móvil) ─────────────────────────────────────────
+function FilaItemCard({ fila, productos, stockOrigen, onChange, onRemove }) {
+  const [busqueda, setBusqueda] = useState('');
+
+  const filtrados = productos.filter(p =>
+    !busqueda ||
+    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
+    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  const disponible = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
+  const excede     = disponible !== null && Number(fila.cantidad) > disponible;
+  const sinStock   = disponible !== null && disponible <= 0;
+
+  return (
+    <div className="p-4 space-y-3 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Producto</label>
+        <input
+          type="text"
+          placeholder="Buscar…"
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        />
+        <select
+          value={fila.id_producto}
+          onChange={e => { onChange('id_producto', e.target.value); setBusqueda(''); }}
+          className="w-full px-2.5 py-2 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        >
+          <option value="">— seleccionar producto —</option>
+          {filtrados.slice(0, 60).map(p => (
+            <option key={p.id_producto} value={p.id_producto}>
+              [{p.codigo_interno}] {p.producto}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1 block">Disponible en origen</label>
+          {disponible === null ? (
+            <span className="text-xs text-zinc-400">—</span>
+          ) : sinStock ? (
+            <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">Sin stock</span>
+          ) : (
+            <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${excede ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'}`}>
+              {fmtNum(disponible)} disp.
+            </span>
+          )}
+        </div>
+        <div className="w-28">
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1 block">Cantidad</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={fila.cantidad}
+            onChange={e => onChange('cantidad', e.target.value)}
+            className={`w-full px-2.5 py-1.5 text-xs rounded-lg border text-right font-mono focus:outline-none focus:ring-1 ${excede ? 'border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 focus:ring-orange-400' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-yellow-400'}`}
+          />
+          {excede && <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 text-right">Supera el disponible</p>}
+        </div>
+        <button
+          onClick={onRemove}
+          className="mt-5 w-7 h-7 flex items-center justify-center rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-lg leading-none"
+        >×</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function TransferenciaForm() {
   const navigate = useNavigate();
@@ -307,28 +379,43 @@ export default function TransferenciaForm() {
           )}
 
           {!cargandoStock && productosConStock.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800">
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Producto</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Código</th>
-                    <th className="text-right px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Disponible</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800">
-                  {productosConStock.map(p => (
-                    <tr key={p.id_producto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                      <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">{p.producto}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-zinc-400">{p.codigo_interno}</td>
-                      <td className="px-4 py-2 text-right font-mono font-semibold text-green-600 dark:text-green-400">
-                        {fmtNum(p.disponible)}
-                      </td>
+            <>
+              {/* Móvil */}
+              <div className="md:hidden divide-y divide-zinc-50 dark:divide-zinc-800">
+                {productosConStock.map(p => (
+                  <div key={p.id_producto} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-zinc-800 dark:text-zinc-200 truncate">{p.producto}</p>
+                      <p className="text-[11px] font-mono text-zinc-400">{p.codigo_interno}</p>
+                    </div>
+                    <span className="font-mono font-semibold text-green-600 dark:text-green-400 shrink-0">{fmtNum(p.disponible)}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800">
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Producto</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Código</th>
+                      <th className="text-right px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Disponible</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800">
+                    {productosConStock.map(p => (
+                      <tr key={p.id_producto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
+                        <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">{p.producto}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-zinc-400">{p.codigo_interno}</td>
+                        <td className="px-4 py-2 text-right font-mono font-semibold text-green-600 dark:text-green-400">
+                          {fmtNum(p.disponible)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -344,13 +431,36 @@ export default function TransferenciaForm() {
           </div>
           <button
             onClick={addItem}
-            className="text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors"
+            className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors"
           >
             + Agregar
           </button>
         </div>
 
-        <table className="w-full text-sm">
+        {/* Móvil: tarjetas */}
+        <div className="md:hidden">
+          {items.map((fila, i) => (
+            <FilaItemCard
+              key={i}
+              fila={fila}
+              productos={productos}
+              stockOrigen={stockOrigen}
+              onChange={(k, v) => updateItem(i, k, v)}
+              onRemove={() => removeItem(i)}
+            />
+          ))}
+          <div className="p-4">
+            <button
+              onClick={addItem}
+              className="w-full py-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 text-sm text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
+            >
+              + Agregar producto
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop: tabla */}
+        <table className="hidden md:table w-full text-sm">
           <thead>
             <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-zinc-800">
               <th className="text-left px-3 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Producto</th>

@@ -69,6 +69,72 @@ function FilaProducto({ fila, productos, stockMap, onChange, onRemove }) {
   );
 }
 
+function FilaProductoCard({ fila, productos, stockMap, onChange, onRemove }) {
+  const [busqueda, setBusqueda] = useState('');
+  const filtrados = productos.filter(p =>
+    !busqueda ||
+    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
+    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase())
+  );
+  const diferencia = Number(fila.cantidad_fisica) - Number(fila.cantidad_sistema);
+
+  return (
+    <div className="px-4 py-3 space-y-3 border-b border-zinc-100 dark:border-zinc-800">
+      <div className="space-y-1.5">
+        <input
+          type="text"
+          placeholder="Buscar producto…"
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        />
+        <select
+          value={fila.id_producto}
+          onChange={e => {
+            const id = e.target.value;
+            const cantSistema = stockMap[id] ?? 0;
+            onChange({ id_producto: id, cantidad_sistema: cantSistema });
+          }}
+          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+        >
+          <option value="">— seleccionar producto —</option>
+          {filtrados.slice(0, 50).map(p => (
+            <option key={p.id_producto} value={p.id_producto}>
+              [{p.codigo_interno}] {p.producto}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-0.5">Sistema</p>
+          <p className="text-sm font-mono text-zinc-600 dark:text-zinc-400">
+            {Number(fila.cantidad_sistema).toLocaleString('es-BO', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-0.5">Físico</p>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={fila.cantidad_fisica}
+            onChange={e => onChange({ cantidad_fisica: e.target.value })}
+            className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right"
+          />
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-0.5">Diferencia</p>
+          <p className={`text-sm font-mono font-semibold ${diferencia > 0 ? 'text-green-600 dark:text-green-400' : diferencia < 0 ? 'text-red-500 dark:text-red-400' : 'text-zinc-400'}`}>
+            {diferencia > 0 ? '+' : ''}{diferencia.toLocaleString('es-BO', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <button onClick={onRemove} className="text-red-400 hover:text-red-600 text-xl leading-none mt-3">×</button>
+      </div>
+    </div>
+  );
+}
+
 export default function AjusteForm() {
   const navigate  = useNavigate();
   const { id }    = useParams();
@@ -198,11 +264,34 @@ export default function AjusteForm() {
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
         <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <p className="text-sm font-semibold text-zinc-900 dark:text-white">Productos</p>
-          <button onClick={addItem} className="text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors">
+          <button onClick={addItem} className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors">
             + Agregar
           </button>
         </div>
-        <div className="overflow-x-auto">
+        {/* ── Tarjetas — móvil < md ── */}
+        <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {items.map((fila, i) => (
+            <FilaProductoCard
+              key={i}
+              fila={fila}
+              productos={productos}
+              stockMap={stockMap}
+              onChange={patch => updateItem(i, patch)}
+              onRemove={() => removeItem(i)}
+            />
+          ))}
+          <div className="px-4 py-3">
+            <button
+              onClick={addItem}
+              className="w-full py-2 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs text-zinc-400 hover:border-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
+            >
+              + Agregar producto
+            </button>
+          </div>
+        </div>
+
+        {/* ── Tabla — desktop md+ ── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/60">

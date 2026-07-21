@@ -410,44 +410,85 @@ function TablaMovimientos({ filas, columnas, total, colorTotal = 'text-zinc-900 
   if (filas.length === 0) {
     return <div className="py-8 text-center text-sm text-zinc-400">Sin movimientos</div>;
   }
+
+  const idCol    = columnas[0];
+  const montoCol = columnas[columnas.length - 1];
+  const midCols  = columnas.slice(1, -1).filter(c => !c.right);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-zinc-50 dark:bg-zinc-800/60">
-            {columnas.map(c => (
-              <th key={c.key}
-                className={`px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 ${c.right ? 'text-right' : 'text-left'} ${c.hidden ?? ''}`}>
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {filas.map((fila, i) => (
-            <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+    <>
+      {/* ── Tarjetas — móvil < md ── */}
+      <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+        {filas.map((fila, i) => (
+          <div key={i} className="px-4 py-3 space-y-1.5">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                {idCol.render ? idCol.render(fila) : fila[idCol.key]}
+              </span>
+              <span className={`font-mono font-bold text-sm ${colorTotal}`}>
+                {signo !== '' ? signo + ' ' : ''}Bs {montoCol.render ? montoCol.render(fila) : fila[montoCol.key]}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {midCols.map(c => {
+                const val = c.render ? c.render(fila) : fila[c.key];
+                if (!val) return null;
+                return (
+                  <span key={c.key} className={c.small ? 'text-xs text-zinc-400 dark:text-zinc-500' : 'text-sm text-zinc-700 dark:text-zinc-300'}>
+                    {val}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 flex justify-between">
+          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Total</span>
+          <span className={`font-mono font-bold text-sm ${colorTotal}`}>
+            {signo !== '' ? signo + ' ' : ''}Bs {fmt(total)}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Tabla — desktop md+ ── */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-zinc-50 dark:bg-zinc-800/60">
               {columnas.map(c => (
-                <td key={c.key}
-                  className={`px-4 py-2.5 ${c.right ? 'text-right font-mono' : ''} ${c.bold ? 'font-semibold' : ''} ${c.small ? 'text-xs text-zinc-500 dark:text-zinc-400' : 'text-zinc-700 dark:text-zinc-300'} ${c.hidden ?? ''}`}>
-                  {c.render ? c.render(fila) : fila[c.key]}
-                </td>
+                <th key={c.key}
+                  className={`px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 ${c.right ? 'text-right' : 'text-left'} ${c.hidden ?? ''}`}>
+                  {c.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-        <tfoot className="bg-zinc-50 dark:bg-zinc-800/60">
-          <tr>
-            <td colSpan={columnas.length - 1}
-              className="px-4 py-2.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 text-right">
-              Total
-            </td>
-            <td className={`px-4 py-2.5 text-right font-mono font-bold ${colorTotal}`}>
-              {signo !== '' ? signo + ' ' : ''}Bs {fmt(total)}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {filas.map((fila, i) => (
+              <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+                {columnas.map(c => (
+                  <td key={c.key}
+                    className={`px-4 py-2.5 ${c.right ? 'text-right font-mono' : ''} ${c.bold ? 'font-semibold' : ''} ${c.small ? 'text-xs text-zinc-500 dark:text-zinc-400' : 'text-zinc-700 dark:text-zinc-300'} ${c.hidden ?? ''}`}>
+                    {c.render ? c.render(fila) : fila[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-zinc-50 dark:bg-zinc-800/60">
+            <tr>
+              <td colSpan={columnas.length - 1}
+                className="px-4 py-2.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 text-right">
+                Total
+              </td>
+              <td className={`px-4 py-2.5 text-right font-mono font-bold ${colorTotal}`}>
+                {signo !== '' ? signo + ' ' : ''}Bs {fmt(total)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </>
   );
 }
 

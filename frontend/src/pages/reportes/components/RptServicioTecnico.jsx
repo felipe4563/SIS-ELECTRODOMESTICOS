@@ -197,32 +197,30 @@ export default function RptServicioTecnico() {
             ))}
           </div>
 
-          {/* Tabla agrupada por estado */}
+          {/* Grupos por estado */}
           {estadosPresentes.map(estado => (
             <div key={estado} className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+
+              {/* Cabecera del grupo */}
               <div className="flex items-center justify-between px-5 py-3 bg-zinc-900 dark:bg-zinc-950">
-                <div className="flex items-center gap-2.5">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${ESTADO_BADGE[estado]}`}>
-                    {ESTADO_LABEL[estado]}
-                  </span>
-                </div>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${ESTADO_BADGE[estado]}`}>
+                  {ESTADO_LABEL[estado]}
+                </span>
                 <span className="text-xs text-zinc-400 font-mono">
                   {grupos[estado].length} {grupos[estado].length === 1 ? 'orden' : 'órdenes'}
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* ── Tabla — desktop md+ ── */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
-                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">N° Orden</th>
-                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Cliente</th>
-                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Equipo</th>
-                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Técnico</th>
-                      <th className="text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Falla</th>
-                      <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Días</th>
-                      <th className="text-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Prioridad</th>
-                      <th className="text-right px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Costo</th>
+                      {['N° Orden','Cliente','Equipo','Técnico','Falla','Días','Prioridad','Costo'].map(h => (
+                        <th key={h} className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400 ${['Días','Prioridad'].includes(h) ? 'text-center' : h === 'Costo' ? 'text-right' : 'text-left'}`}>
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -235,49 +233,31 @@ export default function RptServicioTecnico() {
                           className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3">
-                            <span className="font-mono text-xs font-semibold text-zinc-900 dark:text-white">
-                              {o.numero}
-                            </span>
+                            <span className="font-mono text-xs font-semibold text-zinc-900 dark:text-white">{o.numero}</span>
                             <br />
                             <span className="text-[10px] text-zinc-400">{fmt(o.fecha_recepcion)}</span>
                             {o.garantia && (
-                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                GAR
-                              </span>
+                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">GAR</span>
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <span className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">
-                              {o.cliente_nombre ?? '—'}
-                            </span>
-                            {o.sucursal_nombre && (
-                              <><br /><span className="text-[10px] text-zinc-400">{o.sucursal_nombre}</span></>
-                            )}
+                            <span className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">{o.cliente_nombre ?? '—'}</span>
+                            {o.sucursal_nombre && <><br /><span className="text-[10px] text-zinc-400">{o.sucursal_nombre}</span></>}
                           </td>
                           <td className="px-4 py-3 max-w-[180px]">
-                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-tight block">
-                              {o.descripcion_producto ?? '—'}
-                            </span>
+                            <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-tight block">{o.descripcion_producto ?? '—'}</span>
                             {(o.marca_producto || o.modelo_producto) && (
-                              <span className="text-[10px] text-zinc-400 block mt-0.5">
-                                {[o.marca_producto, o.modelo_producto].filter(Boolean).join(' ')}
-                              </span>
+                              <span className="text-[10px] text-zinc-400 block mt-0.5">{[o.marca_producto, o.modelo_producto].filter(Boolean).join(' ')}</span>
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <span className="text-xs text-zinc-600 dark:text-zinc-300">
-                              {o.tecnico_nombre ?? <span className="text-zinc-300 dark:text-zinc-600">—</span>}
-                            </span>
+                            <span className="text-xs text-zinc-600 dark:text-zinc-300">{o.tecnico_nombre ?? <span className="text-zinc-300 dark:text-zinc-600">—</span>}</span>
                           </td>
                           <td className="px-4 py-3 max-w-[200px]">
-                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-2">
-                              {o.falla_reportada ?? '—'}
-                            </span>
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-2">{o.falla_reportada ?? '—'}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-300">
-                              {o.dias_en_servicio ?? '—'}
-                            </span>
+                            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-300">{o.dias_en_servicio ?? '—'}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${PRIO_BADGE[o.prioridad] ?? PRIO_BADGE.NORMAL}`}>
@@ -293,6 +273,78 @@ export default function RptServicioTecnico() {
                   </tbody>
                 </table>
               </div>
+
+              {/* ── Tarjetas — móvil < md ── */}
+              <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+                {grupos[estado].map(o => {
+                  const costo = gs(o.costo_final) ?? gs(o.costo_estimado);
+                  return (
+                    <div
+                      key={o.id_servicio}
+                      onClick={() => navigate(`/servicio-tecnico/${o.id_servicio}`)}
+                      className="px-4 py-3 active:bg-zinc-50 dark:active:bg-zinc-800/50 cursor-pointer transition-colors"
+                    >
+                      {/* Fila 1: número + badges */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono text-sm font-bold text-zinc-900 dark:text-white shrink-0">{o.numero}</span>
+                          {o.garantia && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">GAR</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${PRIO_BADGE[o.prioridad] ?? PRIO_BADGE.NORMAL}`}>
+                            {o.prioridad ?? '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Fila 2: equipo */}
+                      <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200 leading-snug">
+                        {o.descripcion_producto ?? '—'}
+                        {(o.marca_producto || o.modelo_producto) && (
+                          <span className="text-zinc-400 font-normal"> · {[o.marca_producto, o.modelo_producto].filter(Boolean).join(' ')}</span>
+                        )}
+                      </p>
+
+                      {/* Fila 3: cliente + técnico */}
+                      <div className="flex flex-wrap gap-x-3 mt-1">
+                        {o.cliente_nombre && (
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            <span className="text-zinc-400 dark:text-zinc-500">Cliente: </span>{o.cliente_nombre}
+                          </span>
+                        )}
+                        {o.tecnico_nombre && (
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            <span className="text-zinc-400 dark:text-zinc-500">Técnico: </span>{o.tecnico_nombre}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Falla */}
+                      {o.falla_reportada && (
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 line-clamp-2 leading-relaxed">
+                          {o.falla_reportada}
+                        </p>
+                      )}
+
+                      {/* Fila inferior: fecha + días + costo */}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-zinc-400">{fmt(o.fecha_recepcion)}</span>
+                          {o.dias_en_servicio != null && (
+                            <span className="text-[10px] text-zinc-400 font-mono">{o.dias_en_servicio}d</span>
+                          )}
+                        </div>
+                        {costo && (
+                          <span className="font-mono text-xs font-semibold text-zinc-700 dark:text-zinc-300">{costo}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
             </div>
           ))}
         </>

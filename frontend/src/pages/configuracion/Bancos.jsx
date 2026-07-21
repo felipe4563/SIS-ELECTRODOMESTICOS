@@ -97,48 +97,84 @@ export default function Bancos() {
               <p className="text-sm">No hay bancos registrados</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-zinc-800">
-                    {['Código', 'Nombre', 'Sigla', 'País', 'Estado', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
+            <>
+              {/* ── Tabla — sm+ ── */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-zinc-800">
+                      {['Código', 'Nombre', 'Sigla', 'País', 'Estado', ''].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
+                    {lista.map(b => (
+                      <tr key={b.id_banco} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-amber-600 dark:text-amber-400">{b.codigo}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{b.nombre}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">{b.sigla || '—'}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">{b.pais || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
+                            {b.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            {puedeEditar && (
+                              <button onClick={() => abrirEditar(b)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
+                                <FaEdit className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {puedeEliminar && (
+                              <button onClick={() => setConfirm(b)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                                <FaTrash className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-                  {lista.map(b => (
-                    <tr key={b.id_banco} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs font-semibold text-amber-600 dark:text-amber-400">{b.codigo}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{b.nombre}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">{b.sigla || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-zinc-400">{b.pais || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${b.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── Tarjetas — móvil < sm ── */}
+              <div className="sm:hidden divide-y divide-gray-100 dark:divide-zinc-800">
+                {lista.map(b => (
+                  <div key={b.id_banco} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">{b.codigo}</span>
+                        {b.sigla && <span className="text-xs text-gray-400 dark:text-zinc-500">{b.sigla}</span>}
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${b.activo ? 'bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-zinc-700 text-gray-500 dark:text-zinc-400'}`}>
                           {b.activo ? 'Activo' : 'Inactivo'}
                         </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 justify-end">
-                          {puedeEditar && (
-                            <button onClick={() => abrirEditar(b)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
-                              <FaEdit className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                          {puedeEliminar && (
-                            <button onClick={() => setConfirm(b)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
-                              <FaTrash className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">{b.nombre}</p>
+                      {b.pais && <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">{b.pais}</p>}
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {puedeEditar && (
+                        <button onClick={() => abrirEditar(b)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors">
+                          <FaEdit className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {puedeEliminar && (
+                        <button onClick={() => setConfirm(b)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                          <FaTrash className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
