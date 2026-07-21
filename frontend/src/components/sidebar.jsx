@@ -19,6 +19,8 @@ function Ic({ id, size = 15, className = '' }) {
 }
 
 const ICONS = {
+  hamburger:      <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>,
+  close:          <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
   dashboard:      <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,
   settings:       <><path d="M4 21V14m0-4V3m8 18v-7m0-4V3m8 18v-5m0-4V3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="17" y1="16" x2="23" y2="16"/></>,
   building:       <><path d="M3 21h18"/><rect x="5" y="3" width="14" height="18"/><path d="M9 21V15h6v6"/><path d="M9 7h2m4 0h2M9 11h2m4 0h2"/></>,
@@ -182,25 +184,6 @@ const MENU = [
   },
 ];
 
-/* ─── Tooltip wrapper para modo colapsado ────────────────────────────────── */
-function Tip({ label, children }) {
-  return (
-    <div className="relative group/tip">
-      {children}
-      <span className="
-        pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 z-[500]
-        opacity-0 group-hover/tip:opacity-100 scale-95 group-hover/tip:scale-100
-        transition-all duration-150
-        bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900
-        text-[11px] font-medium px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap
-      ">
-        {label}
-        <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-zinc-900 dark:border-r-zinc-100" />
-      </span>
-    </div>
-  );
-}
-
 /* ─── Toggle de tema ─────────────────────────────────────────────────────── */
 function ToggleTema() {
   const { tema, toggleTema } = useTheme();
@@ -244,25 +227,6 @@ function MenuItem({ path, label, icon, onClose }) {
         </>
       )}
     </NavLink>
-  );
-}
-
-/* ─── Ítem de navegación — modo colapsado (solo icono) ───────────────────── */
-function MenuItemCollapsed({ path, label, icon }) {
-  return (
-    <Tip label={label}>
-      <NavLink to={path} end
-        className={({ isActive }) =>
-          `flex items-center justify-center h-9 w-9 mx-auto rounded-lg transition-all duration-150 ${
-            isActive
-              ? 'bg-amber-400 text-zinc-900 shadow-sm'
-              : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`
-        }
-      >
-        <Ic id={icon} size={16} />
-      </NavLink>
-    </Tip>
   );
 }
 
@@ -312,24 +276,8 @@ function MenuGroup({ grupo, onClose }) {
   );
 }
 
-/* ─── Grupo — modo colapsado ─────────────────────────────────────────────── */
-function MenuGroupCollapsed({ grupo }) {
-  const { puede } = usePermission();
-
-  const itemsVisibles = filtrarItemsVisibles(grupo.items, puede);
-  if (itemsVisibles.length === 0) return null;
-
-  return (
-    <div className="py-1 border-b border-zinc-100 dark:border-zinc-800/60 last:border-0 space-y-0.5 px-1.5">
-      {itemsVisibles.map(item => (
-        <MenuItemCollapsed key={item.path} {...item} />
-      ))}
-    </div>
-  );
-}
-
 /* ─── Sidebar expandido ──────────────────────────────────────────────────── */
-function SidebarFull() {
+function SidebarFull({ onClose } = {}) {
   const { usuario, logout } = useAuth();
   const { limpiar }         = useAbilityUpdater();
   const navigate            = useNavigate();
@@ -375,7 +323,7 @@ function SidebarFull() {
       {/* Navegación */}
       <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-3 sidebar-scroll">
         {MENU.map(grupo => (
-          <MenuGroup key={grupo.label} grupo={grupo} />
+          <MenuGroup key={grupo.label} grupo={grupo} onClose={onClose} />
         ))}
       </nav>
 
@@ -416,78 +364,61 @@ function SidebarFull() {
   );
 }
 
-/* ─── Sidebar colapsado (solo iconos) ───────────────────────────────────── */
-function SidebarIcons() {
-  const { usuario, logout } = useAuth();
-  const { limpiar }         = useAbilityUpdater();
-  const navigate            = useNavigate();
-  const { logoUrl }         = useEmpresa() ?? {};
-  const { tema, toggleTema } = useTheme();
 
-  const handleLogout = async () => {
-    limpiar();
-    await logout();
-    navigate('/login');
-  };
+/* ─── Sidebar móvil: barra superior + drawer ─────────────────────────────── */
+function SidebarMobile() {
+  const [abierto, setAbierto] = useState(false);
+  const { logoUrl }           = useEmpresa() ?? {};
+  const location              = useLocation();
 
-  const iniciales = [usuario?.nombres?.[0], usuario?.apellidos?.[0]]
-    .filter(Boolean).join('').toUpperCase() || '?';
+  useEffect(() => { setAbierto(false); }, [location.pathname]);
+
+  const cerrar = () => setAbierto(false);
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800/80 transition-colors duration-300">
-      {/* Logo reducido */}
-      <div className="flex items-center justify-center h-14 shrink-0 border-b border-zinc-100 dark:border-zinc-800/80">
-        <img src={logoUrl ?? '/logo.png'} alt="Logo"
-          className="h-8 w-8 object-contain select-none rounded"
+    <>
+      {/* Barra superior fija */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center px-4 gap-3 transition-colors duration-300">
+        <button
+          onClick={() => setAbierto(true)}
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          aria-label="Abrir menú"
+        >
+          <Ic id="hamburger" size={20} />
+        </button>
+        <img
+          src={logoUrl ?? '/logo.png'}
+          alt="Logo"
+          className="h-8 w-auto max-w-[130px] object-contain select-none"
           onError={e => { e.target.src = '/logo.png'; }}
-          draggable={false} />
+          draggable={false}
+        />
       </div>
 
-      {/* Avatar usuario */}
-      <div className="flex justify-center py-2.5 border-b border-zinc-100 dark:border-zinc-800/60">
-        <Tip label={`${usuario?.nombres ?? ''} ${usuario?.apellidos ?? ''} · ${usuario?.rol_nombre ?? ''}`}>
-          <div className="w-9 h-9 rounded-lg bg-amber-400 text-zinc-900 flex items-center justify-center text-xs font-bold select-none cursor-default">
-            {iniciales}
-          </div>
-        </Tip>
-      </div>
+      {/* Backdrop */}
+      <div
+        className={`lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${abierto ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={cerrar}
+        aria-hidden="true"
+      />
 
-      {/* Navegación */}
-      <nav className="flex-1 py-1 overflow-y-auto sidebar-scroll">
-        {MENU.map(grupo => (
-          <MenuGroupCollapsed key={grupo.label} grupo={grupo} />
-        ))}
-      </nav>
-
-      {/* Footer iconos */}
-      <div className="px-1.5 pb-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-1">
-        {/* Tema */}
-        <Tip label={tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}>
-          <button onClick={toggleTema}
-            className="flex items-center justify-center h-9 w-9 mx-auto rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
-            <Ic id={tema === 'dark' ? 'moon' : 'sun'} size={16} />
+      {/* Drawer */}
+      <aside
+        className={`lg:hidden fixed left-0 top-0 h-screen w-64 z-50 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${abierto ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        {/* Botón cerrar encima del logo */}
+        <div className="absolute top-3 right-3 z-10">
+          <button
+            onClick={cerrar}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-label="Cerrar menú"
+          >
+            <Ic id="close" size={16} />
           </button>
-        </Tip>
-        {/* Mi perfil */}
-        <Tip label="Mi perfil">
-          <NavLink to="/mi-perfil"
-            className={({ isActive }) =>
-              `flex items-center justify-center h-9 w-9 mx-auto rounded-lg transition-all ${
-                isActive ? 'bg-amber-400 text-zinc-900' : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
-              }`
-            }>
-            <Ic id="profile" size={16} />
-          </NavLink>
-        </Tip>
-        {/* Cerrar sesión */}
-        <Tip label="Cerrar sesión">
-          <button onClick={handleLogout}
-            className="flex items-center justify-center h-9 w-9 mx-auto rounded-lg text-zinc-500 dark:text-zinc-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors">
-            <Ic id="logout" size={16} />
-          </button>
-        </Tip>
-      </div>
-    </div>
+        </div>
+        <SidebarFull onClose={cerrar} />
+      </aside>
+    </>
   );
 }
 
@@ -502,10 +433,8 @@ export default function Sidebar() {
         <SidebarFull />
       </aside>
 
-      {/* Tablet/Móvil: sidebar de solo iconos, siempre visible */}
-      <aside className="lg:hidden flex w-14 shrink-0 flex-col h-screen sticky top-0 z-30">
-        <SidebarIcons />
-      </aside>
+      {/* Móvil: hamburger + drawer */}
+      <SidebarMobile />
     </>
   );
 }
