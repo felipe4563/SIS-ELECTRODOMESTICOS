@@ -368,8 +368,9 @@ function SidebarFull({ onClose } = {}) {
 /* ─── Sidebar móvil: barra superior + drawer ─────────────────────────────── */
 function SidebarMobile() {
   const [abierto, setAbierto] = useState(false);
-  const { logoUrl }           = useEmpresa() ?? {};
+  const { logoUrl, empresa }  = useEmpresa() ?? {};
   const location              = useLocation();
+  const nombreEmpresa         = empresa?.nombre_comercial || empresa?.razon_social || '';
 
   useEffect(() => { setAbierto(false); }, [location.pathname]);
 
@@ -389,10 +390,15 @@ function SidebarMobile() {
         <img
           src={logoUrl ?? '/logo.png'}
           alt="Logo"
-          className="h-8 w-auto max-w-[130px] object-contain select-none"
+          className="h-8 w-auto max-w-[36px] object-contain select-none shrink-0"
           onError={e => { e.target.src = '/logo.png'; }}
           draggable={false}
         />
+        {nombreEmpresa && (
+          <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white leading-tight">
+            {nombreEmpresa}
+          </span>
+        )}
       </div>
 
       {/* Backdrop */}
