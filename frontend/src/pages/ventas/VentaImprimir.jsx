@@ -39,7 +39,7 @@ function Ticket80({ data, logoUrl }) {
 
       {/* Info venta */}
       <div style={{ marginBottom: '4px' }}>
-        <Row label="REC" value={data.numero} bold />
+        <Row label="RECIBO" value={data.numero} bold />
         {data.numero_factura && <Row label="N° Factura:" value={data.numero_factura} />}
         <Row label="Fecha:" value={fmtFecha(data.fecha)} />
         {data.usuario_registro_nombre && data.usuario_registro_nombre !== data.vendedor_nombre && (
@@ -115,7 +115,7 @@ function Ticket110({ data, logoUrl }) {
 
         {/* Columna derecha: datos del comprobante */}
         <div style={{ borderLeft: '1px dashed #999', paddingLeft: '8px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 'bold', textAlign: 'center', marginBottom: '3px', letterSpacing: '0.5px' }}>REC</div>
+          <div style={{ fontSize: '12px', fontWeight: 'bold', textAlign: 'center', marginBottom: '3px', letterSpacing: '0.5px' }}>RECIBO</div>
           <Row label="N°:" value={data.numero} />
           {data.numero_factura && <Row label="Fact.:" value={data.numero_factura} />}
           <Row label="Fecha:" value={fmtFechaCorta(data.fecha)} />
@@ -217,6 +217,198 @@ function Ticket110({ data, logoUrl }) {
       <Nota />
       <Divisor />
       <Pie />
+    </div>
+  );
+}
+
+/* ─── Ticket A4 (formal, 2 copias por hoja) ───────────────────────────────── */
+function TicketA4({ data, logoUrl }) {
+  const clienteNombre = data.cliente_razon || `${data.cliente_nombres ?? ''} ${data.cliente_apellidos ?? ''}`.trim();
+  const empresa = data.empresa_comercial || data.empresa_razon || 'MEGAELECTRA';
+
+  const renderCopia = () => (
+    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', lineHeight: '1.45', color: '#111' }}>
+
+      {/* Franja superior */}
+      <div style={{ height: '3px', background: '#1a1a1a', marginBottom: '10px' }} />
+
+      {/* ── Cabecera: datos empresa | logo | caja recibo ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center', marginBottom: '10px' }}>
+
+        {/* Izquierda: datos empresa */}
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1.5px', lineHeight: '1.2', marginBottom: '4px' }}>{empresa}</div>
+          {data.empresa_nit        && <div><strong>NIT:</strong> {data.empresa_nit}</div>}
+          {data.sucursal_nombre    && <div><strong>Sucursal:</strong> {data.sucursal_nombre}</div>}
+          {data.sucursal_direccion && <div><strong>Dirección:</strong> {data.sucursal_direccion}</div>}
+          {data.sucursal_telefono  && <div><strong>Teléfono:</strong> {data.sucursal_telefono}</div>}
+        </div>
+
+        {/* Centro: logo */}
+        <div style={{ textAlign: 'center' }}>
+          {logoUrl && logoUrl !== '/logo.png'
+            ? <img src={logoUrl} alt="Logo" style={{ height: '72px', width: 'auto', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+            : <div style={{ height: '72px' }} />
+          }
+        </div>
+
+        {/* Caja RECIBO */}
+        <div style={{ border: '1.5px solid #1a1a1a', padding: '8px 12px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '3px', textAlign: 'center', textTransform: 'uppercase', borderBottom: '1px solid #1a1a1a', paddingBottom: '4px', marginBottom: '6px' }}>RECIBO</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+            <tbody>
+              <tr>
+                <td style={{ color: '#555', paddingRight: '10px', whiteSpace: 'nowrap' }}>N°:</td>
+                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{data.numero}</td>
+              </tr>
+              {data.numero_factura && (
+                <tr>
+                  <td style={{ color: '#555', paddingRight: '10px' }}>Factura:</td>
+                  <td style={{ textAlign: 'right' }}>{data.numero_factura}</td>
+                </tr>
+              )}
+              <tr>
+                <td style={{ color: '#555', paddingRight: '10px' }}>Fecha:</td>
+                <td style={{ textAlign: 'right' }}>{fmtFecha(data.fecha)}</td>
+              </tr>
+              {data.usuario_registro_nombre && data.usuario_registro_nombre !== data.vendedor_nombre && (
+                <tr>
+                  <td style={{ color: '#555', paddingRight: '10px' }}>Usuario:</td>
+                  <td style={{ textAlign: 'right' }}>{data.usuario_registro_nombre}</td>
+                </tr>
+              )}
+              <tr>
+                <td style={{ color: '#555', paddingRight: '10px' }}>Vendedor:</td>
+                <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{data.vendedor_nombre}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1.5px solid #1a1a1a', marginBottom: '8px' }} />
+
+      {/* ── Cliente + Condición ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
+        <div>
+          <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '3px' }}>Cliente</div>
+          <div style={{ fontWeight: 'bold', fontSize: '11px', marginBottom: '2px' }}>{clienteNombre}</div>
+          {data.cliente_documento && <div style={{ color: '#444' }}>{data.tipo_documento}: {data.cliente_documento}</div>}
+        </div>
+        <div>
+          <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '3px' }}>Condición de pago</div>
+          <div>{data.condicion_pago === 'CREDITO' ? `Crédito — ${data.dias_credito} días` : 'Contado'}</div>
+          {data.requiere_entrega && data.direccion_entrega && (
+            <>
+              <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginTop: '5px', marginBottom: '2px' }}>Entrega</div>
+              <div>{data.direccion_entrega}</div>
+              {data.fecha_entrega && <div>Fecha: {fmtFecha(data.fecha_entrega)}</div>}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid #d0d0d0', marginBottom: '8px' }} />
+
+      {/* ── Tabla de productos ── */}
+      <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '4px' }}>Detalle de productos</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '10px' }}>
+        <thead>
+          <tr style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1.5px solid #1a1a1a' }}>
+            {['Descripción', 'P. Unit.', 'Cant.', 'Dto.', 'Subtotal'].map((h, i) => (
+              <th key={i} style={{ padding: '4px 6px', textAlign: i === 0 ? 'left' : 'right', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(data.detalle ?? []).map((d, i) => {
+            const base = Number(d.cantidad) * Number(d.precio_unitario);
+            const desc = base * (Number(d.descuento_porc ?? 0) / 100);
+            const sub  = base - desc;
+            return (
+              <tr key={i} style={{ borderBottom: '1px solid #ebebeb' }}>
+                <td style={{ padding: '4px 6px', verticalAlign: 'top' }}>
+                  <div style={{ fontWeight: 'bold' }}>{d.producto}</div>
+                  {(d.marca || d.modelo || d.color || d.numero_serie) && (
+                    <div style={{ fontSize: '8px', color: '#666', marginTop: '1px' }}>
+                      {[d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.numero_serie && `S/N: ${d.numero_serie}`].filter(Boolean).join('  ·  ')}
+                    </div>
+                  )}
+                </td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>Bs {fmtMonto(d.precio_unitario)}</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top' }}>{fmtMonto(d.cantidad)}</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top' }}>{Number(d.descuento_porc) > 0 ? `${d.descuento_porc}%` : '—'}</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Bs {fmtMonto(sub)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* ── Totales ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+        <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '2px 8px', color: '#555' }}>Subtotal:</td>
+              <td style={{ padding: '2px 8px', textAlign: 'right' }}>Bs {fmtMonto(data.subtotal)}</td>
+            </tr>
+            {Number(data.descuento_monto) > 0 && (
+              <tr>
+                <td style={{ padding: '2px 8px', color: '#555' }}>Descuento ({data.descuento_porc}%):</td>
+                <td style={{ padding: '2px 8px', textAlign: 'right' }}>-Bs {fmtMonto(data.descuento_monto)}</td>
+              </tr>
+            )}
+            {Number(data.impuesto) > 0 && (
+              <tr>
+                <td style={{ padding: '2px 8px', color: '#555' }}>Impuesto:</td>
+                <td style={{ padding: '2px 8px', textAlign: 'right' }}>Bs {fmtMonto(data.impuesto)}</td>
+              </tr>
+            )}
+            <tr style={{ borderTop: '1.5px solid #1a1a1a' }}>
+              <td style={{ padding: '5px 8px', fontWeight: 'bold', fontSize: '12px' }}>TOTAL:</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>Bs {fmtMonto(data.total)}</td>
+            </tr>
+            {Number(data.saldo_pendiente) > 0 && (
+              <tr style={{ borderTop: '1px solid #ccc' }}>
+                <td style={{ padding: '3px 8px', color: '#555' }}>Saldo pendiente:</td>
+                <td style={{ padding: '3px 8px', textAlign: 'right', fontWeight: 'bold' }}>Bs {fmtMonto(data.saldo_pendiente)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Firmas ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '10px' }}>
+        {['Firma del Vendedor', 'Firma del Cliente / Receptor'].map((label, i) => (
+          <div key={i} style={{ textAlign: 'center' }}>
+            <div style={{ height: '24px' }} />
+            <div style={{ borderTop: '1px solid #888', paddingTop: '4px', fontSize: '9px', color: '#555' }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Pie ── */}
+      <div style={{ borderTop: '1.5px solid #1a1a1a', paddingTop: '6px', textAlign: 'center', fontSize: '9px', color: '#555', fontStyle: 'italic' }}>
+        NOTA: NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES. VERIFIQUE ANTES DE RETIRAR EL PRODUCTO.
+        <span style={{ fontStyle: 'normal', marginLeft: '8px' }}>— Gracias por su compra. Conserve su comprobante.</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div id="ticket" style={{ width: '190mm', background: 'white' }}>
+      {renderCopia()}
+
+      {/* Línea de corte */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
+        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
+        <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
+        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
+      </div>
+
+      {renderCopia()}
     </div>
   );
 }
@@ -329,7 +521,7 @@ export default function VentaImprimir() {
   if (cargando) return <div className="flex items-center justify-center py-32 text-zinc-400">Cargando…</div>;
   if (!data)    return null;
 
-  const is110 = formato === '110mm';
+  const isA4 = formato === 'A4';
 
   return (
     <>
@@ -344,26 +536,19 @@ export default function VentaImprimir() {
 
         {/* Selector de formato */}
         <div className="flex items-center gap-1 rounded-xl border border-zinc-300 dark:border-zinc-600 p-1">
-          <button
-            onClick={() => setFormato('80mm')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-              !is110
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-            }`}
-          >
-            80mm
-          </button>
-          <button
-            onClick={() => setFormato('110mm')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-              is110
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-            }`}
-          >
-            110mm
-          </button>
+          {['80mm', '110mm', 'A4'].map(f => (
+            <button
+              key={f}
+              onClick={() => setFormato(f)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                formato === f
+                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+              }`}
+            >
+              {f}
+            </button>
+          ))}
         </div>
 
         <button
@@ -376,7 +561,9 @@ export default function VentaImprimir() {
 
       {/* Preview del ticket */}
       <div className="flex justify-center p-4 bg-zinc-100 dark:bg-zinc-950 min-h-screen">
-        {is110
+        {formato === 'A4'
+          ? <TicketA4  data={data} logoUrl={logoUrl} />
+          : formato === '110mm'
           ? <Ticket110 data={data} logoUrl={logoUrl} />
           : <Ticket80  data={data} logoUrl={logoUrl} />
         }
@@ -388,6 +575,18 @@ export default function VentaImprimir() {
           .no-print { display: none !important; }
           body * { visibility: hidden !important; }
           #ticket, #ticket * { visibility: visible !important; }
+          ${formato === 'A4' ? `
+          #ticket {
+            position: static !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            color: #000 !important;
+            width: 190mm !important;
+            font-size: 11px !important;
+          }
+          @page { size: auto; margin: 14mm; }
+          ` : `
           #ticket {
             position: fixed !important;
             top: 0 !important;
@@ -397,12 +596,13 @@ export default function VentaImprimir() {
             background: white !important;
             color: #000 !important;
           }
-          ${is110
+          ${formato === '110mm'
             ? `#ticket { width: 102mm !important; font-size: 10px !important; }
                @page { size: 110mm auto; margin: 0; }`
             : `#ticket { width: 72mm !important; font-size: 11px !important; }
                @page { size: 80mm auto; margin: 0; }`
           }
+          `}
         }
       `}</style>
     </>
