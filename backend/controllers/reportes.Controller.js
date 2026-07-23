@@ -196,7 +196,8 @@ async function getVentasVendedor(req, res) {
         s.nombre AS sucursal,
         COUNT(DISTINCT v.id_venta) AS num_ventas,
         SUM(v.total) AS total_ventas,
-        COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos
+        COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos,
+        COALESCE(SUM(vd.comision_monto),0) AS total_comisiones
       FROM ventas v
       JOIN usuarios u ON u.id_usuario=v.id_vendedor
       JOIN sucursales s ON s.id_sucursal=v.id_sucursal
@@ -478,7 +479,9 @@ async function getBonosVendedoresDetalle(req, res) {
         vd.precio_unitario,
         vd.descuento_porc,
         vd.subtotal,
-        COALESCE(vd.bono_vendedor,0) AS bono_vendedor
+        COALESCE(vd.bono_vendedor,0) AS bono_vendedor,
+        COALESCE(vd.precio_base,0) AS precio_base,
+        COALESCE(vd.comision_monto,0) AS comision_monto
       FROM venta_detalle vd
       JOIN ventas v      ON v.id_venta      = vd.id_venta
       JOIN usuarios u    ON u.id_usuario    = v.id_vendedor
@@ -513,6 +516,8 @@ async function getBonosVendedores(req, res) {
         COUNT(DISTINCT v.id_venta) AS num_ventas,
         SUM(v.total) AS total_ventas,
         COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos,
+        COALESCE(SUM(vd.comision_monto),0) AS total_comisiones,
+        COALESCE(SUM(vd.bono_vendedor + vd.comision_monto),0) AS total_ganado,
         COALESCE(SUM(vd.cantidad),0) AS unidades_vendidas
       FROM venta_detalle vd
       JOIN ventas v ON v.id_venta=vd.id_venta
@@ -686,7 +691,7 @@ async function getTopProductos(req, res) {
       SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
         SUM(vd.cantidad) AS cantidad_vendida,
         SUM(vd.subtotal) AS monto_total,
-        COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos,
+        COALESCE(SUM(vd.bono_vendedor + vd.comision_monto),0) AS total_bonos,
         AVG(vd.precio_unitario) AS precio_promedio
       FROM venta_detalle vd
       JOIN ventas v     ON v.id_venta=vd.id_venta
@@ -1635,7 +1640,7 @@ async function exportarTopProductosPDF(req, res) {
       SELECT p.codigo_interno, p.producto, m.nombre AS marca, cat.nombre AS categoria,
         SUM(vd.cantidad) AS cantidad_vendida,
         SUM(vd.subtotal) AS monto_total,
-        COALESCE(SUM(vd.bono_vendedor),0) AS total_bonos,
+        COALESCE(SUM(vd.bono_vendedor + vd.comision_monto),0) AS total_bonos,
         AVG(vd.precio_unitario) AS precio_promedio
       FROM venta_detalle vd
       JOIN ventas v      ON v.id_venta = vd.id_venta

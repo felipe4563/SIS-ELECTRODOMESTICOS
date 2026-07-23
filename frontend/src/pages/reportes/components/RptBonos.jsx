@@ -39,7 +39,6 @@ export default function RptBonos() {
   useEffect(() => { buscar(); }, []);
   const f = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
-  // Lista de vendedores únicos extraída del resultado
   const vendedores = useMemo(() =>
     filas.map(r => ({ id: r.id_usuario, nombre: r.vendedor }))
          .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
@@ -51,7 +50,10 @@ export default function RptBonos() {
     ? filas.filter(r => String(r.id_usuario) === idVendedor)
     : filas;
 
-  const totalBonos = filasFiltradas.reduce((a, r) => a + Number(r.total_bonos), 0);
+  const totalBonos       = filasFiltradas.reduce((a, r) => a + Number(r.total_bonos ?? 0), 0);
+  const totalComisiones  = filasFiltradas.reduce((a, r) => a + Number(r.total_comisiones ?? 0), 0);
+  const totalGanado      = filasFiltradas.reduce((a, r) => a + Number(r.total_ganado ?? 0), 0);
+  const hayComisiones    = filasFiltradas.some(r => Number(r.total_comisiones ?? 0) > 0);
 
   const cols = [
     { key: 'vendedor',          label: 'Vendedor',        bold: true },
@@ -59,7 +61,16 @@ export default function RptBonos() {
     { key: 'num_ventas',        label: 'Ventas',          align: 'right', render: v => fmtN(v) },
     { key: 'unidades_vendidas', label: 'Unidades',        align: 'right', render: v => fmtN(v) },
     { key: 'total_ventas',      label: 'Monto ventas Bs', align: 'right', render: v => fmt(v) },
-    { key: 'total_bonos',       label: 'Bonos Bs',        align: 'right', render: v => <span className="text-green-600 dark:text-green-400 font-semibold">{fmt(v)}</span> },
+    { key: 'total_bonos',       label: 'Bonos Bs',        align: 'right',
+      render: v => <span className="text-green-600 dark:text-green-400 font-semibold">{fmt(v)}</span> },
+    ...(hayComisiones ? [
+      { key: 'total_comisiones', label: 'Com. sobreprecio Bs', align: 'right',
+        render: v => Number(v) > 0
+          ? <span className="text-amber-600 dark:text-amber-400 font-semibold">{fmt(v)}</span>
+          : <span className="text-zinc-400">—</span> },
+      { key: 'total_ganado',     label: 'Total ganado Bs',     align: 'right',
+        render: v => <span className="text-emerald-600 dark:text-emerald-400 font-bold">{fmt(v)}</span> },
+    ] : []),
   ];
 
   return (
@@ -89,7 +100,6 @@ export default function RptBonos() {
         <p className="text-sm text-red-500 dark:text-red-400">{errorExport}</p>
       )}
 
-      {/* Filtro por vendedor */}
       {vendedores.length > 1 && (
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide whitespace-nowrap">
@@ -117,8 +127,12 @@ export default function RptBonos() {
       )}
 
       <Resumen items={[
-        { label: 'Vendedores',   valor: fmtN(filasFiltradas.length) },
-        { label: 'Total bonos',  valor: `Bs ${fmt(totalBonos)}`, color: 'text-green-600 dark:text-green-400' },
+        { label: 'Vendedores',            valor: fmtN(filasFiltradas.length) },
+        { label: 'Bonos por venta',       valor: `Bs ${fmt(totalBonos)}`,      color: 'text-green-600 dark:text-green-400' },
+        ...(hayComisiones ? [
+          { label: 'Com. sobreprecio',    valor: `Bs ${fmt(totalComisiones)}`, color: 'text-amber-600 dark:text-amber-400' },
+          { label: 'Total ganado',        valor: `Bs ${fmt(totalGanado)}`,     color: 'text-emerald-600 dark:text-emerald-400' },
+        ] : []),
       ]} />
       <Tabla columnas={cols} filas={filasFiltradas} cargando={cargando} />
     </div>
