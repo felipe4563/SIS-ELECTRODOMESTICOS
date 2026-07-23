@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const BACKEND = process.env.UPLOADS_PROXY_URL ?? 'http://localhost:3000';
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   turbopack: {
     root: __dirname,
   },

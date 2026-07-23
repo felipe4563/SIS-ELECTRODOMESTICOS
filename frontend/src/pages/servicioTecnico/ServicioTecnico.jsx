@@ -72,11 +72,11 @@ export default function ServicioTecnico() {
 
   const setF = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
-  const cargar = useCallback(async () => {
+  const cargar = useCallback(async (overrides = {}) => {
     setCargando(true);
     try {
       const params = Object.fromEntries(
-        Object.entries(filtros).filter(([, v]) => v !== '')
+        Object.entries({ ...filtros, ...overrides }).filter(([, v]) => v !== '')
       );
       params.limit = 100;
       const res = await servicioTecnicoService.getAll(params);
@@ -95,7 +95,7 @@ export default function ServicioTecnico() {
     }
   }, [filtros]);
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activosPendientes = ESTADOS_ACTIVOS.reduce((s, e) => s + (pipeline[e] ?? 0), 0);
 
@@ -130,7 +130,11 @@ export default function ServicioTecnico() {
           return (
             <button
               key={e}
-              onClick={() => { setF('estado', filtros.estado === e ? '' : e); }}
+              onClick={() => {
+                const nuevo = filtros.estado === e ? '' : e;
+                setF('estado', nuevo);
+                cargar({ estado: nuevo });
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all
                 ${filtros.estado === e
                   ? 'ring-2 ring-yellow-400 border-yellow-400'

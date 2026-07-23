@@ -1,30 +1,32 @@
-import { useState, useEffect } from 'react';
-import { FaPlus, FaTrash, FaSpinner, FaExchangeAlt, FaEdit, FaUniversity, FaCheckCircle } from 'react-icons/fa';
+import { useState, useEffect, useCallback } from 'react';
+import { FaPlus, FaTrash, FaSpinner, FaExchangeAlt, FaEdit, FaSync } from 'react-icons/fa';
 import { tiposCambioService, monedasService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 
 const hoy = () => new Date().toISOString().split('T')[0];
-const EMPTY = { id_moneda_origen: '', id_moneda_destino: '', fecha: hoy(), tasa_compra: '', tasa_venta: '' };
+const EMPTY = { id_moneda_origen: '', id_moneda_destino: '', fecha: hoy(), tipo: 'oficial', tasa_compra: '', tasa_venta: '' };
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 dark:focus:border-amber-500/50 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
 
+const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+
 export default function TiposCambio() {
   const { puede } = usePermission();
-  const [lista,        setLista]        = useState([]);
-  const [monedas,      setMonedas]      = useState([]);
-  const [cargando,     setCargando]     = useState(true);
-  const [modal,        setModal]        = useState(false);
-  const [confirm,      setConfirm]      = useState(null);
-  const [form,         setForm]         = useState(EMPTY);
-  const [editId,       setEditId]       = useState(null);
-  const [guardando,    setGuardando]    = useState(false);
-  const [error,        setError]        = useState(null);
-  const [bcbModal,     setBcbModal]     = useState(false);
-  const [bcbData,      setBcbData]      = useState(null);
-  const [bcbCargando,  setBcbCargando]  = useState(false);
-  const [bcbError,     setBcbError]     = useState(null);
+  const [lista,         setLista]        = useState([]);
+  const [monedas,       setMonedas]      = useState([]);
+  const [cargando,      setCargando]     = useState(true);
+  const [modal,         setModal]        = useState(false);
+  const [confirm,       setConfirm]      = useState(null);
+  const [form,          setForm]         = useState(EMPTY);
+  const [editId,        setEditId]       = useState(null);
+  const [guardando,     setGuardando]    = useState(false);
+  const [error,         setError]        = useState(null);
+  const [tasas,         setTasas]        = useState(null);
+  const [tasasCargando, setTasasCargando] = useState(true);
+  const [tasasError,    setTasasError]   = useState(null);
+  const [tasasTs,       setTasasTs]      = useState(null);
 
   const cargar = () => {
     setCargando(true);
@@ -37,10 +39,28 @@ export default function TiposCambio() {
       .finally(() => setCargando(false));
   };
 
-  useEffect(cargar, []);
+  const fetchTasas = useCallback(() => {
+    setTasasCargando(true);
+    setTasasError(null);
+    tiposCambioService.getDolar()
+      .then(({ data }) => {
+        setTasas(data);
+        setTasasTs(new Date());
+      })
+      .catch(err => setTasasError(err.response?.data?.error || 'No se pudo obtener la tasa'))
+      .finally(() => setTasasCargando(false));
+  }, []);
+
+  useEffect(() => {
+    cargar();
+    fetchTasas();
+    const id = setInterval(fetchTasas, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchTasas]);
 
   const cerrarModal = () => { setModal(false); setEditId(null); setError(null); };
   const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -67,6 +87,7 @@ export default function TiposCambio() {
       id_moneda_origen: tc.id_moneda_origen,
       id_moneda_destino: tc.id_moneda_destino,
       fecha: tc.fecha ? tc.fecha.slice(0, 10) : hoy(),
+      tipo: tc.tipo || 'oficial',
       tasa_compra: tc.tasa_compra,
       tasa_venta: tc.tasa_venta
     });
@@ -84,44 +105,14 @@ export default function TiposCambio() {
     }
   };
 
-  const abrirBCB = async () => {
-    setBcbError(null);
-    setBcbData(null);
-    setBcbModal(true);
-    setBcbCargando(true);
-    try {
-      const { data } = await tiposCambioService.getBCB();
-      setBcbData(data);
-    } catch (err) {
-      setBcbError(err.response?.data?.error || 'No se pudo conectar con el BCB');
-    } finally {
-      setBcbCargando(false);
-    }
-  };
-
-  const usarTasaBCB = (tipo) => {
-    const usd = monedas.find(m => m.codigo === 'USD');
-    const bob = monedas.find(m => m.codigo === 'BOB' || m.es_moneda_base);
-    if (!usd || !bob) { setBcbError('No se encontraron las monedas BOB y USD activas'); return; }
-    const tasa = bcbData[tipo];
-    setForm({
-      id_moneda_origen:  usd.id_moneda,
-      id_moneda_destino: bob.id_moneda,
-      fecha: bcbData.fecha,
-      tasa_compra: tasa.compra,
-      tasa_venta:  tasa.venta,
-    });
-    setEditId(null);
-    setBcbModal(false);
-    setError(null);
-    setModal(true);
-  };
-
   const formatFecha = (f) => {
     if (!f) return '—';
     const d = new Date(String(f).slice(0, 10) + 'T00:00:00');
     return isNaN(d) ? String(f) : d.toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
   };
+
+  const fmtTasa = (v) => Number(v).toFixed(4);
+  const fmtHora = (d) => d ? d.toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' }) : '—';
 
   return (
     <div>
@@ -129,18 +120,63 @@ export default function TiposCambio() {
         title="Tipos de Cambio"
         description="Tasas de cambio entre monedas por fecha"
         action={puede('gestionar', 'tipos_cambio') && (
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={abrirBCB}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-all border border-zinc-200 dark:border-zinc-700">
-              <FaUniversity className="h-3.5 w-3.5 text-zinc-500" /> Obtener tasa BCB
-            </button>
-            <button onClick={() => { setForm(EMPTY); setEditId(null); setError(null); setModal(true); }}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
-              <FaPlus className="h-3.5 w-3.5" /> Nuevo tipo de cambio
-            </button>
-          </div>
+          <button onClick={() => { setForm(EMPTY); setEditId(null); setError(null); setModal(true); }}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 shadow-md shadow-amber-500/20 transition-all">
+            <FaPlus className="h-3.5 w-3.5" /> Nuevo tipo de cambio
+          </button>
         )}
       />
+
+      {/* ── Widget tasas en vivo ─────────────────────────────────── */}
+      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {[
+          { key: 'paralelo', label: 'Dólar Paralelo', badge: 'BLUE', badgeCls: 'bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300' },
+          { key: 'oficial',  label: 'Oficial Unificado', badge: 'BCB', badgeCls: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' },
+        ].map(({ key, label, badge, badgeCls }) => (
+          <div key={key} className="relative bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl px-5 py-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wider ${badgeCls}`}>{badge}</span>
+                <p className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mt-1">{label}</p>
+              </div>
+              {tasas?.[key] && (
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md font-medium whitespace-nowrap">
+                  guardado hoy
+                </span>
+              )}
+            </div>
+
+            {tasasCargando && !tasas ? (
+              <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-zinc-500"><FaSpinner className="animate-spin h-3 w-3" /> Consultando…</div>
+            ) : tasasError ? (
+              <p className="text-xs text-red-500">{tasasError}</p>
+            ) : tasas?.[key] ? (
+              <div className="flex items-center gap-5">
+                <div>
+                  <p className="text-[10px] text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-0.5">Compra</p>
+                  <p className="font-mono text-xl font-bold text-gray-900 dark:text-white">{fmtTasa(tasas[key].compra)}</p>
+                </div>
+                <div className="text-gray-300 dark:text-zinc-700 text-lg">|</div>
+                <div>
+                  <p className="text-[10px] text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-0.5">Venta</p>
+                  <p className="font-mono text-xl font-bold text-gray-900 dark:text-white">{fmtTasa(tasas[key].venta)}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-600">BOB / USD</p>
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-600">{tasas.fecha}</p>
+                </div>
+              </div>
+            ) : null}
+
+            {tasasTs && (
+              <p className="text-[10px] text-gray-400 dark:text-zinc-600 mt-2 flex items-center gap-1">
+                <FaSync className={`h-2 w-2 ${tasasCargando ? 'animate-spin' : ''}`} />
+                Actualizado {fmtHora(tasasTs)} · refresca cada 5 min
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
 
       {error && !modal && (
         <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
@@ -160,7 +196,7 @@ export default function TiposCambio() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800">
-                    {['Fecha', 'Par', 'Tasa Compra', 'Tasa Venta', ''].map(h => (
+                    {['Fecha', 'Par', 'Tipo', 'Tasa Compra', 'Tasa Venta', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -175,6 +211,12 @@ export default function TiposCambio() {
                           <FaExchangeAlt className="h-3 w-3 text-gray-400" />
                           <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">{tc.moneda_destino_codigo}</span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {tc.tipo === 'paralelo'
+                          ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300">BLUE</span>
+                          : <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">BCB</span>
+                        }
                       </td>
                       <td className="px-4 py-3 font-mono text-gray-900 dark:text-white">{Number(tc.tasa_compra).toFixed(4)}</td>
                       <td className="px-4 py-3 font-mono text-gray-900 dark:text-white">{Number(tc.tasa_venta).toFixed(4)}</td>
@@ -208,6 +250,13 @@ export default function TiposCambio() {
             <label className={labelCls}>Fecha *</label>
             <input name="fecha" type="date" value={form.fecha} onChange={handleChange} required className={inputCls} />
           </div>
+          <div>
+            <label className={labelCls}>Tipo *</label>
+            <select name="tipo" value={form.tipo} onChange={handleChange} required className={inputCls}>
+              <option value="oficial">Oficial (BCB)</option>
+              <option value="paralelo">Paralelo (Blue)</option>
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Moneda Origen *</label>
@@ -240,68 +289,6 @@ export default function TiposCambio() {
             </button>
           </div>
         </form>
-      </Modal>
-
-      {/* ── Modal tasas BCB ───────────────────────────────────────── */}
-      <Modal open={bcbModal} onClose={() => setBcbModal(false)} title="Tasas del Banco Central de Bolivia" maxWidth="max-w-md">
-        {bcbCargando && (
-          <div className="flex flex-col items-center gap-3 py-8 text-gray-400 dark:text-zinc-500">
-            <FaSpinner className="animate-spin h-7 w-7" />
-            <p className="text-sm">Consultando el BCB…</p>
-          </div>
-        )}
-        {bcbError && (
-          <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">
-            {bcbError}
-          </div>
-        )}
-        {bcbData && !bcbCargando && (
-          <div className="space-y-3">
-            <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
-              Datos del BCB para <strong className="text-gray-700 dark:text-zinc-300">{bcbData.fecha}</strong>. Selecciona la tasa a registrar:
-            </p>
-
-            {/* Tasa oficial */}
-            {bcbData.oficial && (
-              <button
-                onClick={() => usarTasaBCB('oficial')}
-                className="w-full flex items-center justify-between gap-4 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/5 transition-all group text-left"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400">
-                    Tasa oficial
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Tipo de cambio del BCB (USD/BOB)</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">Compra <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.oficial.compra}</span></p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">Venta <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.oficial.venta}</span></p>
-                </div>
-                <FaCheckCircle className="h-4 w-4 text-gray-300 dark:text-zinc-600 group-hover:text-amber-500 shrink-0 transition-colors" />
-              </button>
-            )}
-
-            {/* Tasa referencial */}
-            {bcbData.referencial && (
-              <button
-                onClick={() => usarTasaBCB('referencial')}
-                className="w-full flex items-center justify-between gap-4 px-4 py-3.5 rounded-xl border border-gray-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/5 transition-all group text-left"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-400">
-                    Tasa referencial
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Valor referencial publicado por el BCB</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">Compra <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.referencial.compra}</span></p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">Venta <span className="font-mono font-bold text-gray-900 dark:text-white">{bcbData.referencial.venta}</span></p>
-                </div>
-                <FaCheckCircle className="h-4 w-4 text-gray-300 dark:text-zinc-600 group-hover:text-blue-500 shrink-0 transition-colors" />
-              </button>
-            )}
-          </div>
-        )}
       </Modal>
 
       <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Eliminar Tipo de Cambio" maxWidth="max-w-sm">

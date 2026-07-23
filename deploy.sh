@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# deploy.sh — Deploy automático SIS-ELECTRODOMESTICOS
+# deploy.sh — Deploy automático SIS-ELECTRODOMESTICOS (Docker)
 #   • megaelectra.rusoft.dev   → backend API + frontend Vite
 #   • bubbasvibes.rusoft.dev   → catálogo Next.js 16 (SSR)
 #
@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-# ── Colores ──────────────────────────────────────────────────────────────────
+# ── Colores ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 
@@ -36,41 +36,28 @@ for arg in "$@"; do
 done
 
 # ── Configuración ─────────────────────────────────────────────────────────────
-APP_DIR="$(cd "$(dirname "$0")" && pwd)"   # /home/ubuntu/SISTEMAS/SIS-ELECTRODOMESTICOS
-BACKEND_DIR="$APP_DIR/backend"
-FRONTEND_DIR="$APP_DIR/frontend"
-CATALOGO_DIR="$APP_DIR/catalogo"
-FRONTEND_DIST="$FRONTEND_DIR/dist"        # Nginx sirve directamente
-PM2_API_NAME="electrodomesticos-api"      # proceso PM2 del backend
-PM2_CAT_NAME="bubbasvibes-catalogo"       # proceso PM2 del catálogo Next.js
+APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_PORT=3001
 CATALOGO_PORT=5174
 BRANCH="main"
-# ─────────────────────────────────────────────────────────────────────────────
 
 echo -e "\n${BOLD}╔══════════════════════════════════════════╗${RESET}"
 echo -e "${BOLD}║   DEPLOY — megaelectra + bubbasvibes      ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 log "Directorio: $APP_DIR"
 log "Fecha:      $(date '+%Y-%m-%d %H:%M:%S')"
-log "API:        $PM2_API_NAME (puerto $BACKEND_PORT)"
-log "Catálogo:   $PM2_CAT_NAME (puerto $CATALOGO_PORT)"
 
-# ── 1. Verificar prerrequisitos ───────────────────────────────────────────────
+# ── 1. Prerrequisitos ─────────────────────────────────────────────────────────
 step "Verificando prerrequisitos"
 
-command -v node  >/dev/null 2>&1 || error "node no encontrado. Instala Node.js >= 18"
-command -v npm   >/dev/null 2>&1 || error "npm no encontrado"
-command -v git   >/dev/null 2>&1 || error "git no encontrado"
-command -v pm2   >/dev/null 2>&1 || error "pm2 no encontrado. Instala con: npm i -g pm2"
+command -v docker        >/dev/null 2>&1 || error "docker no encontrado"
+command -v git           >/dev/null 2>&1 || error "git no encontrado"
+docker compose version   >/dev/null 2>&1 || error "docker compose no encontrado (v2 requerido)"
 
-ok "Node: $(node -v)"
-ok "npm:  $(npm -v)"
-ok "pm2:  $(pm2 -v)"
+ok "Docker:         $(docker --version)"
+ok "Docker Compose: $(docker compose version)"
 
-[[ -f "$BACKEND_DIR/.env" ]]  || error "Falta $BACKEND_DIR/.env — créalo con las variables de BD y JWT"
-[[ -f "$FRONTEND_DIR/.env" ]] || warn  "Falta $FRONTEND_DIR/.env — VITE_API_URL puede no estar configurado"
-[[ -f "$CATALOGO_DIR/.env.local" ]] || warn "Falta $CATALOGO_DIR/.env.local — variables del catálogo no configuradas"
+[[ -f "$APP_DIR/.env" ]] || error "Falta $APP_DIR/.env — copia .env.example y complétalo"
 
 # ── 2. Git pull ───────────────────────────────────────────────────────────────
 if [[ "$SKIP_PULL" == false ]]; then
@@ -98,101 +85,62 @@ else
   warn "Omitiendo git pull (--skip-pull)"
 fi
 
-# ── 3. Backend — dependencias + restart PM2 ───────────────────────────────────
-if [[ "$SKIP_BACKEND" == false ]]; then
-  step "Backend — instalando dependencias"
-  cd "$BACKEND_DIR"
+cd "$APP_DIR"
 
-  npm install --omit=dev --no-audit --no-fund
-  ok "Dependencias backend instaladas"
+# ── 3. Base de datos (siempre levantada antes de los servicios) ───────────────
+step "Base de datos"
+docker compose up -d db
+ok "Contenedor db levantado"
 
-  step "Backend — reiniciando con PM2"
-  if pm2 show "$PM2_API_NAME" > /dev/null 2>&1; then
-    pm2 reload "$PM2_API_NAME" --update-env
-    ok "Proceso '$PM2_API_NAME' recargado"
-  else
-    if [[ -f "$BACKEND_DIR/ecosystem.config.js" ]]; then
-      pm2 start "$BACKEND_DIR/ecosystem.config.js" --env production
-    else
-      pm2 start "$BACKEND_DIR/index.js" --name "$PM2_API_NAME"
-    fi
-    pm2 save
-    ok "Proceso '$PM2_API_NAME' iniciado y guardado en PM2"
-  fi
+# ── 4. Rebuild y restart de servicios ────────────────────────────────────────
+SERVICES=()
+[[ "$SKIP_BACKEND"  == false ]] && SERVICES+=("backend")
+[[ "$SKIP_FRONTEND" == false ]] && SERVICES+=("frontend")
+[[ "$SKIP_CATALOGO" == false ]] && SERVICES+=("catalogo")
+
+if [[ ${#SERVICES[@]} -gt 0 ]]; then
+  step "Rebuilding: ${SERVICES[*]}"
+  docker compose up -d --build "${SERVICES[@]}"
+  ok "Servicios reconstruidos y levantados: ${SERVICES[*]}"
 else
-  warn "Omitiendo backend (--skip-backend)"
+  warn "Todos los servicios omitidos con --skip-*"
 fi
 
-# ── 4. Frontend — build Vite (nginx lo sirve directamente) ───────────────────
-if [[ "$SKIP_FRONTEND" == false ]]; then
-  step "Frontend — instalando dependencias"
-  cd "$FRONTEND_DIR"
+# Asegurar que backup esté corriendo (sin rebuild)
+docker compose up -d backup 2>/dev/null || warn "Servicio backup no disponible (¿clonaste agentele_backups en backup/?)"
 
-  npm install --no-audit --no-fund
-  ok "Dependencias frontend instaladas"
-
-  step "Frontend — construyendo (vite build)"
-  npm run build
-  ok "Build generado en $FRONTEND_DIST"
-  ok "Nginx sirve el nuevo build automáticamente"
-else
-  warn "Omitiendo frontend (--skip-frontend)"
-fi
-
-# ── 5. Catálogo Next.js — build + restart PM2 ────────────────────────────────
-if [[ "$SKIP_CATALOGO" == false ]]; then
-  step "Catálogo — instalando dependencias"
-  cd "$CATALOGO_DIR"
-
-  npm install --no-audit --no-fund
-  ok "Dependencias catálogo instaladas"
-
-  step "Catálogo — construyendo (next build)"
-  npm run build
-  ok "Build del catálogo generado"
-
-  step "Catálogo — reiniciando con PM2"
-  if pm2 show "$PM2_CAT_NAME" > /dev/null 2>&1; then
-    pm2 reload "$PM2_CAT_NAME" --update-env
-    ok "Proceso '$PM2_CAT_NAME' recargado"
-  else
-    # next start -p 5174  (definido en package.json como "start")
-    pm2 start npm --name "$PM2_CAT_NAME" -- start
-    pm2 save
-    ok "Proceso '$PM2_CAT_NAME' iniciado y guardado en PM2"
-  fi
-else
-  warn "Omitiendo catálogo (--skip-catalogo)"
-fi
+# ── 5. Limpiar imágenes viejas ────────────────────────────────────────────────
+step "Limpiando imágenes Docker huérfanas"
+docker image prune -f
+ok "Limpieza completada"
 
 # ── 6. Health checks ──────────────────────────────────────────────────────────
 step "Health checks"
-sleep 3  # tiempo para que PM2 levante los procesos
+sleep 5
 
 if curl -sf "http://localhost:$BACKEND_PORT/api/health" >/dev/null 2>&1; then
   ok "Backend responde en :$BACKEND_PORT/api/health"
 elif curl -sf "http://localhost:$BACKEND_PORT" >/dev/null 2>&1; then
   ok "Backend responde en :$BACKEND_PORT"
 else
-  warn "Backend no responde en :$BACKEND_PORT — revisa logs:"
-  warn "  pm2 logs $PM2_API_NAME --lines 30"
+  warn "Backend no responde aún en :$BACKEND_PORT"
+  warn "  docker compose logs --tail=30 backend"
 fi
 
 if curl -sf "http://localhost:$CATALOGO_PORT" >/dev/null 2>&1; then
   ok "Catálogo responde en :$CATALOGO_PORT"
 else
-  warn "Catálogo no responde en :$CATALOGO_PORT — revisa logs:"
-  warn "  pm2 logs $PM2_CAT_NAME --lines 30"
+  warn "Catálogo no responde aún en :$CATALOGO_PORT"
+  warn "  docker compose logs --tail=30 catalogo"
 fi
 
-# ── Resumen final ─────────────────────────────────────────────────────────────
+# ── Resumen ───────────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}${GREEN}══ Deploy completado ══${RESET}"
 echo -e "  Sistema   → https://megaelectra.rusoft.dev"
 echo -e "  Catálogo  → https://bubbasvibes.rusoft.dev"
 echo -e ""
-echo -e "  API logs  → pm2 logs $PM2_API_NAME"
-echo -e "  Cat logs  → pm2 logs $PM2_CAT_NAME"
-echo -e "  Monit     → pm2 monit"
+echo -e "  Ver logs  → docker compose logs -f backend"
+echo -e "  Estado    → docker compose ps"
 echo -e ""
 
-pm2 list
+docker compose ps

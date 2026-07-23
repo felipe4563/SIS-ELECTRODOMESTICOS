@@ -226,6 +226,7 @@ export default function ServicioTecnicoForm() {
             trabajo_realizado:     s.trabajo_realizado ?? '',
             repuestos_usados:      s.repuestos_usados ?? '',
             costo_estimado:        s.costo_estimado ?? '0',
+            costo_final:           s.costo_final ?? '0',
             observaciones:         s.observaciones ?? '',
           });
         })
@@ -527,7 +528,7 @@ export default function ServicioTecnicoForm() {
             </div>
             <div>
               <label className={LABEL}>Costo estimado (Gs.)</label>
-              <input type="number" min="0" step="1000" value={formData.costo_estimado}
+              <input type="number" min="0" step="1" value={formData.costo_estimado}
                 onChange={e => set('costo_estimado', e.target.value)} className={INPUT} />
             </div>
             {esEdicion && (
@@ -549,7 +550,7 @@ export default function ServicioTecnicoForm() {
                 </div>
                 <div>
                   <label className={LABEL}>Costo final (Gs.)</label>
-                  <input type="number" min="0" step="1000" value={formData.costo_final ?? '0'}
+                  <input type="number" min="0" step="1" value={formData.costo_final ?? '0'}
                     onChange={e => set('costo_final', e.target.value)} className={INPUT} />
                 </div>
               </>

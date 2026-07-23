@@ -1,0 +1,104 @@
+services:
+
+  # ── Base de datos ──────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE:      ${DB_NAME}
+      MYSQL_USER:          ${DB_USER}
+      MYSQL_PASSWORD:      ${DB_PASSWORD}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Backend API ────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV:       production
+      PORT:           3001
+      DB_HOST:        db
+      DB_PORT:        3306
+      DB_USER:        ${DB_USER}
+      DB_PASSWORD:    ${DB_PASSWORD}
+      DB_NAME:        ${DB_NAME}
+      JWT_SECRET:     ${JWT_SECRET}
+      BASE_URL:       ${BASE_URL}
+      QR_BASE_URL:    ${QR_BASE_URL}
+      QR_PUBLIC_PATH: ./public/qrcodes
+    volumes:
+      - ./data/uploads:/app/uploads
+      - ./data/qrcodes:/app/public/qrcodes
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ── Frontend (Vite → Nginx estático) ──────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+    networks:
+      - app-net
+
+  # ── Catálogo Next.js SSR ───────────────────────────────────────────────────
+  catalogo:
+    build:
+      context: ./catalogo
+      dockerfile: Dockerfile
+      args:
+        UPLOADS_PROXY_URL: ${UPLOADS_PROXY_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV:          production
+      UPLOADS_PROXY_URL: ${UPLOADS_PROXY_URL}
+    ports:
+      - "127.0.0.1:5174:5174"
+    networks:
+      - app-net
+
+  # ── Backup client (agentele_backups) ──────────────────────────────────────
+  # Clonar primero: git clone https://github.com/felipe4563/agentele_backups.git backup
+  backup:
+    build:
+      context: ./backup/backup_client
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      API_KEY: ${BACKUP_API_KEY}
+    volumes:
+      - ./backup/backup_client/config.yaml:/app/config.yaml:ro
+      - ./data/uploads:/mnt/uploads:ro
+      - ./data/backups:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
