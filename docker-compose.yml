@@ -11,8 +11,6 @@ services:
       MYSQL_PASSWORD:      ${DB_PASSWORD}
     volumes:
       - ./data/mysql:/var/lib/mysql
-    ports:
-      - "127.0.0.1:3306:3306"
     networks:
       - app-net
     healthcheck:
