@@ -124,19 +124,27 @@ export default function Navbar({ empresa }: Props) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logo} alt={nombre}
                   style={{ height: 70, maxWidth: 220, objectFit: 'contain', display: 'block' }} />
-                <span style={{
-                  fontFamily:    'var(--font-headline)',
-                  fontWeight:     800,
-                  fontSize:      '1rem',
-                  color:          'var(--color-txt)',
-                  letterSpacing: '-0.01em',
-                  lineHeight:     1.2,
-                  whiteSpace:    'nowrap',
-                  overflow:      'hidden',
-                  textOverflow:  'ellipsis',
-                  maxWidth:       180,
-                }}>
-                  {nombre}
+                <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                  <span style={{
+                    fontFamily:    'var(--font-headline)',
+                    fontWeight:     800,
+                    fontSize:      '1rem',
+                    color:          'var(--color-txt)',
+                    letterSpacing: '-0.01em',
+                    whiteSpace:    'nowrap',
+                  }}>
+                    MEGA ELECTRA
+                  </span>
+                  <span style={{
+                    fontFamily:    'var(--font-body)',
+                    fontWeight:     500,
+                    fontSize:      '0.65rem',
+                    color:          'var(--color-muted)',
+                    letterSpacing:  '0.04em',
+                    whiteSpace:    'nowrap',
+                  }}>
+                    By Arlet Store
+                  </span>
                 </span>
               </>
             ) : (
