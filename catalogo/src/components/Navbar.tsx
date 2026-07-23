@@ -131,6 +131,10 @@ export default function Navbar({ empresa }: Props) {
                   color:          'var(--color-txt)',
                   letterSpacing: '-0.01em',
                   lineHeight:     1.2,
+                  whiteSpace:    'nowrap',
+                  overflow:      'hidden',
+                  textOverflow:  'ellipsis',
+                  maxWidth:       180,
                 }}>
                   {nombre}
                 </span>
