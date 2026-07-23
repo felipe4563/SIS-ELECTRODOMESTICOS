@@ -7,7 +7,13 @@ const ThemeContext = createContext({
 
 export function ThemeProvider({ children }) {
   const [tema, setTema] = useState(() => {
-    return localStorage.getItem('tema') ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    try {
+      const saved = localStorage.getItem('tema');
+      if (saved) return saved;
+      return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch {
+      return 'dark';
+    }
   });
 
   useEffect(() => {
@@ -17,7 +23,7 @@ export function ThemeProvider({ children }) {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('tema', tema);
+    try { localStorage.setItem('tema', tema); } catch { /* localStorage no disponible */ }
   }, [tema]);
 
   const toggleTema = () =>
