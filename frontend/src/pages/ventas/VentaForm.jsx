@@ -38,7 +38,7 @@ function resolverPromo(prod, promociones) {
   return 0;
 }
 
-function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, onChange, onRemove }) {
+function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, comisionPorc, onChange, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
@@ -50,6 +50,8 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
 
   const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
   const precioBase = resolverPrecio(prod, tipoVenta);
+  const sobreprecio = fila.id_producto ? Math.max(0, Number(fila.precio_unitario) - precioBase) : 0;
+  const comisionMonto = +(sobreprecio * (comisionPorc ?? 0) / 100).toFixed(2);
 
   const disponible = fila.id_producto ? (stockMap[fila.id_producto] ?? 0) : null;
 
@@ -132,7 +134,11 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
         <input
           type="number" min={0} step="0.01" value={fila.precio_unitario}
           onChange={e => onChange({ precio_unitario: e.target.value })}
-          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
+          className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
+            sobreprecio > 0
+              ? 'border-amber-400 focus:ring-amber-400'
+              : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
+          }`}
         />
         <div className="flex items-center justify-between mt-1">
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
@@ -146,6 +152,18 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
             <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
           )}
         </div>
+        {sobreprecio > 0 && (
+          <div className="mt-0.5 space-y-0.5">
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-mono text-right">
+              +{fmtMonto(sobreprecio)} sobre
+            </p>
+            {comisionPorc > 0 && (
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono text-right font-semibold">
+                Com: Bs {fmtMonto(comisionMonto)}
+              </p>
+            )}
+          </div>
+        )}
       </td>
 
       {/* Descuento % */}
@@ -201,7 +219,7 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
   );
 }
 
-function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, onChange, onRemove }) {
+function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, comisionPorc, onChange, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
@@ -213,6 +231,8 @@ function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones
 
   const prod      = productos.find(p => String(p.id_producto) === String(fila.id_producto));
   const precioBase = resolverPrecio(prod, tipoVenta);
+  const sobreprecio = fila.id_producto ? Math.max(0, Number(fila.precio_unitario) - precioBase) : 0;
+  const comisionMonto = +(sobreprecio * (comisionPorc ?? 0) / 100).toFixed(2);
   const disponible = fila.id_producto ? (stockMap[fila.id_producto] ?? 0) : null;
   const base      = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
   const desc      = base * (Number(fila.descuento_porc ?? 0) / 100);
@@ -294,7 +314,11 @@ function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones
           <input
             type="number" min={0} step="0.01" value={fila.precio_unitario}
             onChange={e => onChange({ precio_unitario: e.target.value })}
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
+            className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
+              sobreprecio > 0
+                ? 'border-amber-400 focus:ring-amber-400'
+                : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
+            }`}
           />
           <div className="flex items-center justify-between mt-0.5">
             <span className={`text-[10px] px-1 py-0.5 rounded font-semibold ${
@@ -308,6 +332,18 @@ function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones
               <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
             )}
           </div>
+          {sobreprecio > 0 && (
+            <div className="mt-0.5 space-y-0.5">
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-mono text-right">
+                +{fmtMonto(sobreprecio)} sobre
+              </p>
+              {comisionPorc > 0 && (
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono text-right font-semibold">
+                  Com: Bs {fmtMonto(comisionMonto)}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <div>
           <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Desc %</p>
@@ -631,6 +667,9 @@ export default function VentaForm() {
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const limpiarItems = () => setItems([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+
+  const vendedorActual = vendedores.find(v => String(v.id_usuario) === String(form.id_vendedor));
+  const comisionPorc   = Number(vendedorActual?.porcentaje_comision ?? 0);
 
   const subtotal  = items.reduce((s, it) => {
     const base = Number(it.cantidad ?? 0) * Number(it.precio_unitario ?? 0);
@@ -1027,6 +1066,7 @@ export default function VentaForm() {
               tipoVenta={form.tipo_venta}
               promociones={promociones}
               impuestos={impuestos}
+              comisionPorc={comisionPorc}
               onChange={patch => updateItem(i, patch)}
               onRemove={() => removeItem(i)}
             />
@@ -1077,6 +1117,7 @@ export default function VentaForm() {
                   tipoVenta={form.tipo_venta}
                   promociones={promociones}
                   impuestos={impuestos}
+                  comisionPorc={comisionPorc}
                   onChange={patch => updateItem(i, patch)}
                   onRemove={() => removeItem(i)}
                 />

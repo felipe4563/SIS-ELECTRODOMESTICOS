@@ -321,14 +321,28 @@ const createVenta = async (req, res) => {
     );
     const id_venta = ins.insertId;
 
+    // Porcentaje de comisión del vendedor asignado
+    const id_vendedor_real = id_vendedor || req.user.id_usuario;
+    const [[vendedorComision]] = await db.promise().query(
+      `SELECT porcentaje_comision FROM usuarios WHERE id_usuario = ?`, [id_vendedor_real]
+    );
+    const porcentaje_comision = Number(vendedorComision?.porcentaje_comision ?? 0);
+
     for (const it of items) {
       const [[st]] = await db.promise().query(
         `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [it.id_producto, id_deposito]
       );
       const costo_unitario = Number(st?.costo ?? 0);
-      const [[prod]] = await db.promise().query(`SELECT bono FROM productos WHERE id_producto = ?`, [it.id_producto]);
+      const [[prod]] = await db.promise().query(
+        `SELECT bono, precio_publico, precio_mayor FROM productos WHERE id_producto = ?`, [it.id_producto]
+      );
       const bono_vendedor = Number(prod?.bono ?? 0);
+      const precio_base = +(tipo_venta === 'MAYOR'
+        ? (Number(prod?.precio_mayor) || Number(prod?.precio_publico) || 0)
+        : (Number(prod?.precio_publico) || 0)).toFixed(2);
+      const sobreprecio = Math.max(0, Number(it.precio_unitario) - precio_base);
+      const comision_monto = +(sobreprecio * porcentaje_comision / 100).toFixed(2);
 
       const base = Number(it.cantidad) * Number(it.precio_unitario);
       const desc = base * (Number(it.descuento_porc ?? 0) / 100);
@@ -336,13 +350,13 @@ const createVenta = async (req, res) => {
       const subtotalItem = +(base - desc + imp).toFixed(2);
 
       await db.promise().query(
-        `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, observacion, numero_serie)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id_venta, it.id_producto, it.cantidad, it.precio_unitario,
+        `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
+          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, observacion, numero_serie)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id_venta, it.id_producto, it.cantidad, it.precio_unitario, precio_base,
           it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, it.observacion ?? null,
-          it.numero_serie?.trim() || null]
+          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
+          it.observacion ?? null, it.numero_serie?.trim() || null]
       );
     }
 
@@ -417,7 +431,17 @@ const updateVenta = async (req, res) => {
     );
 
     await db.promise().query(`DELETE FROM venta_detalle WHERE id_venta = ?`, [id]);
-    const [[ventaFull]] = await db.promise().query(`SELECT id_deposito FROM ventas WHERE id_venta = ?`, [id]);
+    const [[ventaFull]] = await db.promise().query(
+      `SELECT id_deposito, id_vendedor, tipo_venta FROM ventas WHERE id_venta = ?`, [id]
+    );
+
+    // Porcentaje de comisión del vendedor (puede haber cambiado en este update)
+    const id_vendedor_up = id_vendedor || ventaFull.id_vendedor;
+    const [[vendedorComisionUp]] = await db.promise().query(
+      `SELECT porcentaje_comision FROM usuarios WHERE id_usuario = ?`, [id_vendedor_up]
+    );
+    const porcentaje_comision_up = Number(vendedorComisionUp?.porcentaje_comision ?? 0);
+    const tipo_venta_up = ventaFull.tipo_venta;
 
     for (const it of items) {
       const [[st]] = await db.promise().query(
@@ -425,8 +449,15 @@ const updateVenta = async (req, res) => {
         [it.id_producto, ventaFull.id_deposito]
       );
       const costo_unitario = Number(st?.costo ?? 0);
-      const [[prod]] = await db.promise().query(`SELECT bono FROM productos WHERE id_producto = ?`, [it.id_producto]);
+      const [[prod]] = await db.promise().query(
+        `SELECT bono, precio_publico, precio_mayor FROM productos WHERE id_producto = ?`, [it.id_producto]
+      );
       const bono_vendedor = Number(prod?.bono ?? 0);
+      const precio_base = +(tipo_venta_up === 'MAYOR'
+        ? (Number(prod?.precio_mayor) || Number(prod?.precio_publico) || 0)
+        : (Number(prod?.precio_publico) || 0)).toFixed(2);
+      const sobreprecio = Math.max(0, Number(it.precio_unitario) - precio_base);
+      const comision_monto = +(sobreprecio * porcentaje_comision_up / 100).toFixed(2);
 
       const base = Number(it.cantidad) * Number(it.precio_unitario);
       const desc = base * (Number(it.descuento_porc ?? 0) / 100);
@@ -434,13 +465,13 @@ const updateVenta = async (req, res) => {
       const subtotalItem = +(base - desc + imp).toFixed(2);
 
       await db.promise().query(
-        `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, observacion, numero_serie)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, it.id_producto, it.cantidad, it.precio_unitario,
+        `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
+          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, observacion, numero_serie)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, it.id_producto, it.cantidad, it.precio_unitario, precio_base,
           it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, it.observacion ?? null,
-          it.numero_serie?.trim() || null]
+          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
+          it.observacion ?? null, it.numero_serie?.trim() || null]
       );
     }
 
@@ -1212,9 +1243,9 @@ const getFormData = async (req, res) => {
        FROM clientes WHERE activo = 1 ORDER BY razon_social, nombres`
     );
 
-    // Vendedores: todos los usuarios activos (para asignación de bonos)
+    // Vendedores: todos los usuarios activos (con % comisión para cálculo en tiempo real)
     const [vendedores] = await db.promise().query(
-      `SELECT id_usuario, CONCAT(nombres, ' ', apellidos) AS nombre_completo
+      `SELECT id_usuario, CONCAT(nombres, ' ', apellidos) AS nombre_completo, porcentaje_comision
        FROM usuarios WHERE activo = 1 ORDER BY nombres, apellidos`
     );
 

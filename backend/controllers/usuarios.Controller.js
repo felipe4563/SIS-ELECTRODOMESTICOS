@@ -9,7 +9,7 @@ const getUsuarios = async (req, res) => {
       SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.email,
              u.telefono, u.documento, u.id_rol, u.id_sucursal_default,
              u.foto_url, u.debe_cambiar_pass, u.ultimo_login, u.activo,
-             u.fecha_creacion,
+             u.porcentaje_comision, u.fecha_creacion,
              r.nombre AS rol_nombre,
              s.nombre AS sucursal_nombre,
              COUNT(DISTINCT us.id_sucursal) AS total_sucursales
@@ -34,6 +34,7 @@ const getUsuario = async (req, res) => {
       SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.email,
              u.telefono, u.documento, u.id_rol, u.id_sucursal_default,
              u.foto_url, u.debe_cambiar_pass, u.ultimo_login, u.activo,
+             u.porcentaje_comision,
              r.nombre AS rol_nombre, s.nombre AS sucursal_nombre
       FROM usuarios u
       JOIN roles r ON r.id_rol = u.id_rol
@@ -107,7 +108,7 @@ const createUsuario = async (req, res) => {
 // PUT /api/usuarios/:id
 const updateUsuario = async (req, res) => {
   const { id } = req.params;
-  const { nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, activo } = req.body;
+  const { nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, activo, porcentaje_comision } = req.body;
 
   if (!nombres?.trim() || !apellidos?.trim() || !id_rol) {
     return res.status(400).json({ error: 'nombres, apellidos y rol son requeridos' });
@@ -137,12 +138,13 @@ const updateUsuario = async (req, res) => {
       }
     }
 
+    const comisionPorc = Math.max(0, Math.min(100, Number(porcentaje_comision ?? 0)));
     await db.promise().query(
       `UPDATE usuarios SET nombres=?, apellidos=?, documento=?, email=?, telefono=?,
-       id_rol=?, id_sucursal_default=?, activo=? WHERE id_usuario=?`,
+       id_rol=?, id_sucursal_default=?, activo=?, porcentaje_comision=? WHERE id_usuario=?`,
       [nombres.trim(), apellidos.trim(), documento?.trim() || null,
        email?.trim() || null, telefono?.trim() || null,
-       id_rol, id_sucursal_default || null, activo ? 1 : 0, id]
+       id_rol, id_sucursal_default || null, activo ? 1 : 0, comisionPorc, id]
     );
 
     const [newRows] = await db.promise().query(
