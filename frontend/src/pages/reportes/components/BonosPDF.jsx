@@ -325,8 +325,9 @@ function BonosDoc({ filas, empresa, logoUrl, desde, hasta }) {
 }
 
 /* ─── Exportador ──────────────────────────────────────────────────────────── */
-export async function exportarBonosPDF({ filtros, empresa, logoUrl }) {
-  const { data } = await reportesService.getBonosVendedoresDetalle(filtros);
+export async function exportarBonosPDF({ filtros, idVendedor, empresa, logoUrl }) {
+  const params = { ...filtros, ...(idVendedor ? { id_vendedor: idVendedor } : {}) };
+  const { data } = await reportesService.getBonosVendedoresDetalle(params);
 
   if (!data || data.length === 0) {
     throw new Error('No hay datos en el período seleccionado para exportar.');

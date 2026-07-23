@@ -28,7 +28,7 @@ export default function RptBonos() {
     setExportando(true);
     setErrorExport('');
     try {
-      await exportarBonosPDF({ filtros, empresa, logoUrl });
+      await exportarBonosPDF({ filtros, idVendedor: idVendedor || null, empresa, logoUrl });
     } catch (e) {
       setErrorExport(e.message || 'Error al generar PDF');
     } finally {

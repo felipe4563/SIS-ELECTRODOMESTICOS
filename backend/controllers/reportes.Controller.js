@@ -459,7 +459,7 @@ async function getEstadoResultados(req, res) {
 async function getBonosVendedoresDetalle(req, res) {
   if (!validarFechas(req.query, res)) return;
   try {
-    const { id_sucursal } = req.query;
+    const { id_sucursal, id_vendedor } = req.query;
     const desde = defaultDesde(req.query);
     const hasta = defaultHasta(req.query);
 
@@ -493,6 +493,7 @@ async function getBonosVendedoresDetalle(req, res) {
     `;
     const params = [desde, hasta];
     if (id_sucursal) { sql += ' AND v.id_sucursal = ?'; params.push(id_sucursal); }
+    if (id_vendedor) { sql += ' AND v.id_vendedor = ?'; params.push(id_vendedor); }
     sql += ' ORDER BY u.apellidos ASC, u.nombres ASC, v.fecha ASC, vd.id_detalle ASC';
 
     const [rows] = await db.promise().query(sql, params);
