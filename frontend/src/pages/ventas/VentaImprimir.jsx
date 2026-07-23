@@ -308,8 +308,6 @@ function TicketA4({ data, logoUrl }) {
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid #d0d0d0', marginBottom: '8px' }} />
-
       {/* ── Tabla de productos ── */}
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '10px' }}>
         <thead>
