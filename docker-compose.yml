@@ -69,6 +69,7 @@ services:
       dockerfile: Dockerfile
       args:
         UPLOADS_PROXY_URL: ${UPLOADS_PROXY_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     restart: unless-stopped
     environment:
       NODE_ENV:          production

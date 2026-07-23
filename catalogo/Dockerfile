@@ -10,6 +10,9 @@ COPY . .
 ARG UPLOADS_PROXY_URL=http://backend:3001
 ENV UPLOADS_PROXY_URL=$UPLOADS_PROXY_URL
 
+ARG NEXT_PUBLIC_API_URL=https://megaelectra.rusoft.dev/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build
 
 # ── Runner ────────────────────────────────────────────────────────────────────
