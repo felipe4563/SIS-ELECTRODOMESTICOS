@@ -23,7 +23,7 @@ function Ticket80({ data, logoUrl }) {
           <img src={logoUrl} alt="Logo" style={{ height: '80px', width: '112px', objectFit: 'contain', flexShrink: 0 }} />
         )}
         <div style={{ flex: 1, minWidth: 0, paddingTop: '2px' }}>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', lineHeight: '1.3', wordBreak: 'break-word', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{empresa}</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', lineHeight: '1.3', wordBreak: 'break-word' }}>{empresa}</div>
           {data.empresa_nit && (
             <div style={{ fontSize: '10px', marginTop: '3px' }}>
               <span style={{ fontWeight: 'bold' }}>NIT:</span> {data.empresa_nit}
@@ -105,7 +105,7 @@ function Ticket110({ data, logoUrl }) {
             <img src={logoUrl} alt="Logo" style={{ height: '64px', width: '90px', objectFit: 'contain', flexShrink: 0 }} />
           )}
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: '1.3', wordBreak: 'break-word' }}>{empresa}</div>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', lineHeight: '1.3', wordBreak: 'break-word' }}>{empresa}</div>
             {data.empresa_nit && <div style={{ fontSize: '9px', marginTop: '2px' }}><span style={{ fontWeight: 'bold' }}>NIT:</span> {data.empresa_nit}</div>}
             {data.sucursal_nombre && <div style={{ fontSize: '9px' }}><span style={{ fontWeight: 'bold' }}>Sucursal:</span> {data.sucursal_nombre}</div>}
             {data.sucursal_direccion && <div style={{ fontSize: '9px' }}><span style={{ fontWeight: 'bold' }}>Dir:</span> {data.sucursal_direccion}</div>}
@@ -237,7 +237,7 @@ function TicketA4({ data, logoUrl }) {
 
         {/* Izquierda: datos empresa */}
         <div>
-          <div style={{ fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1.5px', lineHeight: '1.2', marginBottom: '4px' }}>{empresa}</div>
+          <div style={{ fontSize: '13px', fontWeight: 'bold', lineHeight: '1.2', marginBottom: '4px' }}>{empresa}</div>
           {data.empresa_nit        && <div><strong>NIT:</strong> {data.empresa_nit}</div>}
           {data.sucursal_nombre    && <div><strong>Sucursal:</strong> {data.sucursal_nombre}</div>}
           {data.sucursal_direccion && <div><strong>Dirección:</strong> {data.sucursal_direccion}</div>}
