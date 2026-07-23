@@ -311,7 +311,6 @@ function TicketA4({ data, logoUrl }) {
       <div style={{ borderTop: '1px solid #d0d0d0', marginBottom: '8px' }} />
 
       {/* ── Tabla de productos ── */}
-      <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '4px' }}>Detalle de productos</div>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '10px' }}>
         <thead>
           <tr style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1.5px solid #1a1a1a' }}>
