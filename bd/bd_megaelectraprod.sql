@@ -1605,6 +1605,7 @@ CREATE TABLE `usuarios` (
   `debe_cambiar_pass` tinyint(1) NOT NULL DEFAULT 1,
   `ultimo_login` datetime DEFAULT NULL,
   `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `porcentaje_comision` decimal(5,2) NOT NULL DEFAULT 0.00 COMMENT 'Porcentaje de comisión sobre el sobreprecio de venta',
   `fecha_creacion` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -1690,6 +1691,7 @@ CREATE TABLE `venta_detalle` (
   `id_producto` int(11) NOT NULL,
   `cantidad` decimal(14,2) NOT NULL,
   `precio_unitario` decimal(14,2) NOT NULL,
+  `precio_base` decimal(14,2) NOT NULL DEFAULT 0.00 COMMENT 'Precio publicado del producto al momento de la venta (precio_publico o precio_mayor)',
   `descuento_porc` decimal(5,2) DEFAULT 0.00,
   `descuento_monto` decimal(14,2) DEFAULT 0.00,
   `id_impuesto` int(11) DEFAULT NULL,
@@ -1697,6 +1699,7 @@ CREATE TABLE `venta_detalle` (
   `subtotal` decimal(14,2) NOT NULL,
   `costo_unitario` decimal(14,4) DEFAULT 0.0000 COMMENT 'Costo al momento de venta para rentabilidad',
   `bono_vendedor` decimal(14,2) DEFAULT 0.00,
+  `comision_monto` decimal(14,2) NOT NULL DEFAULT 0.00 COMMENT 'Comisión del vendedor por sobreprecio: (precio_unitario - precio_base) × porcentaje_comision / 100',
   `id_promocion` int(11) DEFAULT NULL COMMENT 'Promoción aplicada al ítem',
   `id_combo` int(11) DEFAULT NULL COMMENT 'Combo asociado',
   `observacion` varchar(255) DEFAULT NULL,
