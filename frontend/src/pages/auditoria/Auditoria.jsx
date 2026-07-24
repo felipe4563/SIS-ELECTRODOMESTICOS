@@ -528,37 +528,15 @@ function TabSesiones() {
 
 // ── Página principal ──────────────────────────────────────────────────────
 export default function Auditoria() {
-  const [tab, setTab] = useState('auditoria');
-
-  const TABS = [
-    { id: 'auditoria', label: 'Log de auditoría' },
-    { id: 'sesiones',  label: 'Sesiones activas' },
-  ];
-
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Auditoría</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Registro de acciones y sesiones del sistema</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Sesiones activas del sistema</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-              tab === t.id
-                ? 'bg-yellow-400 text-zinc-900 shadow-sm'
-                : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800'
-            }`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Panel */}
       <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
-        {tab === 'auditoria' ? <TabAuditoria /> : <TabSesiones />}
+        <TabSesiones />
       </div>
     </div>
   );
