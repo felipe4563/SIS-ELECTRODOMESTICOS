@@ -71,7 +71,6 @@ import Auditoria from './pages/auditoria/Auditoria';
 
 // ── Herramientas ───────────────────────────────────────────────────────────────
 import Herramientas from './pages/herramientas/Herramientas';
-import Backup       from './pages/herramientas/Backup';
 import ExcelImport  from './pages/herramientas/ExcelImport';
 import CatalogoPDF  from './pages/herramientas/CatalogoPDF';
 
@@ -437,9 +436,6 @@ export default function App() {
               {/* ── Herramientas ──────────────────────────────────────── */}
               <Route path="/herramientas" element={
                 <PageRoute action="ver" subject="herramientas"><Herramientas /></PageRoute>
-              } />
-              <Route path="/herramientas/backup" element={
-                <PageRoute action="ver" subject="herramientas"><Backup /></PageRoute>
               } />
               <Route path="/herramientas/excel" element={
                 <PageRoute action="importar_productos" subject="excel"><ExcelImport /></PageRoute>

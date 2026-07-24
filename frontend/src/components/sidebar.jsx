@@ -177,7 +177,6 @@ const MENU = [
     label: 'Herramientas',
     items: [
       { label: 'Herramientas',    path: '/herramientas',              icon: 'tool',     action: 'ver',          subject: 'herramientas' },
-      { label: 'Backup',          path: '/herramientas/backup',       icon: 'database', action: 'descargar',    subject: 'backup' },
       { label: 'Importar Excel',  path: '/herramientas/excel',        icon: 'table',    action: 'importar_productos', subject: 'excel' },
       { label: 'Catálogo PDF',    path: '/herramientas/catalogo-pdf', icon: 'file-pdf', action: 'generar_pdf',  subject: 'catalogo' },
     ],
