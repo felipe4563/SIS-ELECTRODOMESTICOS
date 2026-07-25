@@ -152,18 +152,6 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
             <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
           )}
         </div>
-        {sobreprecio > 0 && (
-          <div className="mt-0.5 space-y-0.5">
-            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-mono text-right">
-              +{fmtMonto(sobreprecio)} sobre
-            </p>
-            {comisionPorc > 0 && (
-              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono text-right font-semibold">
-                Com: Bs {fmtMonto(comisionMonto)}
-              </p>
-            )}
-          </div>
-        )}
       </td>
 
       {/* Descuento % */}
@@ -332,18 +320,6 @@ function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones
               <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
             )}
           </div>
-          {sobreprecio > 0 && (
-            <div className="mt-0.5 space-y-0.5">
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-mono text-right">
-                +{fmtMonto(sobreprecio)} sobre
-              </p>
-              {comisionPorc > 0 && (
-                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono text-right font-semibold">
-                  Com: Bs {fmtMonto(comisionMonto)}
-                </p>
-              )}
-            </div>
-          )}
         </div>
         <div>
           <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Desc %</p>
