@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 
-const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://megaelectra.rusoft.dev';
+const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://appmg.arletgroup.com';
 
 export default function EtiquetasImprimir() {
   const navigate     = useNavigate();

@@ -1418,7 +1418,7 @@ CREATE TABLE `sesiones` (
   `id_sesion` bigint(20) NOT NULL,
   `id_usuario` int(11) NOT NULL,
   `jti` varchar(36) NOT NULL,
-  `token` varchar(512) NOT NULL,
+  `token` text NOT NULL,
   `ip_origen` varchar(45) DEFAULT NULL,
   `user_agent` varchar(255) DEFAULT NULL,
   `fecha_inicio` datetime NOT NULL DEFAULT current_timestamp(),

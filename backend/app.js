@@ -45,8 +45,8 @@ const app = express();
 // ── CORS ──────────────────────────────────────────────────────────────────
 const corsOptions = {
   origin: [
-    'https://megaelectra.rusoft.dev',
-    'https://bubbasvibes.rusoft.dev',
+    'https://appmg.arletgroup.com',
+    'https://megaelectra.arletgroup.com',
     'http://localhost:5173',
     'http://localhost:5174'
   ],

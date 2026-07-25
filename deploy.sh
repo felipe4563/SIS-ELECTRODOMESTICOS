@@ -1,8 +1,8 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # deploy.sh — Deploy automático SIS-ELECTRODOMESTICOS (Docker)
-#   • megaelectra.rusoft.dev   → backend API + frontend Vite
-#   • bubbasvibes.rusoft.dev   → catálogo Next.js 16 (SSR)
+#   • appmg.arletgroup.com        → backend API + frontend Vite
+#   • megaelectra.arletgroup.com  → catálogo Next.js 16 (SSR)
 #
 # Uso:  bash deploy.sh [--skip-pull] [--skip-frontend] [--skip-backend] [--skip-catalogo]
 # ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ CATALOGO_PORT=5174
 BRANCH="main"
 
 echo -e "\n${BOLD}╔══════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║   DEPLOY — megaelectra + bubbasvibes      ║${RESET}"
+echo -e "${BOLD}║   DEPLOY — appmg + megaelectra.arletgroup ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 log "Directorio: $APP_DIR"
 log "Fecha:      $(date '+%Y-%m-%d %H:%M:%S')"
@@ -136,8 +136,8 @@ fi
 
 # ── Resumen ───────────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}${GREEN}══ Deploy completado ══${RESET}"
-echo -e "  Sistema   → https://megaelectra.rusoft.dev"
-echo -e "  Catálogo  → https://bubbasvibes.rusoft.dev"
+echo -e "  Sistema   → https://appmg.arletgroup.com"
+echo -e "  Catálogo  → https://megaelectra.arletgroup.com"
 echo -e ""
 echo -e "  Ver logs  → docker compose logs -f backend"
 echo -e "  Estado    → docker compose ps"
