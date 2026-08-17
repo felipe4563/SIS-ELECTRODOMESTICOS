@@ -504,7 +504,7 @@ export default function CotizacionForm() {
               <option value="">— seleccionar —</option>
               {clientes.map(c => (
                 <option key={c.id_cliente} value={c.id_cliente}>
-                  [{c.codigo}] {c.razon_social || `${c.nombres} ${c.apellidos}`}
+                  [{c.codigo}] {c.razon_social || [c.nombres, c.apellidos].filter(Boolean).join(' ')}
                 </option>
               ))}
             </select>

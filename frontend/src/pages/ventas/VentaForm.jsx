@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { cajaService } from '../../services/caja.service';
+import { clientesService } from '../../services/clientes.service';
 import api from '../../api/axios';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,10 +43,11 @@ function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, im
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
-    !busqueda ||
-    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (p.codigo_barras || '').includes(busqueda)
+    ((stockMap[p.id_producto] ?? 0) >= 1 || String(p.id_producto) === String(fila.id_producto)) &&
+    (!busqueda ||
+      p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
+      p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (p.codigo_barras || '').includes(busqueda))
   );
 
   const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
@@ -211,10 +213,11 @@ function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
-    !busqueda ||
-    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (p.codigo_barras || '').includes(busqueda)
+    ((stockMap[p.id_producto] ?? 0) >= 1 || String(p.id_producto) === String(fila.id_producto)) &&
+    (!busqueda ||
+      p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
+      p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (p.codigo_barras || '').includes(busqueda))
   );
 
   const prod      = productos.find(p => String(p.id_producto) === String(fila.id_producto));
@@ -449,10 +452,17 @@ export default function VentaForm() {
   const [mostrarEscaner, setMostrarEscaner] = useState(false);
   const qrTimerRef = useRef(null);
 
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+
   const [modalRapido, setModalRapido] = useState(false);
   const [rpForm, setRpForm]   = useState({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
   const [rpError, setRpError] = useState('');
   const [rpGuardando, setRpGuardando] = useState(false);
+
+  const [modalClienteRapido, setModalClienteRapido] = useState(false);
+  const [rcForm, setRcForm]   = useState({ nombre: '', documento: '', telefono: '', habilitarCredito: false, limite_credito: '', dias_credito: '' });
+  const [rcError, setRcError] = useState('');
+  const [rcGuardando, setRcGuardando] = useState(false);
 
   useEffect(() => {
     if (!esEdicion) {
@@ -726,6 +736,44 @@ export default function VentaForm() {
     }
   }, [rpForm, form.tipo_venta]);
 
+  const setRc = (k, v) => setRcForm(p => ({ ...p, [k]: v }));
+
+  const guardarClienteRapido = useCallback(async () => {
+    setRcError('');
+    const { nombre, documento, telefono, habilitarCredito, limite_credito, dias_credito } = rcForm;
+    if (!nombre.trim()) return setRcError('El nombre es requerido');
+    if (habilitarCredito && !(Number(limite_credito) > 0)) {
+      return setRcError('Ingresá un límite de crédito válido');
+    }
+    setRcGuardando(true);
+    try {
+      const res = await clientesService.create({
+        nombres: nombre.trim(),
+        documento: documento.trim() || undefined,
+        telefono: telefono.trim() || undefined,
+      });
+      let nuevoCliente = res.data.cliente;
+
+      if (habilitarCredito) {
+        const resCredito = await clientesService.updateCredito(nuevoCliente.id_cliente, {
+          permite_credito: true,
+          limite_credito: Number(limite_credito),
+          dias_credito: Number(dias_credito) || 0,
+        });
+        nuevoCliente = { ...nuevoCliente, ...resCredito.data.credito };
+      }
+
+      setClientes(prev => [...prev, nuevoCliente]);
+      setF('id_cliente', String(nuevoCliente.id_cliente));
+      setModalClienteRapido(false);
+      setRcForm({ nombre: '', documento: '', telefono: '', habilitarCredito: false, limite_credito: '', dias_credito: '' });
+    } catch (err) {
+      setRcError(err.response?.data?.error ?? 'Error al crear cliente');
+    } finally {
+      setRcGuardando(false);
+    }
+  }, [rcForm]);
+
   const inputCls = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-shadow';
   const monedaSel = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
 
@@ -872,14 +920,41 @@ export default function VentaForm() {
           {/* Fila 2: Cliente + Condición pago + Moneda + Tipo cambio */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="sm:col-span-2 lg:col-span-2">
-              <FieldLabel>Cliente *</FieldLabel>
+              <div className="flex items-center justify-between mb-1.5">
+                <FieldLabel>Cliente *</FieldLabel>
+                <button
+                  type="button"
+                  onClick={() => setModalClienteRapido(true)}
+                  className="text-[11px] px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
+                >
+                  + Cliente rápido
+                </button>
+              </div>
+              <input
+                type="text" value={busquedaCliente} onChange={e => setBusquedaCliente(e.target.value)}
+                placeholder="Buscar por CI, nombre o código…"
+                className="w-full mb-1.5 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 focus:bg-white dark:focus:bg-zinc-800"
+              />
               <select value={form.id_cliente} onChange={e => setF('id_cliente', e.target.value)} className={inputCls}>
                 <option value="">— seleccionar cliente —</option>
-                {clientes.map(c => (
-                  <option key={c.id_cliente} value={c.id_cliente}>
-                    [{c.codigo}] {c.razon_social || `${c.nombres} ${c.apellidos}`}
-                  </option>
-                ))}
+                {clientes
+                  .filter(c => {
+                    if (!busquedaCliente.trim()) return true;
+                    const q = busquedaCliente.toLowerCase();
+                    return (
+                      (c.documento ?? '').toLowerCase().includes(q) ||
+                      (c.nombres ?? '').toLowerCase().includes(q) ||
+                      (c.apellidos ?? '').toLowerCase().includes(q) ||
+                      (c.razon_social ?? '').toLowerCase().includes(q) ||
+                      (c.codigo ?? '').toLowerCase().includes(q)
+                    );
+                  })
+                  .slice(0, 50)
+                  .map(c => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      [{c.codigo}] {c.razon_social || [c.nombres, c.apellidos].filter(Boolean).join(' ')}
+                    </option>
+                  ))}
               </select>
               {clienteInfo && (
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -1252,6 +1327,92 @@ export default function VentaForm() {
               </button>
               <button
                 onClick={() => { setModalRapido(false); setRpError(''); }}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Modal cliente rápido ── */}
+      {modalClienteRapido && (
+        <Modal titulo="Agregar cliente rápido" onClose={() => { setModalClienteRapido(false); setRcError(''); }}>
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-400">El cliente se creará como minorista. Direcciones, email y demás datos se completan luego desde el módulo Clientes.</p>
+
+            <div>
+              <FieldLabel>Nombre / Razón social *</FieldLabel>
+              <input
+                type="text" value={rcForm.nombre} onChange={e => setRc('nombre', e.target.value)}
+                placeholder="Ej: Juan Pérez"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel>Documento</FieldLabel>
+                <input type="text" value={rcForm.documento}
+                  onChange={e => setRc('documento', e.target.value)}
+                  placeholder="Opcional" className={inputCls} />
+              </div>
+              <div>
+                <FieldLabel>Teléfono</FieldLabel>
+                <input type="text" value={rcForm.telefono}
+                  onChange={e => setRc('telefono', e.target.value)}
+                  placeholder="Opcional" className={inputCls} />
+              </div>
+            </div>
+
+            {puede('dar_credito', 'clientes') && (
+              <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group mt-3">
+                  <input
+                    type="checkbox" checked={rcForm.habilitarCredito}
+                    onChange={e => setRc('habilitarCredito', e.target.checked)}
+                    className="w-4 h-4 rounded accent-yellow-400"
+                  />
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+                    Habilitar crédito
+                  </span>
+                </label>
+
+                {rcForm.habilitarCredito && (
+                  <div className="grid grid-cols-2 gap-3 mt-3 pl-6 border-l-2 border-yellow-400/30 ml-1.5">
+                    <div>
+                      <FieldLabel>Límite de crédito *</FieldLabel>
+                      <input type="number" min={0} step="0.01" value={rcForm.limite_credito}
+                        onChange={e => setRc('limite_credito', e.target.value)}
+                        className={inputCls} />
+                    </div>
+                    <div>
+                      <FieldLabel>Días de crédito</FieldLabel>
+                      <input type="number" min={0} value={rcForm.dias_credito}
+                        onChange={e => setRc('dias_credito', e.target.value)}
+                        placeholder="0" className={inputCls} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {rcError && (
+              <p className="text-sm text-red-500 flex items-center gap-1.5">
+                <span>⚠</span> {rcError}
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={guardarClienteRapido} disabled={rcGuardando}
+                className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
+              >
+                {rcGuardando ? 'Creando…' : 'Crear y seleccionar'}
+              </button>
+              <button
+                onClick={() => { setModalClienteRapido(false); setRcError(''); }}
                 className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancelar
