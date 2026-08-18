@@ -27,7 +27,7 @@ async function generarNumero() {
 const getFormData = async (req, res) => {
   try {
     const [[categorias], [sucursales], [monedas]] = await Promise.all([
-      db.promise().query('SELECT * FROM categorias_gasto WHERE activo = 1 ORDER BY nombre'),
+      db.promise().query('SELECT * FROM categorias_gasto WHERE activo = 1 ORDER BY id_categoria_gasto'),
       db.promise().query('SELECT id_sucursal, nombre FROM sucursales WHERE activo = 1 ORDER BY nombre'),
       db.promise().query('SELECT id_moneda, nombre, simbolo, es_moneda_base FROM monedas WHERE activo = 1 ORDER BY es_moneda_base DESC, nombre'),
     ]);
@@ -43,7 +43,7 @@ const getCategorias = async (req, res) => {
     let sql = 'SELECT * FROM categorias_gasto';
     const params = [];
     if (activo !== undefined) { sql += ' WHERE activo = ?'; params.push(activo); }
-    sql += ' ORDER BY nombre';
+    sql += ' ORDER BY id_categoria_gasto';
     const [rows] = await db.promise().query(sql, params);
     res.json({ categorias: rows });
   } catch (e) { res.status(500).json({ mensaje: e.message }); }
@@ -192,15 +192,22 @@ const crearGasto = async (req, res) => {
       return res.status(400).json({ mensaje: `Número de comprobante requerido para gastos ≥ ${montoMin}` });
     }
 
+    // Si el usuario tiene un turno de caja abierto, el gasto queda atado a ese arqueo
+    // (igual que los cobros de venta) — así el arqueo puede mostrarlo/descontarlo con precisión.
+    const [[arqueoActivo]] = await db.promise().query(
+      `SELECT id_arqueo FROM arqueos_caja WHERE id_usuario = ? AND estado = 'ABIERTA' ORDER BY fecha_apertura DESC LIMIT 1`,
+      [req.user.id_usuario]
+    );
+
     const numero = await generarNumero();
     const [result] = await db.promise().query(`
       INSERT INTO gastos
-        (numero, id_categoria_gasto, id_sucursal, id_proveedor, descripcion,
+        (numero, id_categoria_gasto, id_sucursal, id_arqueo, id_proveedor, descripcion,
          fecha, id_moneda, tipo_cambio, monto, metodo_pago, numero_comprobante,
          id_usuario, observaciones)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
-      numero, id_categoria_gasto, id_sucursal, id_proveedor || null, descripcion.trim(),
+      numero, id_categoria_gasto, id_sucursal, arqueoActivo?.id_arqueo ?? null, id_proveedor || null, descripcion.trim(),
       fecha, id_moneda, tipo_cambio || 1, monto, metodo_pago, numero_comprobante || null,
       req.user.id_usuario, observaciones || null,
     ]);

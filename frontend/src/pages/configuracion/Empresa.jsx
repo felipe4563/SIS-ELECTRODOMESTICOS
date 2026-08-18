@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FaBuilding, FaSave, FaSpinner, FaCamera } from 'react-icons/fa';
+import { FaBuilding, FaSave, FaSpinner, FaCamera, FaTrash } from 'react-icons/fa';
 import { empresaService } from '../../services/configuracion.service';
 import { useEmpresa, buildLogoUrl } from '../../contexts/EmpresaContext';
 import { usePermission } from '../../hooks/usePermission';
@@ -96,6 +96,25 @@ export default function Empresa() {
     }
   };
 
+  const handleQuitarLogo = async () => {
+    if (!empresa || !window.confirm('¿Quitar el logo de la empresa?')) return;
+    setSubiendo(true);
+    setError(null);
+    try {
+      const { data } = await empresaService.deleteLogo(empresa.id_empresa);
+      setEmpresa(data.empresa ?? null);
+      setForm(data.empresa ?? {});
+      setEmpresaCtx?.(data.empresa);
+      recargar?.();
+      if (blobRef.current) { URL.revokeObjectURL(blobRef.current); blobRef.current = null; }
+      setLogoPreview(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al quitar el logo');
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
   if (cargando) return (
     <div className="flex items-center justify-center h-64 text-gray-400 dark:text-zinc-500">
       <FaSpinner className="animate-spin h-6 w-6 mr-2" /> Cargando...
@@ -153,7 +172,7 @@ export default function Empresa() {
             <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Logo de la empresa</p>
             <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">Se usa en comprobantes, facturas y el menú lateral. PNG o JPG, máx. 5 MB.</p>
             {puedeEditar && empresa && (
-              <>
+              <div className="flex items-center gap-2">
                 <input
                   ref={fileRef}
                   type="file"
@@ -170,7 +189,18 @@ export default function Empresa() {
                   <FaCamera className="h-3 w-3" />
                   {subiendo ? 'Subiendo…' : 'Cambiar logo'}
                 </button>
-              </>
+                {empresa.logo_url && (
+                  <button
+                    type="button"
+                    disabled={subiendo}
+                    onClick={handleQuitarLogo}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 hover:border-red-300 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+                  >
+                    <FaTrash className="h-3 w-3" />
+                    Quitar
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

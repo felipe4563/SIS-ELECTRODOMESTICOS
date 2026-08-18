@@ -731,7 +731,8 @@ exports.getCatalogoSucursales = async (req, res) => {
 
 exports.generarCatalogoPDF = async (req, res) => {
   try {
-    const { id_marca, id_categoria, id_sucursal } = req.query;
+    const { id_marca, id_categoria, id_sucursal, mostrar_mayor } = req.query;
+    const mostrarMayor = mostrar_mayor !== '0' && mostrar_mayor !== 'false';
 
     let where = 'p.activo = 1';
     const params = [];
@@ -798,9 +799,9 @@ exports.generarCatalogoPDF = async (req, res) => {
     // Columns — widths sum to CW (523): 60+200+78+76+46+63 = 523
     const cols = [
       { label: 'Código',                w: 60,  align: 'left',  bold: false },
-      { label: 'Producto / Descripción',w: 200, align: 'left',  bold: false },
+      { label: 'Producto / Descripción',w: mostrarMayor ? 200 : 276, align: 'left',  bold: false },
       { label: 'P. Público',            w: 78,  align: 'right', bold: true  },
-      { label: 'P. Mayor',              w: 76,  align: 'right', bold: true  },
+      ...(mostrarMayor ? [{ label: 'P. Mayor', w: 76, align: 'right', bold: true }] : []),
       { label: 'Bono',                  w: 46,  align: 'right', bold: false },
       { label: 'Stock',                 w: 63,  align: 'right', bold: true  },
     ];
@@ -932,7 +933,7 @@ exports.generarCatalogoPDF = async (req, res) => {
       // Cols 2-5: prices and stock, vertically centered
       const priceVals = [
         { v: fmtBs(p.precio_publico), color: '#0f766e', bold: true  },
-        { v: fmtBs(p.precio_mayor),   color: '#1d4ed8', bold: true  },
+        ...(mostrarMayor ? [{ v: fmtBs(p.precio_mayor), color: '#1d4ed8', bold: true }] : []),
         { v: Number(p.bono) > 0 ? fmtBs(p.bono) : '—', color: Number(p.bono) > 0 ? '#b45309' : '#94a3b8', bold: false },
         { v: String(p.stock_total),    color: '#1e293b', bold: true  },
       ];

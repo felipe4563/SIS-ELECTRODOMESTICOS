@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { transferenciasService } from '../../services/transferencias.service';
 import { usePermission }          from '../../hooks/usePermission';
+import { useEmpresa }             from '../../contexts/EmpresaContext';
+import { descargarTransferenciaPDF } from './TransferenciaImprimir';
 
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO') : '—';
 const fmtCant  = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -32,6 +34,7 @@ export default function TransferenciaDetalle() {
   const { id }    = useParams();
   const navigate  = useNavigate();
   const { puede } = usePermission();
+  const { empresa, logoUrl } = useEmpresa();
 
   const [trf,      setTrf]      = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -40,6 +43,7 @@ export default function TransferenciaDetalle() {
   const [recvItems, setRecvItems] = useState([]);
   const [procesando, setProcesando] = useState(false);
   const [error,    setError]    = useState('');
+  const [descargando, setDescargando] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -113,6 +117,17 @@ export default function TransferenciaDetalle() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={async () => {
+              setDescargando(true);
+              try { await descargarTransferenciaPDF(id, empresa, logoUrl); }
+              finally { setDescargando(false); }
+            }}
+            disabled={descargando}
+            className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-60 font-semibold text-sm transition-colors"
+          >
+            {descargando ? 'Generando…' : 'Comprobante PDF'}
+          </button>
           {trf.estado === 'SOLICITADA' && puedeEnviar && (
             <button onClick={() => setModal('enviar')}
               className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">

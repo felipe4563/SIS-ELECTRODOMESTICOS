@@ -7,17 +7,69 @@ import { usePermission } from '../../hooks/usePermission';
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 
+/* ─── Íconos mínimos (outline, consistentes con el resto de la app) ──────── */
+function Ic({ id, size = 15, className = '' }) {
+  const paths = {
+    ticket:  <path d="M3 9a2 2 0 002-2V6a2 2 0 00-2-2v0a2 2 0 00-2 2v1a2 2 0 002 2zm0 0a2 2 0 00-2 2v1a2 2 0 002 2v0a2 2 0 002-2v-1a2 2 0 00-2-2M8 6h13M8 12h13M8 18h13M3 15a2 2 0 002 2v0a2 2 0 002-2v-1a2 2 0 00-2-2 2 2 0 00-2 2z" />,
+    clock:   <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></>,
+    cash:    <><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="3" /><path d="M6 6v0M18 6v0M6 18v0M18 18v0" /></>,
+    alert:   <><path d="M12 9v4M12 17h.01" /><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></>,
+    plus:    <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
+    search:  <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
+    empty:   <path d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />,
+  };
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size}
+      fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      className={className} aria-hidden="true">
+      {paths[id]}
+    </svg>
+  );
+}
+
 const ESTADO_BADGE = {
-  BORRADOR:  { label: 'Borrador',  cls: 'bg-zinc-100  text-zinc-600  dark:bg-zinc-800  dark:text-zinc-400' },
-  EMITIDA:   { label: 'Emitida',   cls: 'bg-blue-100  text-blue-700  dark:bg-blue-900/30  dark:text-blue-400' },
-  PAGADA:    { label: 'Pagada',    cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  PARCIAL:   { label: 'Parcial',   cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500' },
-  ANULADA:   { label: 'Anulada',   cls: 'bg-red-100   text-red-700   dark:bg-red-900/30   dark:text-red-400' },
-  DEVUELTA:  { label: 'Devuelta',  cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+  BORRADOR:  { label: 'Borrador',  cls: 'bg-zinc-100  text-zinc-600  dark:bg-zinc-800  dark:text-zinc-400',  accent: 'bg-zinc-300 dark:bg-zinc-600',  chipOn: 'bg-zinc-700 text-white dark:bg-zinc-300 dark:text-zinc-900' },
+  EMITIDA:   { label: 'Emitida',   cls: 'bg-blue-100  text-blue-700  dark:bg-blue-900/30  dark:text-blue-400',   accent: 'bg-blue-400',   chipOn: 'bg-blue-500 text-white' },
+  PAGADA:    { label: 'Pagada',    cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', accent: 'bg-green-400',  chipOn: 'bg-green-500 text-white' },
+  PARCIAL:   { label: 'Parcial',   cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500', accent: 'bg-yellow-400', chipOn: 'bg-yellow-500 text-zinc-900' },
+  ANULADA:   { label: 'Anulada',   cls: 'bg-red-100   text-red-700   dark:bg-red-900/30   dark:text-red-400',   accent: 'bg-red-400',    chipOn: 'bg-red-500 text-white' },
+  DEVUELTA:  { label: 'Devuelta',  cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', accent: 'bg-purple-400', chipOn: 'bg-purple-500 text-white' },
 };
 
 const HOY    = new Date().toISOString().slice(0, 10);
 const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+
+/* ─── Chip de filtro de estado ────────────────────────────────────────────── */
+function ChipEstado({ label, activo, colorOn, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+        activo
+          ? `${colorOn} shadow-sm`
+          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ─── Tarjeta de estadística estilo POS ──────────────────────────────────── */
+function StatTile({ icon, iconCls, label, value, sub, valueCls = 'text-zinc-900 dark:text-white' }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-start gap-3">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconCls}`}>
+        <Ic id={icon} size={17} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">{label}</p>
+        <p className={`text-xl font-bold font-mono leading-tight ${valueCls}`}>{value}</p>
+        <p className="text-[11px] text-zinc-400 mt-0.5">{sub}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function Ventas() {
   const navigate = useNavigate();
@@ -72,13 +124,14 @@ export default function Ventas() {
             onClick={() => !sinCaja && navigate('/ventas/nueva')}
             disabled={sinCaja}
             title={sinCaja ? 'Debes abrir una caja antes de realizar ventas' : undefined}
-            className={`self-start sm:self-auto px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${
+            className={`self-start sm:self-auto inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-sm ${
               sinCaja
                 ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
                 : 'bg-yellow-400 hover:bg-yellow-500 text-zinc-900'
             }`}
           >
-            + Nueva venta
+            <Ic id="plus" size={16} />
+            Nueva venta
           </button>
         )}
       </div>
@@ -96,56 +149,57 @@ export default function Ventas() {
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-0.5">
-            <div className="w-0.5 h-4 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-            <p className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Total ventas</p>
-          </div>
-          <p className="text-2xl font-bold text-zinc-900 dark:text-white font-mono">{ventas.length}</p>
-          <p className="text-xs text-zinc-400">en el período</p>
-        </div>
-
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-0.5">
-            <div className="w-0.5 h-4 rounded-full bg-blue-400" />
-            <p className="text-[11px] font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wide">Emitidas</p>
-          </div>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">{emitidas}</p>
-          <p className="text-xs text-zinc-400">pendientes de cobro</p>
-        </div>
-
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-0.5">
-            <div className="w-0.5 h-4 rounded-full bg-green-400" />
-            <p className="text-[11px] font-semibold text-green-600 dark:text-green-400 uppercase tracking-wide">Total Bs</p>
-          </div>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400 font-mono">{fmtMonto(totalMonto)}</p>
-          <p className="text-xs text-zinc-400">facturado total</p>
-        </div>
-
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-0.5">
-            <div className="w-0.5 h-4 rounded-full bg-yellow-400" />
-            <p className="text-[11px] font-semibold text-yellow-600 dark:text-yellow-500 uppercase tracking-wide">Por cobrar Bs</p>
-          </div>
-          <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400 font-mono">{fmtMonto(pendiente)}</p>
-          <p className="text-xs text-zinc-400">saldo pendiente</p>
-        </div>
+        <StatTile
+          icon="ticket" iconCls="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+          label="Total ventas" value={ventas.length} sub="en el período"
+        />
+        <StatTile
+          icon="clock" iconCls="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+          label="Emitidas" value={emitidas} sub="pendientes de cobro"
+          valueCls="text-blue-600 dark:text-blue-400"
+        />
+        <StatTile
+          icon="cash" iconCls="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+          label="Total Bs" value={fmtMonto(totalMonto)} sub="facturado total"
+          valueCls="text-green-600 dark:text-green-400"
+        />
+        <StatTile
+          icon="alert" iconCls="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-500"
+          label="Por cobrar Bs" value={fmtMonto(pendiente)} sub="saldo pendiente"
+          valueCls="text-yellow-600 dark:text-yellow-400"
+        />
       </div>
 
       {/* ── Filtros ── */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <select value={filtros.estado} onChange={e => setF('estado', e.target.value)} className={inputCls}>
-            <option value="">Todos los estados</option>
-            {Object.entries(ESTADO_BADGE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-3">
 
-          <select value={filtros.tipo_venta} onChange={e => setF('tipo_venta', e.target.value)} className={inputCls}>
-            <option value="">Menor y mayor</option>
-            <option value="MENOR">Al por menor</option>
-            <option value="MAYOR">Al por mayor</option>
-          </select>
+        {/* Chips de estado */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 sidebar-scroll">
+          <ChipEstado label="Todos" activo={filtros.estado === ''} colorOn="bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" onClick={() => setF('estado', '')} />
+          {Object.entries(ESTADO_BADGE).map(([k, v]) => (
+            <ChipEstado key={k} label={v.label} activo={filtros.estado === k} colorOn={v.chipOn} onClick={() => setF('estado', k)} />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl gap-1">
+            {[
+              { v: '',      label: 'Menor y mayor' },
+              { v: 'MENOR', label: 'Menor' },
+              { v: 'MAYOR', label: 'Mayor' },
+            ].map(opt => (
+              <button
+                key={opt.v} onClick={() => setF('tipo_venta', opt.v)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filtros.tipo_venta === opt.v
+                    ? 'bg-yellow-400 text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
           <div className="relative">
             <label className="absolute -top-2 left-3 text-[10px] font-semibold text-zinc-400 bg-white dark:bg-zinc-900 px-1 uppercase tracking-wide">Desde</label>
@@ -158,12 +212,15 @@ export default function Ventas() {
           </div>
 
           <div className="flex gap-2">
-            <input
-              type="text" placeholder="Buscar número, cliente…" value={filtros.q}
-              onChange={e => setF('q', e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && cargar()}
-              className={`flex-1 ${inputCls}`}
-            />
+            <div className="relative flex-1">
+              <Ic id="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+              <input
+                type="text" placeholder="Buscar número, cliente…" value={filtros.q}
+                onChange={e => setF('q', e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && cargar()}
+                className={`pl-9 ${inputCls}`}
+              />
+            </div>
             <button
               onClick={cargar}
               className="px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors flex-shrink-0"
@@ -183,9 +240,7 @@ export default function Ventas() {
           </div>
         ) : ventas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-2 text-zinc-400">
-            <svg className="w-10 h-10 text-zinc-300 dark:text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-            </svg>
+            <Ic id="empty" size={40} className="text-zinc-300 dark:text-zinc-700" />
             <p className="text-sm font-medium">Sin ventas para estos filtros</p>
             <p className="text-xs">Ajustá el rango de fechas o los filtros</p>
           </div>
@@ -196,6 +251,7 @@ export default function Ventas() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                    <th className="w-1" />
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Número</th>
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Cliente</th>
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Tipo</th>
@@ -208,7 +264,7 @@ export default function Ventas() {
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                   {ventas.map(v => {
-                    const badge = ESTADO_BADGE[v.estado] ?? { label: v.estado, cls: 'bg-zinc-100 text-zinc-600' };
+                    const badge = ESTADO_BADGE[v.estado] ?? { label: v.estado, cls: 'bg-zinc-100 text-zinc-600', accent: 'bg-zinc-300' };
                     const clienteNombre = v.cliente_razon || `${v.cliente_nombres ?? ''} ${v.cliente_apellidos ?? ''}`.trim();
                     return (
                       <tr
@@ -216,6 +272,9 @@ export default function Ventas() {
                         className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors cursor-pointer group"
                         onClick={() => navigate(`/ventas/${v.id_venta}`)}
                       >
+                        <td className="p-0">
+                          <div className={`w-1 h-full min-h-[52px] ${badge.accent}`} />
+                        </td>
                         <td className="px-4 py-3 font-mono font-semibold text-zinc-900 dark:text-white text-sm">
                           {v.numero}
                         </td>
@@ -261,51 +320,54 @@ export default function Ventas() {
               </table>
             </div>
 
-            {/* Vista lista — mobile y tablet */}
+            {/* Vista lista — mobile y tablet, estilo ticket */}
             <div className="lg:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
               {ventas.map(v => {
-                const badge = ESTADO_BADGE[v.estado] ?? { label: v.estado, cls: 'bg-zinc-100 text-zinc-600' };
+                const badge = ESTADO_BADGE[v.estado] ?? { label: v.estado, cls: 'bg-zinc-100 text-zinc-600', accent: 'bg-zinc-300' };
                 const clienteNombre = v.cliente_razon || `${v.cliente_nombres ?? ''} ${v.cliente_apellidos ?? ''}`.trim();
                 const tienePendiente = Number(v.saldo_pendiente) > 0;
                 return (
                   <div
                     key={v.id_venta}
-                    className="px-4 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 active:bg-zinc-100 dark:active:bg-zinc-800 transition-colors cursor-pointer"
+                    className="flex active:bg-zinc-100 dark:active:bg-zinc-800 transition-colors cursor-pointer"
                     onClick={() => navigate(`/ventas/${v.id_venta}`)}
                   >
-                    {/* Fila superior: número + badges + total */}
-                    <div className="flex items-start justify-between gap-3 mb-1.5">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className="font-mono font-bold text-zinc-900 dark:text-white text-sm shrink-0">
-                          {v.numero}
-                        </span>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${badge.cls}`}>
-                          {badge.label}
-                        </span>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
-                          v.tipo_venta === 'MAYOR'
-                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
-                            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
-                        }`}>
-                          {v.tipo_venta === 'MAYOR' ? 'Mayor' : 'Menor'}
-                        </span>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono font-bold text-zinc-900 dark:text-white text-sm leading-tight">
-                          Bs {fmtMonto(v.total)}
-                        </p>
-                        {tienePendiente && (
-                          <p className="text-[11px] font-mono text-yellow-600 dark:text-yellow-400 font-semibold leading-tight">
-                            Pend. {fmtMonto(v.saldo_pendiente)}
+                    <div className={`w-1 shrink-0 ${badge.accent}`} />
+                    <div className="flex-1 min-w-0 px-4 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                      {/* Fila superior: número + badges + total */}
+                      <div className="flex items-start justify-between gap-3 mb-1.5">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <span className="font-mono font-bold text-zinc-900 dark:text-white text-sm shrink-0">
+                            {v.numero}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                            v.tipo_venta === 'MAYOR'
+                              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
+                              : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                          }`}>
+                            {v.tipo_venta === 'MAYOR' ? 'Mayor' : 'Menor'}
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-mono font-bold text-zinc-900 dark:text-white text-sm leading-tight">
+                            Bs {fmtMonto(v.total)}
                           </p>
-                        )}
+                          {tienePendiente && (
+                            <p className="text-[11px] font-mono text-yellow-600 dark:text-yellow-400 font-semibold leading-tight">
+                              Pend. {fmtMonto(v.saldo_pendiente)}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Fila inferior: cliente + fecha */}
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm text-zinc-700 dark:text-zinc-300 font-medium truncate">{clienteNombre}</p>
-                      <p className="text-xs text-zinc-400 shrink-0">{fmtFecha(v.fecha)}</p>
+                      {/* Fila inferior: cliente + fecha */}
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300 font-medium truncate">{clienteNombre}</p>
+                        <p className="text-xs text-zinc-400 shrink-0">{fmtFecha(v.fecha)}</p>
+                      </div>
                     </div>
                   </div>
                 );

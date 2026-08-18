@@ -12,4 +12,7 @@ export const cajaService = {
   getArqueo:    (id)         => api.get(`/caja/arqueos/${id}`),
   abrirCaja:  (id, data) => api.post(`/caja/${id}/abrir`, data),
   cerrarCaja: (id, data) => api.post(`/caja/arqueos/${id}/cerrar`, data),
+
+  // Libro Caja
+  getLibroCaja: (params) => api.get('/caja/libro-caja', { params }),
 };

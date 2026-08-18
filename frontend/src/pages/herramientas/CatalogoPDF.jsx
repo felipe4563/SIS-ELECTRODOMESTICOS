@@ -6,6 +6,7 @@ export default function CatalogoPDF() {
   const [categorias,  setCategorias]  = useState([]);
   const [sucursales,  setSucursales]  = useState([]);
   const [filtros,     setFiltros]     = useState({ id_marca: '', id_categoria: '', id_sucursal: '' });
+  const [mostrarMayor, setMostrarMayor] = useState(true);
   const [generando,   setGenerando]   = useState(false);
   const [error,       setError]       = useState(null);
 
@@ -25,7 +26,7 @@ export default function CatalogoPDF() {
     setGenerando(true);
     setError(null);
     try {
-      const res = await svc.getCatalogoPDF(filtros);
+      const res = await svc.getCatalogoPDF({ ...filtros, mostrar_mayor: mostrarMayor ? '1' : '0' });
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -73,7 +74,7 @@ export default function CatalogoPDF() {
           </div>
           <span className="ml-2 text-xs text-zinc-400 font-mono">catalogo.pdf</span>
           <span className="ml-auto text-xs text-zinc-500 hidden sm:block">
-            Código · Producto · P.Público · P.Mayor · Bono · Stock
+            Código · Producto · P.Público{mostrarMayor ? ' · P.Mayor' : ''} · Bono · Stock
           </span>
         </div>
         <div className="bg-white dark:bg-zinc-800 p-4 space-y-2">
@@ -98,7 +99,7 @@ export default function CatalogoPDF() {
               <div className="h-1 w-24 bg-zinc-300 dark:bg-zinc-500 rounded flex-shrink-0" />
               <div className="h-1 flex-1" />
               <div className="h-1 w-12 bg-teal-400/60 rounded flex-shrink-0" />
-              <div className="h-1 w-10 bg-blue-400/60 rounded flex-shrink-0" />
+              {mostrarMayor && <div className="h-1 w-10 bg-blue-400/60 rounded flex-shrink-0" />}
               <div className="h-1 w-8 bg-zinc-400/60 rounded flex-shrink-0" />
             </div>
           ))}
@@ -173,6 +174,17 @@ export default function CatalogoPDF() {
               </select>
             </div>
           </div>
+
+          <label className="mt-4 flex items-center gap-2.5 cursor-pointer select-none w-fit group">
+            <input
+              type="checkbox" checked={mostrarMayor}
+              onChange={e => setMostrarMayor(e.target.checked)}
+              className="w-4 h-4 rounded accent-amber-400"
+            />
+            <span className="text-sm text-zinc-600 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+              Mostrar precio por mayor en el PDF
+            </span>
+          </label>
         </div>
 
         {/* Active filter chips */}

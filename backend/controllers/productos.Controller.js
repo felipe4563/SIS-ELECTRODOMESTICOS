@@ -67,7 +67,7 @@ const getFormData = async (req, res) => {
 const getProductos = async (req, res) => {
   try {
     const q      = req.query.q?.trim() ?? '';
-    const limit  = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 500);
+    const limit  = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 5000);
     const page   = Math.max(parseInt(req.query.page) || 1, 1);
     const offset = (page - 1) * limit;
 

@@ -1182,7 +1182,8 @@ const getFormData = async (req, res) => {
     const [productos] = await db.promise().query(
       `SELECT p.id_producto, p.codigo_interno, p.codigo_barras,
               p.producto, p.precio_publico, p.precio_mayor, p.precio_real,
-              p.id_categoria, p.id_marca, p.id_impuesto_default, p.activo
+              p.id_categoria, p.id_marca, p.id_impuesto_default, p.activo,
+              p.imagen_url
        FROM productos p
        WHERE p.activo = 1
        ORDER BY p.producto

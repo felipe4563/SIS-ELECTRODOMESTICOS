@@ -3,8 +3,9 @@ import { AuthProvider }    from './contexts/AuthContext';
 import { AbilityProvider } from './contexts/AbilityContext';
 import { ThemeProvider }   from './contexts/ThemeContext';
 import { EmpresaProvider } from './contexts/EmpresaContext';
+import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import ProtectedRoute      from './components/ProtectedRoute';
-import Sidebar             from './components/sidebar';
+import Sidebar, { BotonAbrirSidebar } from './components/sidebar';
 
 // ── Páginas públicas ─────────────────────────────────────────────────────
 import Login              from './pages/Login';
@@ -62,6 +63,7 @@ import Gastos from './pages/gastos/Gastos';
 // ── Caja ─────────────────────────────────────────────────────────────────────
 import Caja          from './pages/caja/Caja';
 import ArqueoDetalle from './pages/caja/ArqueoDetalle';
+import LibroCaja     from './pages/caja/LibroCaja';
 
 // ── Reportes ──────────────────────────────────────────────────────────────────
 import Reportes from './pages/reportes/Reportes';
@@ -111,14 +113,23 @@ import Impuestos   from './pages/configuracion/Impuestos';
 
 // ── Layout ───────────────────────────────────────────────────────────────
 function AppLayout({ children }) {
+  const { colapsado } = useSidebar();
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 dark:bg-zinc-950 transition-colors duration-300">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-gray-100 dark:bg-zinc-950 transition-colors duration-300">
-        <div className="pt-16 lg:pt-0 px-4 sm:px-6 py-4 sm:py-6 min-h-full">
-          {children}
-        </div>
-      </main>
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Fila real (no superpuesta) con el botón para reabrir el sidebar colapsado — solo desktop */}
+        {colapsado && (
+          <div className="hidden lg:flex items-center h-14 px-4 shrink-0 border-b border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 transition-colors duration-300">
+            <BotonAbrirSidebar />
+          </div>
+        )}
+        <main className="flex-1 overflow-y-auto bg-gray-100 dark:bg-zinc-950 transition-colors duration-300">
+          <div className="pt-16 lg:pt-0 px-4 sm:px-6 py-4 sm:py-6 min-h-full">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
@@ -139,6 +150,7 @@ export default function App() {
         <AuthProvider>
           <AbilityProvider>
             <EmpresaProvider>
+            <SidebarProvider>
             <Routes>
 
               {/* Rutas públicas */}
@@ -422,6 +434,9 @@ export default function App() {
               <Route path="/caja/arqueos/:id" element={
                 <PageRoute action="ver_arqueo_propio" subject="caja"><ArqueoDetalle /></PageRoute>
               } />
+              <Route path="/caja/libro" element={
+                <PageRoute action="ver_libro" subject="caja"><LibroCaja /></PageRoute>
+              } />
 
               {/* ── Reportes ─────────────────────────────────────────── */}
               <Route path="/reportes" element={
@@ -454,6 +469,7 @@ export default function App() {
               <Route path="*"  element={<NotFound />} />
 
             </Routes>
+            </SidebarProvider>
             </EmpresaProvider>
           </AbilityProvider>
         </AuthProvider>

@@ -10,6 +10,7 @@ export const empresaService = {
     fd.append('logo', file);
     return api.post(`/empresa/${id}/logo`, fd);
   },
+  deleteLogo: (id)         => api.delete(`/empresa/${id}/logo`),
 };
 
 export const sucursalesService = {

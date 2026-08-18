@@ -5,6 +5,7 @@ import {
   StyleSheet as PDFStyleSheet, PDFDownloadLink,
 } from '@react-pdf/renderer';
 import { cajaService } from '../../services/caja.service';
+import { gastosService } from '../../services/gastos.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useEmpresa } from '../../contexts/EmpresaContext';
 
@@ -306,6 +307,151 @@ function ResumenCajaPDF({ arqueo, empresa, logoUrl, cobros, gastos, pagosCompra,
   );
 }
 
+// ── Modal gasto rápido (imprevistos durante el turno) ────────────────────
+function ModalGastoRapido({ arqueo, onClose, onSuccess }) {
+  const HOY = new Date().toISOString().slice(0, 10);
+
+  const [categorias, setCategorias] = useState([]);
+  const [monedaBase, setMonedaBase] = useState(null);
+  const [cargandoCat, setCargandoCat] = useState(true);
+  const [mostrarCategoria, setMostrarCategoria] = useState(false);
+
+  const [form, setForm] = useState({
+    id_categoria_gasto: '',
+    descripcion: '',
+    monto: '',
+    metodo_pago: 'EFECTIVO',
+    numero_comprobante: '',
+  });
+  const [cargando, setCargando] = useState(false);
+  const [error,    setError]    = useState('');
+
+  useEffect(() => {
+    gastosService.getFormData()
+      .then(({ data }) => {
+        const cats = (data.categorias ?? []).filter(c => c.activo);
+        setCategorias(cats);
+        setForm(p => ({ ...p, id_categoria_gasto: cats[0]?.id_categoria_gasto ?? '' }));
+        setMonedaBase((data.monedas ?? []).find(m => m.es_moneda_base) ?? data.monedas?.[0] ?? null);
+      })
+      .catch(() => {})
+      .finally(() => setCargandoCat(false));
+  }, []);
+
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleGuardar = async () => {
+    setError('');
+    if (!form.id_categoria_gasto) return setError('Elegí una categoría');
+    if (!form.descripcion.trim()) return setError('Ingresá una descripción');
+    if (!(Number(form.monto) > 0)) return setError('Ingresá un monto válido');
+    if (!monedaBase) return setError('No hay moneda configurada');
+
+    setCargando(true);
+    try {
+      await gastosService.crearGasto({
+        id_categoria_gasto: form.id_categoria_gasto,
+        id_sucursal: arqueo.id_sucursal,
+        descripcion: form.descripcion.trim(),
+        fecha: HOY,
+        id_moneda: monedaBase.id_moneda,
+        monto: form.monto,
+        metodo_pago: form.metodo_pago,
+        numero_comprobante: form.numero_comprobante.trim() || undefined,
+      });
+      onSuccess();
+    } catch (e) {
+      setError(e.response?.data?.mensaje ?? 'Error al registrar el gasto');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const inputCls = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Registrar gasto</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{arqueo.caja} — {arqueo.sucursal}</p>
+        </div>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
+        {mostrarCategoria ? (
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Categoría *</label>
+            <select
+              value={form.id_categoria_gasto} onChange={e => setF('id_categoria_gasto', e.target.value)}
+              disabled={cargandoCat} className={inputCls}
+            >
+              {categorias.map(c => <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>)}
+            </select>
+          </div>
+        ) : (
+          !cargandoCat && categorias.length > 1 && (
+            <button type="button" onClick={() => setMostrarCategoria(true)}
+              className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-yellow-600 dark:hover:text-yellow-400 underline underline-offset-2">
+              Categoría: {categorias.find(c => String(c.id_categoria_gasto) === String(form.id_categoria_gasto))?.nombre ?? '—'} (cambiar)
+            </button>
+          )
+        )}
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Descripción *</label>
+          <input
+            type="text" value={form.descripcion} onChange={e => setF('descripcion', e.target.value)}
+            placeholder="Ej: Taxi para entrega urgente" className={inputCls} autoFocus
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Monto (Bs) *</label>
+            <input
+              type="number" min={0} step="0.01" value={form.monto}
+              onChange={e => setF('monto', e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Método</label>
+            <select value={form.metodo_pago} onChange={e => setF('metodo_pago', e.target.value)} className={inputCls}>
+              {['EFECTIVO', 'TRANSFERENCIA', 'QR', 'CHEQUE', 'TARJETA', 'OTRO'].map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">N° Comprobante</label>
+          <input
+            type="text" value={form.numero_comprobante} onChange={e => setF('numero_comprobante', e.target.value)}
+            placeholder="Opcional" className={inputCls}
+          />
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={handleGuardar} disabled={cargando || cargandoCat}
+            className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
+            {cargando ? 'Guardando…' : 'Registrar gasto'}
+          </button>
+          <button onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Modal cierre ──────────────────────────────────────────────────────────
 function ModalCerrar({ arqueo, provisional, onClose, onSuccess }) {
   const [montoReal, setMontoReal] = useState(provisional != null ? String(provisional.toFixed(2)) : '');
@@ -500,6 +646,7 @@ export default function ArqueoDetalle() {
   const { empresa, logoUrl } = useEmpresa() ?? {};
 
   const puedoCerrar = puede('cerrar', 'caja');
+  const puedoRegistrarGasto = puede('crear', 'gastos');
 
   const [data,     setData]     = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -604,6 +751,12 @@ export default function ArqueoDetalle() {
             className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
             Volver
           </Link>
+          {esAbierta && puedoRegistrarGasto && (
+            <button onClick={() => setModal('gasto')}
+              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+              + Registrar gasto
+            </button>
+          )}
           {esAbierta && puedoCerrar && (
             <button onClick={() => setModal('cerrar')}
               className="px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors">
@@ -820,6 +973,14 @@ export default function ArqueoDetalle() {
           />
         )}
       </div>
+
+      {modal === 'gasto' && (
+        <ModalGastoRapido
+          arqueo={arqueo}
+          onClose={() => setModal(null)}
+          onSuccess={() => { setModal(null); cargar(); }}
+        />
+      )}
 
       {modal === 'cerrar' && (
         <ModalCerrar

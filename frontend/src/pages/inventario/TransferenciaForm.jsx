@@ -15,6 +15,14 @@ function FilaItem({ fila, productos, stockOrigen, onChange, onRemove }) {
     p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase())
   );
 
+  // Aseguramos que el producto ya seleccionado en la fila siempre tenga su <option>,
+  // aunque no esté entre los primeros 60 ni coincida con la búsqueda actual.
+  const opciones = filtrados.slice(0, 60);
+  if (fila.id_producto && !opciones.some(p => String(p.id_producto) === String(fila.id_producto))) {
+    const seleccionado = productos.find(p => String(p.id_producto) === String(fila.id_producto));
+    if (seleccionado) opciones.unshift(seleccionado);
+  }
+
   const disponible   = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
   const excede       = disponible !== null && Number(fila.cantidad) > disponible;
   const sinStock     = disponible !== null && disponible <= 0;
@@ -36,7 +44,7 @@ function FilaItem({ fila, productos, stockOrigen, onChange, onRemove }) {
           className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
         >
           <option value="">— seleccionar producto —</option>
-          {filtrados.slice(0, 60).map(p => (
+          {opciones.map(p => (
             <option key={p.id_producto} value={p.id_producto}>
               [{p.codigo_interno}] {p.producto}
             </option>
@@ -106,6 +114,12 @@ function FilaItemCard({ fila, productos, stockOrigen, onChange, onRemove }) {
     p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase())
   );
 
+  const opciones = filtrados.slice(0, 60);
+  if (fila.id_producto && !opciones.some(p => String(p.id_producto) === String(fila.id_producto))) {
+    const seleccionado = productos.find(p => String(p.id_producto) === String(fila.id_producto));
+    if (seleccionado) opciones.unshift(seleccionado);
+  }
+
   const disponible = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
   const excede     = disponible !== null && Number(fila.cantidad) > disponible;
   const sinStock   = disponible !== null && disponible <= 0;
@@ -127,7 +141,7 @@ function FilaItemCard({ fila, productos, stockOrigen, onChange, onRemove }) {
           className="w-full px-2.5 py-2 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
         >
           <option value="">— seleccionar producto —</option>
-          {filtrados.slice(0, 60).map(p => (
+          {opciones.map(p => (
             <option key={p.id_producto} value={p.id_producto}>
               [{p.codigo_interno}] {p.producto}
             </option>
@@ -215,6 +229,22 @@ export default function TransferenciaForm() {
   const removeItem = i  => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
 
+  // Agregar un producto desde la lista de "stock disponible en origen"
+  const agregarProducto = (p) => {
+    setItems(prev => {
+      const idx = prev.findIndex(it => String(it.id_producto) === String(p.id_producto));
+      if (idx >= 0) {
+        const disp = stockOrigen[String(p.id_producto)] ?? Infinity;
+        if (Number(prev[idx].cantidad) >= disp) return prev;
+        return prev.map((it, i) => i === idx ? { ...it, cantidad: Number(it.cantidad) + 1 } : it);
+      }
+      const vacio = prev.findIndex(it => !it.id_producto);
+      const nuevaFila = { id_producto: String(p.id_producto), cantidad: 1 };
+      if (vacio >= 0) return prev.map((it, i) => i === vacio ? nuevaFila : it);
+      return [...prev, nuevaFila];
+    });
+  };
+
   // Resumen de items con stock válido
   const itemsValidos = items.filter(it => it.id_producto && Number(it.cantidad) > 0);
   const hayExcesos   = itemsValidos.some(it => {
@@ -258,6 +288,11 @@ export default function TransferenciaForm() {
     }))
     .filter(p => p.id_producto)
     .sort((a, b) => b.disponible - a.disponible);
+
+  const cantidadesSeleccionadas = items.reduce((acc, it) => {
+    if (it.id_producto) acc[it.id_producto] = (acc[it.id_producto] ?? 0) + Number(it.cantidad || 0);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -364,7 +399,9 @@ export default function TransferenciaForm() {
                 Stock disponible en origen
               </p>
               {depositoOrigen && (
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{depositoOrigen.nombre}</p>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+                  {depositoOrigen.nombre} · tocá un producto para agregarlo a la transferencia
+                </p>
               )}
             </div>
             {cargandoStock && (
@@ -382,15 +419,30 @@ export default function TransferenciaForm() {
             <>
               {/* Móvil */}
               <div className="md:hidden divide-y divide-zinc-50 dark:divide-zinc-800">
-                {productosConStock.map(p => (
-                  <div key={p.id_producto} className="flex items-center justify-between px-4 py-2.5 gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm text-zinc-800 dark:text-zinc-200 truncate">{p.producto}</p>
-                      <p className="text-[11px] font-mono text-zinc-400">{p.codigo_interno}</p>
-                    </div>
-                    <span className="font-mono font-semibold text-green-600 dark:text-green-400 shrink-0">{fmtNum(p.disponible)}</span>
-                  </div>
-                ))}
+                {productosConStock.map(p => {
+                  const enCarrito = cantidadesSeleccionadas[p.id_producto] ?? 0;
+                  return (
+                    <button
+                      key={p.id_producto}
+                      type="button"
+                      onClick={() => agregarProducto(p)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 gap-3 text-left hover:bg-yellow-50 dark:hover:bg-yellow-900/10 active:bg-yellow-100 dark:active:bg-yellow-900/20 transition-colors"
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        {enCarrito > 0 && (
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center">
+                            {enCarrito}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm text-zinc-800 dark:text-zinc-200 truncate">{p.producto}</p>
+                          <p className="text-[11px] font-mono text-zinc-400">{p.codigo_interno}</p>
+                        </div>
+                      </div>
+                      <span className="font-mono font-semibold text-green-600 dark:text-green-400 shrink-0">{fmtNum(p.disponible)}</span>
+                    </button>
+                  );
+                })}
               </div>
               {/* Desktop */}
               <div className="hidden md:block overflow-x-auto">
@@ -400,18 +452,36 @@ export default function TransferenciaForm() {
                       <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Producto</th>
                       <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Código</th>
                       <th className="text-right px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Disponible</th>
+                      <th className="w-10" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800">
-                    {productosConStock.map(p => (
-                      <tr key={p.id_producto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">{p.producto}</td>
-                        <td className="px-4 py-2 font-mono text-xs text-zinc-400">{p.codigo_interno}</td>
-                        <td className="px-4 py-2 text-right font-mono font-semibold text-green-600 dark:text-green-400">
-                          {fmtNum(p.disponible)}
-                        </td>
-                      </tr>
-                    ))}
+                    {productosConStock.map(p => {
+                      const enCarrito = cantidadesSeleccionadas[p.id_producto] ?? 0;
+                      return (
+                        <tr
+                          key={p.id_producto}
+                          onClick={() => agregarProducto(p)}
+                          className="cursor-pointer hover:bg-yellow-50 dark:hover:bg-yellow-900/10 transition-colors"
+                        >
+                          <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">
+                            <span className="flex items-center gap-2">
+                              {enCarrito > 0 && (
+                                <span className="shrink-0 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center">
+                                  {enCarrito}
+                                </span>
+                              )}
+                              {p.producto}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 font-mono text-xs text-zinc-400">{p.codigo_interno}</td>
+                          <td className="px-4 py-2 text-right font-mono font-semibold text-green-600 dark:text-green-400">
+                            {fmtNum(p.disponible)}
+                          </td>
+                          <td className="px-4 py-2 text-center text-yellow-500 font-bold">+</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

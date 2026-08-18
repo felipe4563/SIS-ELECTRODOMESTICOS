@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { cajaService } from '../../services/caja.service';
@@ -9,6 +9,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import EscanerQR from '../../components/EscanerQR';
 
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+
+const RC_FORM_VACIO = { nombre: '', telefono: '', direccion: '', ciudad: '', habilitarCredito: false, limite_credito: '', dias_credito: '' };
+
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const buildImgUrl = (url) =>
+  !url ? null : url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
 
 // Resuelve el precio según tipo de venta con fallback: mayor→publico→real | publico→real
 function resolverPrecio(prod, tipoVenta) {
@@ -39,330 +45,169 @@ function resolverPromo(prod, promociones) {
   return 0;
 }
 
-function FilaItem({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, comisionPorc, onChange, onRemove }) {
-  const [busqueda, setBusqueda] = useState('');
-
-  const filtrados = productos.filter(p =>
-    ((stockMap[p.id_producto] ?? 0) >= 1 || String(p.id_producto) === String(fila.id_producto)) &&
-    (!busqueda ||
-      p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (p.codigo_barras || '').includes(busqueda))
-  );
-
-  const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
-  const precioBase = resolverPrecio(prod, tipoVenta);
-  const sobreprecio = fila.id_producto ? Math.max(0, Number(fila.precio_unitario) - precioBase) : 0;
-  const comisionMonto = +(sobreprecio * (comisionPorc ?? 0) / 100).toFixed(2);
-
-  const disponible = fila.id_producto ? (stockMap[fila.id_producto] ?? 0) : null;
-
-  const base     = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
-  const desc     = base * (Number(fila.descuento_porc ?? 0) / 100);
-  const imp      = (base - desc) * (Number(fila.impuesto_porc ?? 0) / 100);
-  const subtotal = +(base - desc + imp).toFixed(2);
-
-  const promoPorc = prod ? resolverPromo(prod, promociones) : 0;
-
+/* ─── Íconos mínimos ──────────────────────────────────────────────────────── */
+function Ic({ id, size = 15, className = '' }) {
+  const paths = {
+    package: <><path d="M16.5 9.4l-9-5.21" /><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></>,
+    cart:    <><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" /></>,
+    plus:    <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
+    minus:   <line x1="5" y1="12" x2="19" y2="12" />,
+    trash:   <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m5-3h4a1 1 0 011 1v2H9V4a1 1 0 011-1z" /></>,
+    tune:    <><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></>,
+    chevron: <polyline points="6 9 12 15 18 9" />,
+    search:  <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
+    camera:  <><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></>,
+  };
   return (
-    <tr className="border-b border-zinc-100 dark:border-zinc-800/80 align-top hover:bg-zinc-50/40 dark:hover:bg-zinc-800/20 transition-colors">
-      {/* Producto */}
-      <td className="px-4 py-2.5 min-w-[220px]">
-        <input
-          type="text" placeholder="Filtrar…" value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          className="w-full mb-1 px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 focus:bg-white dark:focus:bg-zinc-800"
-        />
-        <select
-          value={fila.id_producto}
-          onChange={e => {
-            const id  = e.target.value;
-            const p   = productos.find(x => String(x.id_producto) === id);
-            const precio = resolverPrecio(p, tipoVenta);
-            const descPromo = resolverPromo(p, promociones);
-            const impDef = p?.id_impuesto_default
-              ? impuestos.find(i => String(i.id_impuesto) === String(p.id_impuesto_default))
-              : impuestos.find(i => i.es_default);
-            onChange({
-              id_producto: id, precio_unitario: precio, descuento_porc: descPromo,
-              id_impuesto: impDef ? String(impDef.id_impuesto) : '',
-              impuesto_porc: impDef ? Number(impDef.porcentaje) : 0,
-            });
-          }}
-          className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
-        >
-          <option value="">— seleccionar —</option>
-          {filtrados.slice(0, 50).map(p => (
-            <option key={p.id_producto} value={p.id_producto}>
-              [{p.codigo_interno}] {p.producto}
-            </option>
-          ))}
-        </select>
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          {disponible !== null && (
-            <span className={`text-[10px] font-medium ${disponible <= 0 ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
-              Stock: {fmtMonto(disponible)}
-            </span>
-          )}
-          {promoPorc > 0 && fila.id_producto && (
-            <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
-              Promo −{promoPorc}%
-            </span>
-          )}
-        </div>
-        {/* N° de serie */}
-        {fila.id_producto && (
-          <input
-            type="text"
-            placeholder="N° de serie (opcional)"
-            value={fila.numero_serie ?? ''}
-            onChange={e => onChange({ numero_serie: e.target.value })}
-            className="mt-1.5 w-full px-2 py-1 text-[11px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
-          />
-        )}
-      </td>
-
-      {/* Cantidad */}
-      <td className="px-3 py-2.5 w-24">
-        <input
-          type="number" min={1} step="1" value={fila.cantidad}
-          onChange={e => onChange({ cantidad: Math.max(1, parseInt(e.target.value) || 1) })}
-          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
-        />
-      </td>
-
-      {/* Precio */}
-      <td className="px-3 py-2.5 w-32">
-        <input
-          type="number" min={0} step="0.01" value={fila.precio_unitario}
-          onChange={e => onChange({ precio_unitario: e.target.value })}
-          className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
-            sobreprecio > 0
-              ? 'border-amber-400 focus:ring-amber-400'
-              : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
-          }`}
-        />
-        <div className="flex items-center justify-between mt-1">
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-            tipoVenta === 'MAYOR'
-              ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
-          }`}>
-            {tipoVenta === 'MAYOR' ? 'MAYOR' : 'PVP'}
-          </span>
-          {precioBase > 0 && (
-            <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
-          )}
-        </div>
-      </td>
-
-      {/* Descuento % */}
-      <td className="px-3 py-2.5 w-20">
-        <input
-          type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
-          onChange={e => onChange({ descuento_porc: e.target.value })}
-          className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
-            Number(fila.descuento_porc) > 0
-              ? 'border-green-400 focus:ring-green-400 text-green-700 dark:text-green-400 font-semibold'
-              : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
-          }`}
-        />
-        {Number(fila.descuento_porc) > 0 && promoPorc > 0 && (
-          <p className="text-[10px] text-green-600 dark:text-green-400 text-center mt-0.5">auto</p>
-        )}
-      </td>
-
-      {/* Impuesto */}
-      <td className="px-3 py-2.5 w-36">
-        <select
-          value={fila.id_impuesto ?? ''}
-          onChange={e => {
-            const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
-            onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
-          }}
-          className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
-        >
-          <option value="">Sin imp.</option>
-          {impuestos.map(i => (
-            <option key={i.id_impuesto} value={i.id_impuesto}>
-              {i.codigo} ({Number(i.porcentaje).toFixed(0)}%)
-            </option>
-          ))}
-        </select>
-      </td>
-
-      {/* Subtotal */}
-      <td className="px-3 py-2.5 w-32 text-right font-mono text-sm font-semibold text-zinc-900 dark:text-white align-middle">
-        Bs {fmtMonto(subtotal)}
-      </td>
-
-      {/* Eliminar */}
-      <td className="px-3 py-2.5 w-10 text-center align-middle">
-        <button
-          onClick={onRemove}
-          className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-base leading-none"
-        >
-          ×
-        </button>
-      </td>
-    </tr>
+    <svg viewBox="0 0 24 24" width={size} height={size}
+      fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"
+      className={className} aria-hidden="true">
+      {paths[id]}
+    </svg>
   );
 }
 
-function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones, impuestos, comisionPorc, onChange, onRemove }) {
-  const [busqueda, setBusqueda] = useState('');
-
-  const filtrados = productos.filter(p =>
-    ((stockMap[p.id_producto] ?? 0) >= 1 || String(p.id_producto) === String(fila.id_producto)) &&
-    (!busqueda ||
-      p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (p.codigo_barras || '').includes(busqueda))
-  );
-
-  const prod      = productos.find(p => String(p.id_producto) === String(fila.id_producto));
-  const precioBase = resolverPrecio(prod, tipoVenta);
-  const sobreprecio = fila.id_producto ? Math.max(0, Number(fila.precio_unitario) - precioBase) : 0;
-  const comisionMonto = +(sobreprecio * (comisionPorc ?? 0) / 100).toFixed(2);
-  const disponible = fila.id_producto ? (stockMap[fila.id_producto] ?? 0) : null;
-  const base      = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
-  const desc      = base * (Number(fila.descuento_porc ?? 0) / 100);
-  const imp       = (base - desc) * (Number(fila.impuesto_porc ?? 0) / 100);
-  const subtotal  = +(base - desc + imp).toFixed(2);
-  const promoPorc = prod ? resolverPromo(prod, promociones) : 0;
+/* ─── Tile de producto (grilla estilo POS) ───────────────────────────────── */
+function ProductoTile({ prod, disponible, promoPorc, enCarrito, onClick }) {
+  const [errImg, setErrImg] = useState(false);
+  const img = buildImgUrl(prod.imagen_url);
 
   return (
-    <div className="px-4 py-3 space-y-3 border-b border-zinc-100 dark:border-zinc-800">
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Producto {index + 1}</span>
-          <button onClick={onRemove} className="text-zinc-400 hover:text-red-500 text-xl leading-none transition-colors">×</button>
-        </div>
-        <input
-          type="text" placeholder="Filtrar…" value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-        />
-        <select
-          value={fila.id_producto}
-          onChange={e => {
-            const id = e.target.value;
-            const p  = productos.find(x => String(x.id_producto) === id);
-            const precio    = resolverPrecio(p, tipoVenta);
-            const descPromo = resolverPromo(p, promociones);
-            const impDef = p?.id_impuesto_default
-              ? impuestos.find(i => String(i.id_impuesto) === String(p.id_impuesto_default))
-              : impuestos.find(i => i.es_default);
-            onChange({
-              id_producto: id, precio_unitario: precio, descuento_porc: descPromo,
-              id_impuesto: impDef ? String(impDef.id_impuesto) : '',
-              impuesto_porc: impDef ? Number(impDef.porcentaje) : 0,
-            });
-          }}
-          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
-        >
-          <option value="">— seleccionar producto —</option>
-          {filtrados.slice(0, 50).map(p => (
-            <option key={p.id_producto} value={p.id_producto}>
-              [{p.codigo_interno}] {p.producto}
-            </option>
-          ))}
-        </select>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {disponible !== null && (
-            <span className={`text-[10px] font-medium ${disponible <= 0 ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
-              Stock: {fmtMonto(disponible)}
-            </span>
-          )}
-          {promoPorc > 0 && fila.id_producto && (
-            <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
-              Promo −{promoPorc}%
-            </span>
-          )}
-        </div>
-        {fila.id_producto && (
-          <input
-            type="text"
-            placeholder="N° de serie (opcional)"
-            value={fila.numero_serie ?? ''}
-            onChange={e => onChange({ numero_serie: e.target.value })}
-            className="w-full px-2.5 py-1.5 text-[11px] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
-          />
+    <button
+      onClick={onClick}
+      className="relative flex flex-col items-stretch text-left bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:border-yellow-400 dark:hover:border-yellow-400 hover:shadow-md active:scale-[0.98] transition-all overflow-hidden group"
+    >
+      {enCarrito > 0 && (
+        <span className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center shadow">
+          {enCarrito}
+        </span>
+      )}
+      {promoPorc > 0 && (
+        <span className="absolute top-1.5 left-1.5 z-10 text-[9px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+          −{promoPorc}%
+        </span>
+      )}
+      <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
+        {img && !errImg ? (
+          <img src={img} alt={prod.producto} className="w-full h-full object-cover" onError={() => setErrImg(true)} />
+        ) : (
+          <Ic id="package" size={28} className="text-zinc-300 dark:text-zinc-600" />
         )}
       </div>
-
-      <div className="grid grid-cols-2 gap-2.5">
-        <div>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Cantidad</p>
-          <input
-            type="number" min={1} step="1" value={fila.cantidad}
-            onChange={e => onChange({ cantidad: Math.max(1, parseInt(e.target.value) || 1) })}
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
-          />
-        </div>
-        <div>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Precio unit.</p>
-          <input
-            type="number" min={0} step="0.01" value={fila.precio_unitario}
-            onChange={e => onChange({ precio_unitario: e.target.value })}
-            className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
-              sobreprecio > 0
-                ? 'border-amber-400 focus:ring-amber-400'
-                : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
-            }`}
-          />
-          <div className="flex items-center justify-between mt-0.5">
-            <span className={`text-[10px] px-1 py-0.5 rounded font-semibold ${
-              tipoVenta === 'MAYOR'
-                ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
-            }`}>
-              {tipoVenta === 'MAYOR' ? 'MAYOR' : 'PVP'}
-            </span>
-            {precioBase > 0 && (
-              <span className="text-[10px] text-zinc-400">Base: {fmtMonto(precioBase)}</span>
-            )}
-          </div>
-        </div>
-        <div>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Desc %</p>
-          <input
-            type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
-            onChange={e => onChange({ descuento_porc: e.target.value })}
-            className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
-              Number(fila.descuento_porc) > 0
-                ? 'border-green-400 focus:ring-green-400 text-green-700 dark:text-green-400 font-semibold'
-                : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
-            }`}
-          />
-          {Number(fila.descuento_porc) > 0 && promoPorc > 0 && (
-            <p className="text-[10px] text-green-600 dark:text-green-400 text-center mt-0.5">auto</p>
+      <div className="px-2.5 py-2 space-y-0.5">
+        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-tight line-clamp-2 min-h-[2.2em]">
+          {prod.producto}
+        </p>
+        <div className="flex items-center justify-between gap-1">
+          <p className="font-mono font-bold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(resolverPrecio(prod, prod.__tipoVenta))}</p>
+          {disponible !== null && disponible <= 5 && (
+            <span className="text-[9px] text-amber-500 font-semibold shrink-0">{disponible} u.</span>
           )}
         </div>
-        <div>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1">Impuesto</p>
-          <select
-            value={fila.id_impuesto ?? ''}
-            onChange={e => {
-              const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
-              onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
-            }}
-            className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
-          >
-            <option value="">Sin imp.</option>
-            {impuestos.map(i => (
-              <option key={i.id_impuesto} value={i.id_impuesto}>
-                {i.codigo} ({Number(i.porcentaje).toFixed(0)}%)
-              </option>
-            ))}
-          </select>
+      </div>
+    </button>
+  );
+}
+
+/* ─── Línea del carrito (panel de orden) ─────────────────────────────────── */
+function CartLinea({ fila, prod, disponible, impuestos, tipoVenta, expandido, onToggleExpand, onQtyDelta, onChange, onRemove }) {
+  const precioBase   = resolverPrecio(prod, tipoVenta);
+  const sobreprecio  = Math.max(0, Number(fila.precio_unitario) - precioBase);
+  const base         = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
+  const desc         = base * (Number(fila.descuento_porc ?? 0) / 100);
+  const imp          = (base - desc) * (Number(fila.impuesto_porc ?? 0) / 100);
+  const subtotal     = +(base - desc + imp).toFixed(2);
+
+  return (
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{prod?.producto ?? '—'}</p>
+          <p className="text-xs text-zinc-400 font-mono">Bs {fmtMonto(fila.precio_unitario)} c/u</p>
         </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onQtyDelta(-1)}
+            className="w-6 h-6 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <Ic id="minus" size={12} />
+          </button>
+          <span className="w-6 text-center text-sm font-mono font-semibold text-zinc-900 dark:text-white">{fila.cantidad}</span>
+          <button
+            onClick={() => onQtyDelta(1)}
+            disabled={disponible !== null && Number(fila.cantidad) >= disponible}
+            className="w-6 h-6 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Ic id="plus" size={12} />
+          </button>
+        </div>
+
+        <p className="w-20 text-right font-mono font-semibold text-sm text-zinc-900 dark:text-white shrink-0">
+          {fmtMonto(subtotal)}
+        </p>
+
+        <button
+          onClick={onToggleExpand}
+          className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${expandido ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600' : 'text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+          title="Descuento, impuesto, N° de serie"
+        >
+          <Ic id="tune" size={13} />
+        </button>
+        <button
+          onClick={onRemove}
+          className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+        >
+          <Ic id="trash" size={13} />
+        </button>
       </div>
 
-      <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800">
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">Subtotal</span>
-        <span className="font-mono font-bold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(subtotal)}</span>
-      </div>
+      {expandido && (
+        <div className="px-3 pb-3 pt-1 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30 grid grid-cols-2 gap-2.5">
+          <div>
+            <label className="block text-[10px] text-zinc-400 mb-1">Precio unit.</label>
+            <input
+              type="number" min={0} step="0.01" value={fila.precio_unitario}
+              onChange={e => onChange({ precio_unitario: e.target.value })}
+              className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 text-right font-mono ${
+                sobreprecio > 0 ? 'border-amber-400 focus:ring-amber-400' : 'border-zinc-200 dark:border-zinc-700 focus:ring-yellow-400'
+              }`}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-zinc-400 mb-1">Descuento %</label>
+            <input
+              type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
+              onChange={e => onChange({ descuento_porc: e.target.value })}
+              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-zinc-400 mb-1">Impuesto</label>
+            <select
+              value={fila.id_impuesto ?? ''}
+              onChange={e => {
+                const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
+                onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
+              }}
+              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+            >
+              <option value="">Sin imp.</option>
+              {impuestos.map(i => (
+                <option key={i.id_impuesto} value={i.id_impuesto}>{i.codigo} ({Number(i.porcentaje).toFixed(0)}%)</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] text-zinc-400 mb-1">N° de serie</label>
+            <input
+              type="text" value={fila.numero_serie ?? ''} placeholder="Opcional"
+              onChange={e => onChange({ numero_serie: e.target.value })}
+              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -370,7 +215,7 @@ function FilaItemCard({ fila, index, productos, stockMap, tipoVenta, promociones
 function Modal({ titulo, onClose, children, maxW = 'max-w-md' }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className={`bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full ${maxW} shadow-2xl`}>
+      <div className={`bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 w-full ${maxW} shadow-2xl max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <h3 className="text-base font-semibold text-zinc-900 dark:text-white">{titulo}</h3>
           <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-lg leading-none">×</button>
@@ -385,7 +230,7 @@ function Modal({ titulo, onClose, children, maxW = 'max-w-md' }) {
 function SectionCard({ title, badge, actions, children }) {
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-2">
+      <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <div className="w-0.5 h-5 rounded-full bg-yellow-400 flex-shrink-0" />
           <span className="text-sm font-semibold text-zinc-900 dark:text-white">{title}</span>
@@ -401,7 +246,7 @@ function SectionCard({ title, badge, actions, children }) {
 // Label estándar
 function FieldLabel({ children }) {
   return (
-    <label className="block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5 uppercase tracking-wide">
+    <label className="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-1 uppercase tracking-wide">
       {children}
     </label>
   );
@@ -429,7 +274,6 @@ export default function VentaForm() {
   const [stockMap,    setStockMap]    = useState({});
   const [promociones, setPromociones] = useState([]);
   const [categorias,  setCategorias]  = useState([]);
-  const [unidades,    setUnidades]    = useState([]);
   const [impuestos,   setImpuestos]   = useState([]);
   const [vendedores,  setVendedores]  = useState([]);
 
@@ -440,7 +284,8 @@ export default function VentaForm() {
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
     id_vendedor: '',
   });
-  const [items, setItems] = useState([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0, numero_serie: '' }]);
+  const [items, setItems] = useState([]);
+  const [expandidos, setExpandidos] = useState(() => new Set());
   const [clienteInfo, setClienteInfo] = useState(null);
   const [guardando,    setGuardando]    = useState(false);
   const [cargando,     setCargando]     = useState(esEdicion);
@@ -453,14 +298,11 @@ export default function VentaForm() {
   const qrTimerRef = useRef(null);
 
   const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [categoriaSel, setCategoriaSel] = useState('');
+  const [mostrarMasOpciones, setMostrarMasOpciones] = useState(false);
 
-  const [modalRapido, setModalRapido] = useState(false);
-  const [rpForm, setRpForm]   = useState({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
-  const [rpError, setRpError] = useState('');
-  const [rpGuardando, setRpGuardando] = useState(false);
-
-  const [modalClienteRapido, setModalClienteRapido] = useState(false);
-  const [rcForm, setRcForm]   = useState({ nombre: '', documento: '', telefono: '', habilitarCredito: false, limite_credito: '', dias_credito: '' });
+  const [rcForm, setRcForm]   = useState(RC_FORM_VACIO);
   const [rcError, setRcError] = useState('');
   const [rcGuardando, setRcGuardando] = useState(false);
 
@@ -474,7 +316,7 @@ export default function VentaForm() {
     ventasService.formData().then(r => {
       const { sucursales: suc, depositos: deps, productos: prods,
               monedas: mons, impuestos: imps, categorias: cats,
-              unidades: uns, promociones: promos, clientes: clis,
+              promociones: promos, clientes: clis,
               vendedores: vends } = r.data;
 
       setSucursales(suc ?? []);
@@ -484,7 +326,6 @@ export default function VentaForm() {
       setMonedas(mons ?? []);
       setImpuestos(imps ?? []);
       setCategorias(cats ?? []);
-      setUnidades(uns ?? []);
       setPromociones(promos ?? []);
       setVendedores(vends ?? []);
 
@@ -604,6 +445,36 @@ export default function VentaForm() {
     }
   }, [form.id_moneda, monedas]); // eslint-disable-line
 
+  // ── Carrito ────────────────────────────────────────────────────────────────
+  const agregarAlCarrito = useCallback((prod) => {
+    if (!prod) return;
+    const disponible = stockMap[prod.id_producto] ?? null;
+    setItems(prev => {
+      const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
+      if (idx >= 0) {
+        if (disponible !== null && Number(prev[idx].cantidad) >= disponible) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
+        return next;
+      }
+      const precio = resolverPrecio(prod, form.tipo_venta);
+      const descPromo = resolverPromo(prod, promociones);
+      const impDef = prod.id_impuesto_default
+        ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
+        : impuestos.find(i => i.es_default);
+      return [...prev, {
+        _key:            crypto.randomUUID(),
+        id_producto:     String(prod.id_producto),
+        cantidad:        1,
+        precio_unitario: precio,
+        descuento_porc:  descPromo,
+        id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
+        impuesto_porc:   impDef ? Number(impDef.porcentaje) : 0,
+        numero_serie:    '',
+      }];
+    });
+  }, [stockMap, form.tipo_venta, promociones, impuestos]);
+
   const procesarCodigo = useCallback((raw) => {
     const trimmed = raw.trim();
     if (!trimmed) return;
@@ -619,43 +490,35 @@ export default function VentaForm() {
       return;
     }
 
-    const precio = resolverPrecio(prod, form.tipo_venta);
-    setItems(prev => {
-      const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
-        return next;
-      }
-      const impDef = prod.id_impuesto_default
-        ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
-        : impuestos.find(i => i.es_default);
-      return [...prev, {
-        _key:            crypto.randomUUID(),
-        id_producto:     String(prod.id_producto),
-        cantidad:        1,
-        precio_unitario: precio,
-        descuento_porc:  0,
-        id_impuesto:    impDef ? String(impDef.id_impuesto) : '',
-        impuesto_porc:  impDef ? Number(impDef.porcentaje) : 0,
-      }];
-    });
+    agregarAlCarrito(prod);
     setQrInput('');
     setQrError('');
-  }, [productos, form.tipo_venta, impuestos]); // eslint-disable-line
+  }, [productos, agregarAlCarrito]);
 
   const handleQrScan = (val) => {
     clearTimeout(qrTimerRef.current);
     qrTimerRef.current = setTimeout(() => procesarCodigo(val), 300);
   };
 
-  const addItem    = () => setItems(p => [...p, { _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+  const cambiarCantidad = (i, delta) => {
+    setItems(prev => prev.map((it, idx) => {
+      if (idx !== i) return it;
+      const disponible = stockMap[it.id_producto] ?? null;
+      let nueva = Number(it.cantidad) + delta;
+      if (disponible !== null) nueva = Math.min(nueva, disponible);
+      nueva = Math.max(1, nueva);
+      return { ...it, cantidad: nueva };
+    }));
+  };
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
-  const limpiarItems = () => setItems([{ _key: crypto.randomUUID(), id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, id_impuesto: '', impuesto_porc: 0 }]);
+  const limpiarItems = () => setItems([]);
 
-  const vendedorActual = vendedores.find(v => String(v.id_usuario) === String(form.id_vendedor));
-  const comisionPorc   = Number(vendedorActual?.porcentaje_comision ?? 0);
+  const toggleExpandido = (key) => setExpandidos(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   const subtotal  = items.reduce((s, it) => {
     const base = Number(it.cantidad ?? 0) * Number(it.precio_unitario ?? 0);
@@ -666,6 +529,7 @@ export default function VentaForm() {
   const descMonto = subtotal * (Number(form.descuento_porc) / 100);
   const impuesto  = Number(form.impuesto);
   const total     = subtotal - descMonto + impuesto;
+  const totalUnidades = items.reduce((s, it) => s + Number(it.cantidad ?? 0), 0);
 
   const guardar = async () => {
     setError('');
@@ -694,53 +558,11 @@ export default function VentaForm() {
     }
   };
 
-  const setRp = (k, v) => setRpForm(p => ({ ...p, [k]: v }));
-
-  const guardarProductoRapido = useCallback(async () => {
-    setRpError('');
-    const { nombre, id_categoria, id_unidad, precio_real, precio_publico } = rpForm;
-    if (!nombre || !id_categoria || !id_unidad || !precio_real || !precio_publico) {
-      return setRpError('Nombre, categoría, unidad y precios son requeridos');
-    }
-    setRpGuardando(true);
-    try {
-      const res = await ventasService.productoRapido({
-        nombre,
-        id_categoria,
-        id_unidad,
-        precio_real: Number(precio_real),
-        precio_publico: Number(precio_publico),
-        precio_mayor: rpForm.precio_mayor ? Number(rpForm.precio_mayor) : Number(precio_publico),
-      });
-      const nuevoProd = res.data.producto;
-      setProductos(prev => [...prev, nuevoProd]);
-      const precio = resolverPrecio(nuevoProd, form.tipo_venta);
-      const impDef = nuevoProd.id_impuesto_default
-        ? impuestos.find(i => String(i.id_impuesto) === String(nuevoProd.id_impuesto_default))
-        : impuestos.find(i => i.es_default);
-      setItems(prev => [...prev, {
-        _key:            crypto.randomUUID(),
-        id_producto:     String(nuevoProd.id_producto),
-        cantidad:        1,
-        precio_unitario: precio,
-        descuento_porc:  0,
-        id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
-        impuesto_porc:   impDef ? Number(impDef.porcentaje) : 0,
-      }]);
-      setModalRapido(false);
-      setRpForm({ nombre: '', id_categoria: '', id_unidad: '', precio_real: '', precio_publico: '', precio_mayor: '' });
-    } catch (err) {
-      setRpError(err.response?.data?.mensaje ?? 'Error al crear producto');
-    } finally {
-      setRpGuardando(false);
-    }
-  }, [rpForm, form.tipo_venta]);
-
   const setRc = (k, v) => setRcForm(p => ({ ...p, [k]: v }));
 
   const guardarClienteRapido = useCallback(async () => {
     setRcError('');
-    const { nombre, documento, telefono, habilitarCredito, limite_credito, dias_credito } = rcForm;
+    const { nombre, telefono, direccion, ciudad, habilitarCredito, limite_credito, dias_credito } = rcForm;
     if (!nombre.trim()) return setRcError('El nombre es requerido');
     if (habilitarCredito && !(Number(limite_credito) > 0)) {
       return setRcError('Ingresá un límite de crédito válido');
@@ -749,7 +571,7 @@ export default function VentaForm() {
     try {
       const res = await clientesService.create({
         nombres: nombre.trim(),
-        documento: documento.trim() || undefined,
+        documento: busquedaCliente.trim() || undefined,
         telefono: telefono.trim() || undefined,
       });
       let nuevoCliente = res.data.cliente;
@@ -763,19 +585,67 @@ export default function VentaForm() {
         nuevoCliente = { ...nuevoCliente, ...resCredito.data.credito };
       }
 
+      if (direccion.trim()) {
+        await clientesService.createDireccion(nuevoCliente.id_cliente, {
+          direccion: direccion.trim(),
+          ciudad: ciudad.trim() || undefined,
+          es_principal: true,
+        });
+      }
+
       setClientes(prev => [...prev, nuevoCliente]);
       setF('id_cliente', String(nuevoCliente.id_cliente));
-      setModalClienteRapido(false);
-      setRcForm({ nombre: '', documento: '', telefono: '', habilitarCredito: false, limite_credito: '', dias_credito: '' });
+      setBusquedaCliente('');
+      setRcForm(RC_FORM_VACIO);
     } catch (err) {
       setRcError(err.response?.data?.error ?? 'Error al crear cliente');
     } finally {
       setRcGuardando(false);
     }
-  }, [rcForm]);
+  }, [rcForm, busquedaCliente]);
 
-  const inputCls = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-shadow';
-  const monedaSel = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
+  const inputCls   = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-shadow';
+  const compactCls = 'w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400';
+  const monedaSel  = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
+
+  const clientesFiltrados = useMemo(() => clientes.filter(c => {
+    if (!busquedaCliente.trim()) return true;
+    const q = busquedaCliente.toLowerCase();
+    return (
+      (c.documento ?? '').toLowerCase().includes(q) ||
+      (c.nombres ?? '').toLowerCase().includes(q) ||
+      (c.apellidos ?? '').toLowerCase().includes(q) ||
+      (c.razon_social ?? '').toLowerCase().includes(q) ||
+      (c.codigo ?? '').toLowerCase().includes(q)
+    );
+  }).slice(0, 50), [clientes, busquedaCliente]);
+
+  // Si la búsqueda deja un único cliente posible, se selecciona solo (sin click extra en el select)
+  useEffect(() => {
+    if (!busquedaCliente.trim() || clientesFiltrados.length !== 1) return;
+    const unico = clientesFiltrados[0];
+    if (String(form.id_cliente) !== String(unico.id_cliente)) {
+      setF('id_cliente', String(unico.id_cliente));
+    }
+  }, [clientesFiltrados]); // eslint-disable-line
+
+  const productosVisibles = productos
+    .filter(p => (stockMap[p.id_producto] ?? 0) >= 1)
+    .filter(p => {
+      if (busquedaProducto.trim()) {
+        const q = busquedaProducto.toLowerCase();
+        return p.producto.toLowerCase().includes(q) ||
+          p.codigo_interno.toLowerCase().includes(q) ||
+          (p.codigo_barras || '').includes(busquedaProducto);
+      }
+      return !categoriaSel || String(p.id_categoria) === String(categoriaSel);
+    })
+    .slice(0, 60);
+
+  const cantidadesEnCarrito = items.reduce((acc, it) => {
+    acc[it.id_producto] = (acc[it.id_producto] ?? 0) + Number(it.cantidad ?? 0);
+    return acc;
+  }, {});
 
   if (cargando) return (
     <div className="flex items-center justify-center py-32">
@@ -787,7 +657,7 @@ export default function VentaForm() {
   );
 
   return (
-    <div className="pb-28 lg:pb-8 max-w-5xl space-y-4">
+    <div className="pb-24 lg:pb-4 space-y-4">
 
       {/* ── Cabecera de página ── */}
       <div className="flex items-center justify-between gap-4">
@@ -802,30 +672,9 @@ export default function VentaForm() {
             {esEdicion ? 'Editar venta' : 'Nueva venta'}
           </h1>
         </div>
-
-        {/* Acciones desktop */}
-        <div className="hidden lg:flex items-center gap-2.5">
-          <button
-            onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
-            className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm font-medium transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={guardar} disabled={guardando}
-            className="inline-flex items-center gap-2.5 px-5 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
-          >
-            {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear venta'}
-            {!guardando && (
-              <span className="font-mono text-xs bg-zinc-900/10 px-2 py-0.5 rounded-lg font-bold">
-                Bs {fmtMonto(total)}
-              </span>
-            )}
-          </button>
-        </div>
       </div>
 
-      {/* Banner sin caja (solo en nueva venta) */}
+      {/* Banner sin caja */}
       {!esEdicion && arqueoActual === null && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20">
           <span className="text-orange-500 text-lg flex-shrink-0">⚠</span>
@@ -844,117 +693,129 @@ export default function VentaForm() {
         </div>
       )}
 
-      {/* ── SECCIÓN 1: Datos de la venta ── */}
-      <SectionCard title="Datos de la venta">
-        <div className="p-5 space-y-5">
-
-          {/* Fila 1: Tipo venta + Sucursal + Depósito + Vendedor */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <FieldLabel>Tipo de venta</FieldLabel>
-              {tiposPermitidos.length > 1 ? (
-                <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl gap-1">
-                  {tiposPermitidos.map(t => (
-                    <button
-                      key={t} onClick={() => setF('tipo_venta', t)} disabled={esEdicion}
-                      className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                        form.tipo_venta === t
-                          ? 'bg-yellow-400 text-zinc-900 shadow-sm'
-                          : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
-                      } disabled:opacity-60`}
-                    >
-                      {t === 'MENOR' ? 'Por menor' : 'Por mayor'}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${form.tipo_venta === 'MAYOR' ? 'bg-blue-400' : 'bg-yellow-400'}`} />
-                  <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                    {form.tipo_venta === 'MENOR' ? 'Por menor' : 'Por mayor'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <FieldLabel>Sucursal *</FieldLabel>
-              <select
-                value={form.id_sucursal} onChange={e => setF('id_sucursal', e.target.value)}
-                disabled={esEdicion || sucursales.length <= 1} className={inputCls}
-              >
-                <option value="">— seleccionar —</option>
-                {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <FieldLabel>Depósito / Punto de venta *</FieldLabel>
-              <select
-                value={form.id_deposito} onChange={e => setF('id_deposito', e.target.value)}
-                disabled={esEdicion} className={inputCls}
-              >
-                <option value="">— seleccionar —</option>
-                {depositos
-                  .filter(d => !form.id_sucursal || String(d.id_sucursal) === String(form.id_sucursal))
-                  .map(d => <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <FieldLabel>Vendedor *</FieldLabel>
-              <select
-                value={form.id_vendedor} onChange={e => setF('id_vendedor', e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— seleccionar —</option>
-                {vendedores.map(v => (
-                  <option key={v.id_usuario} value={v.id_usuario}>{v.nombre_completo}</option>
+      {/* ── Franja compacta: datos de la venta ── */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 items-end">
+          <div>
+            <FieldLabel>Tipo</FieldLabel>
+            {tiposPermitidos.length > 1 ? (
+              <div className="flex p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-lg gap-0.5">
+                {tiposPermitidos.map(t => (
+                  <button
+                    key={t} onClick={() => setF('tipo_venta', t)} disabled={esEdicion}
+                    className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      form.tipo_venta === t ? 'bg-yellow-400 text-zinc-900' : 'text-zinc-500 dark:text-zinc-400'
+                    } disabled:opacity-60`}
+                  >
+                    {t === 'MENOR' ? 'Menor' : 'Mayor'}
+                  </button>
                 ))}
-              </select>
-            </div>
+              </div>
+            ) : (
+              <div className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                {form.tipo_venta === 'MENOR' ? 'Menor' : 'Mayor'}
+              </div>
+            )}
           </div>
 
-          <div className="border-t border-zinc-100 dark:border-zinc-800" />
+          <div>
+            <FieldLabel>Sucursal *</FieldLabel>
+            <select value={form.id_sucursal} onChange={e => setF('id_sucursal', e.target.value)} disabled={esEdicion || sucursales.length <= 1} className={compactCls}>
+              <option value="">—</option>
+              {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
+            </select>
+          </div>
 
-          {/* Fila 2: Cliente + Condición pago + Moneda + Tipo cambio */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="sm:col-span-2 lg:col-span-2">
-              <div className="flex items-center justify-between mb-1.5">
-                <FieldLabel>Cliente *</FieldLabel>
-                <button
-                  type="button"
-                  onClick={() => setModalClienteRapido(true)}
-                  className="text-[11px] px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
-                >
-                  + Cliente rápido
-                </button>
+          <div>
+            <FieldLabel>Depósito *</FieldLabel>
+            <select value={form.id_deposito} onChange={e => setF('id_deposito', e.target.value)} disabled={esEdicion} className={compactCls}>
+              <option value="">—</option>
+              {depositos.filter(d => !form.id_sucursal || String(d.id_sucursal) === String(form.id_sucursal)).map(d => (
+                <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <FieldLabel>Vendedor *</FieldLabel>
+            <select value={form.id_vendedor} onChange={e => setF('id_vendedor', e.target.value)} className={compactCls}>
+              <option value="">—</option>
+              {vendedores.map(v => <option key={v.id_usuario} value={v.id_usuario}>{v.nombre_completo}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <FieldLabel>Condición</FieldLabel>
+            <select value={form.condicion_pago} onChange={e => setF('condicion_pago', e.target.value)} className={compactCls}>
+              <option value="CONTADO">Contado</option>
+              {puede('vender_credito', 'ventas') && <option value="CREDITO">Crédito</option>}
+            </select>
+          </div>
+
+          <div>
+            <FieldLabel>&nbsp;</FieldLabel>
+            <button
+              type="button" onClick={() => setMostrarMasOpciones(true)}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <Ic id="tune" size={13} /> Más opciones
+            </button>
+          </div>
+        </div>
+
+        {form.condicion_pago === 'CREDITO' && (
+          <div className="mt-2.5 w-40">
+            <FieldLabel>Días de crédito</FieldLabel>
+            <input type="number" min={0} value={form.dias_credito} onChange={e => setF('dias_credito', e.target.value)} className={compactCls} />
+          </div>
+        )}
+
+        <div className="border-t border-zinc-100 dark:border-zinc-800 mt-3 pt-3">
+          <FieldLabel>Cliente *</FieldLabel>
+          <input
+            type="text" value={busquedaCliente} onChange={e => setBusquedaCliente(e.target.value)}
+            placeholder="Buscar por CI, nombre o código…"
+            className="w-full mb-1.5 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 focus:bg-white dark:focus:bg-zinc-800"
+          />
+
+          {busquedaCliente.trim() && clientesFiltrados.length === 1 ? (
+            <div className="px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-2">
+              <span className="text-green-600 dark:text-green-400 text-sm">✓</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-green-800 dark:text-green-300 truncate">
+                  {clientesFiltrados[0].razon_social || [clientesFiltrados[0].nombres, clientesFiltrados[0].apellidos].filter(Boolean).join(' ')}
+                </p>
+                {clienteInfo && (
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                    <span className={`text-xs ${clienteInfo.permite_credito ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>
+                      {clienteInfo.permite_credito
+                        ? `Crédito: Bs ${fmtMonto(clienteInfo.limite_credito)} · Saldo: Bs ${fmtMonto(clienteInfo.saldo_actual)}`
+                        : 'Sin crédito habilitado'}
+                    </span>
+                    {clienteInfo.descuento_default > 0 && (
+                      <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
+                        Dto. {clienteInfo.descuento_default}% aplicado
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-              <input
-                type="text" value={busquedaCliente} onChange={e => setBusquedaCliente(e.target.value)}
-                placeholder="Buscar por CI, nombre o código…"
-                className="w-full mb-1.5 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 focus:bg-white dark:focus:bg-zinc-800"
-              />
+              <button
+                type="button" onClick={() => setBusquedaCliente('')}
+                className="text-xs text-green-600 dark:text-green-400 hover:underline shrink-0"
+              >
+                Cambiar
+              </button>
+            </div>
+          ) : clientesFiltrados.length > 0 ? (
+            <>
               <select value={form.id_cliente} onChange={e => setF('id_cliente', e.target.value)} className={inputCls}>
                 <option value="">— seleccionar cliente —</option>
-                {clientes
-                  .filter(c => {
-                    if (!busquedaCliente.trim()) return true;
-                    const q = busquedaCliente.toLowerCase();
-                    return (
-                      (c.documento ?? '').toLowerCase().includes(q) ||
-                      (c.nombres ?? '').toLowerCase().includes(q) ||
-                      (c.apellidos ?? '').toLowerCase().includes(q) ||
-                      (c.razon_social ?? '').toLowerCase().includes(q) ||
-                      (c.codigo ?? '').toLowerCase().includes(q)
-                    );
-                  })
-                  .slice(0, 50)
-                  .map(c => (
-                    <option key={c.id_cliente} value={c.id_cliente}>
-                      [{c.codigo}] {c.razon_social || [c.nombres, c.apellidos].filter(Boolean).join(' ')}
-                    </option>
-                  ))}
+                {clientesFiltrados.map(c => (
+                  <option key={c.id_cliente} value={c.id_cliente}>
+                    [{c.codigo}] {c.razon_social || [c.nombres, c.apellidos].filter(Boolean).join(' ')}
+                  </option>
+                ))}
               </select>
               {clienteInfo && (
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -970,220 +831,216 @@ export default function VentaForm() {
                   )}
                 </div>
               )}
-            </div>
+            </>
+          ) : busquedaCliente.trim() ? (
+            <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2.5">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                No se encontró a "{busquedaCliente.trim()}" — completá los datos para crearlo.
+              </p>
 
-            <div>
-              <FieldLabel>Condición de pago *</FieldLabel>
-              <select value={form.condicion_pago} onChange={e => setF('condicion_pago', e.target.value)} className={inputCls}>
-                <option value="CONTADO">Contado</option>
-                {puede('vender_credito', 'ventas') && <option value="CREDITO">Crédito</option>}
-              </select>
-              {form.condicion_pago === 'CREDITO' && (
-                <div className="mt-2">
-                  <label className="block text-[10px] text-zinc-400 mb-1">Días de crédito</label>
-                  <input
-                    type="number" min={0} value={form.dias_credito}
-                    onChange={e => setF('dias_credito', e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-              )}
-            </div>
+              <div>
+                <FieldLabel>Nombre / Razón social *</FieldLabel>
+                <input
+                  type="text" value={rcForm.nombre} onChange={e => setRc('nombre', e.target.value)}
+                  placeholder="Ej: Juan Pérez" className={inputCls}
+                />
+              </div>
 
-            <div>
-              <FieldLabel>Moneda</FieldLabel>
-              <select value={form.id_moneda} onChange={e => setF('id_moneda', e.target.value)} className={inputCls}>
-                <option value="">— seleccionar —</option>
-                {monedas.map(m => (
-                  <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>
-                ))}
-              </select>
-              {monedaSel && !monedaSel.es_moneda_base && (
-                <div className="mt-2">
-                  <label className="block text-[10px] text-zinc-400 mb-1">Tipo de cambio</label>
-                  <input
-                    type="number" min="0.000001" step="0.000001" value={form.tipo_cambio}
-                    onChange={e => setF('tipo_cambio', e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
+              <div>
+                <FieldLabel>Teléfono</FieldLabel>
+                <input type="text" value={rcForm.telefono}
+                  onChange={e => setRc('telefono', e.target.value)}
+                  placeholder="Opcional" className={inputCls} />
+              </div>
 
-          <div className="border-t border-zinc-100 dark:border-zinc-800" />
-
-          {/* Fila 3: Entrega + Observaciones */}
-          <div className="space-y-3">
-            <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group">
-              <input
-                type="checkbox" id="entrega" checked={form.requiere_entrega}
-                onChange={e => setF('requiere_entrega', e.target.checked)}
-                className="w-4 h-4 rounded accent-yellow-400"
-              />
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-                Requiere entrega a domicilio
-              </span>
-            </label>
-
-            {form.requiere_entrega && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-yellow-400/30 ml-1.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <FieldLabel>Dirección de entrega</FieldLabel>
-                  <input type="text" value={form.direccion_entrega} onChange={e => setF('direccion_entrega', e.target.value)} className={inputCls} />
+                  <FieldLabel>Dirección</FieldLabel>
+                  <input type="text" value={rcForm.direccion}
+                    onChange={e => setRc('direccion', e.target.value)}
+                    placeholder="Opcional" className={inputCls} />
                 </div>
                 <div>
-                  <FieldLabel>Fecha de entrega</FieldLabel>
-                  <input type="datetime-local" value={form.fecha_entrega} onChange={e => setF('fecha_entrega', e.target.value)} className={inputCls} />
+                  <FieldLabel>Ciudad</FieldLabel>
+                  <input type="text" value={rcForm.ciudad}
+                    onChange={e => setRc('ciudad', e.target.value)}
+                    placeholder="Opcional" className={inputCls} />
                 </div>
               </div>
-            )}
 
-            <div>
-              <FieldLabel>Observaciones</FieldLabel>
-              <textarea
-                value={form.observaciones} onChange={e => setF('observaciones', e.target.value)}
-                rows={2} className={inputCls} placeholder="Notas adicionales…"
+              {puede('dar_credito', 'clientes') && (
+                <div className="pt-1 border-t border-zinc-200 dark:border-zinc-700">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group mt-2">
+                    <input
+                      type="checkbox" checked={rcForm.habilitarCredito}
+                      onChange={e => setRc('habilitarCredito', e.target.checked)}
+                      className="w-4 h-4 rounded accent-yellow-400"
+                    />
+                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+                      Habilitar crédito
+                    </span>
+                  </label>
+
+                  {rcForm.habilitarCredito && (
+                    <div className="grid grid-cols-2 gap-2.5 mt-2.5 pl-6 border-l-2 border-yellow-400/30 ml-1.5">
+                      <div>
+                        <FieldLabel>Límite de crédito *</FieldLabel>
+                        <input type="number" min={0} step="0.01" value={rcForm.limite_credito}
+                          onChange={e => setRc('limite_credito', e.target.value)}
+                          className={inputCls} />
+                      </div>
+                      <div>
+                        <FieldLabel>Días de crédito</FieldLabel>
+                        <input type="number" min={0} value={rcForm.dias_credito}
+                          onChange={e => setRc('dias_credito', e.target.value)}
+                          placeholder="0" className={inputCls} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {rcError && (
+                <p className="text-xs text-red-500 flex items-center gap-1.5">
+                  <span>⚠</span> {rcError}
+                </p>
+              )}
+
+              <button
+                onClick={guardarClienteRapido} disabled={rcGuardando}
+                className="w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-xs transition-colors"
+              >
+                {rcGuardando ? 'Creando…' : 'Crear y usar este cliente'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Layout principal: grilla de productos + panel de orden ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+
+        {/* ── Columna productos ── */}
+        <div className="space-y-3 min-w-0">
+
+          {/* Escáner QR */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-2.5 flex items-center gap-3">
+            <span className="text-[10px] font-mono font-bold text-zinc-400 flex-shrink-0 tracking-widest select-none uppercase">QR</span>
+            <input
+              type="text" value={qrInput}
+              onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
+              onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+              placeholder="Escanee un código o escriba manualmente…"
+              className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+            />
+            {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
+            <button
+              type="button" onClick={() => setMostrarEscaner(true)} title="Escanear con cámara"
+              className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-500 transition-colors"
+            >
+              <Ic id="camera" size={16} />
+            </button>
+          </div>
+
+          {/* Categorías + buscador */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1 sidebar-scroll">
+              <button
+                onClick={() => setCategoriaSel('')}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                  categoriaSel === '' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                Todos
+              </button>
+              {categorias.map(c => (
+                <button
+                  key={c.id_categoria}
+                  onClick={() => setCategoriaSel(String(c.id_categoria))}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                    categoriaSel === String(c.id_categoria) ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  {c.nombre}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative">
+              <Ic id="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+              <input
+                type="text" value={busquedaProducto} onChange={e => setBusquedaProducto(e.target.value)}
+                placeholder="Buscar producto por nombre o código…"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
             </div>
+
+            {/* Grilla de productos */}
+            {productosVisibles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-2 text-zinc-400">
+                <Ic id="package" size={32} className="text-zinc-300 dark:text-zinc-700" />
+                <p className="text-sm font-medium">Sin productos con stock para este filtro</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                {productosVisibles.map(p => (
+                  <ProductoTile
+                    key={p.id_producto}
+                    prod={{ ...p, __tipoVenta: form.tipo_venta }}
+                    disponible={stockMap[p.id_producto] ?? null}
+                    promoPorc={resolverPromo(p, promociones)}
+                    enCarrito={cantidadesEnCarrito[p.id_producto] ?? 0}
+                    onClick={() => agregarAlCarrito(p)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      </SectionCard>
 
-      {/* ── SECCIÓN 2: Productos ── */}
-      <SectionCard
-        title="Productos"
-        badge={
-          promociones.length > 0 && (
-            <span className="text-[11px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-semibold">
-              {promociones.length} promo{promociones.length > 1 ? 's' : ''} activa{promociones.length > 1 ? 's' : ''}
-            </span>
-          )
-        }
-        actions={
-          <>
-            <button
-              onClick={() => setModalRapido(true)}
-              className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
-            >
-              + Producto rápido
-            </button>
-            <button
-              onClick={limpiarItems}
-              className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              Limpiar
-            </button>
-            <button
-              onClick={addItem}
-              className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold transition-colors"
-            >
-              + Agregar fila
-            </button>
-          </>
-        }
-      >
-        {/* Escáner QR */}
-        <div className="px-5 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/20 flex items-center gap-3">
-          <span className="text-[10px] font-mono font-bold text-zinc-400 flex-shrink-0 tracking-widest select-none uppercase">QR</span>
-          <input
-            type="text"
-            value={qrInput}
-            onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
-            onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
-            placeholder="Escanee un código o escriba manualmente…"
-            className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
-          />
-          {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
-          <button
-            type="button"
-            onClick={() => setMostrarEscaner(true)}
-            title="Escanear con cámara"
-            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-500 transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* ── Tarjetas — móvil < md ── */}
-        <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
-          {items.map((fila, i) => (
-            <FilaItemCard
-              key={fila._key} fila={fila} index={i}
-              productos={productos} stockMap={stockMap}
-              tipoVenta={form.tipo_venta}
-              promociones={promociones}
-              impuestos={impuestos}
-              comisionPorc={comisionPorc}
-              onChange={patch => updateItem(i, patch)}
-              onRemove={() => removeItem(i)}
-            />
-          ))}
-          <div className="px-4 py-3 space-y-2">
-            <button
-              onClick={addItem}
-              className="w-full py-2 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs text-zinc-400 hover:border-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
-            >
-              + Agregar fila
-            </button>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setModalRapido(true)}
-                className="flex-1 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium transition-colors"
-              >
-                + Producto rápido
-              </button>
-              <button
-                onClick={limpiarItems}
-                className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
+        {/* ── Columna panel de orden ── */}
+        <div className="lg:sticky lg:top-4 space-y-3">
+          <SectionCard
+            title="Orden"
+            actions={items.length > 0 && (
+              <button onClick={limpiarItems} className="text-[11px] px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Limpiar
               </button>
+            )}
+          >
+            <div className="p-3.5 space-y-2 max-h-[50vh] lg:max-h-[calc(100vh-22rem)] overflow-y-auto">
+              {items.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2 text-zinc-400">
+                  <Ic id="cart" size={30} className="text-zinc-300 dark:text-zinc-700" />
+                  <p className="text-xs text-center">Tocá un producto para agregarlo</p>
+                </div>
+              ) : (
+                items.map((fila, i) => {
+                  const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
+                  return (
+                    <CartLinea
+                      key={fila._key}
+                      fila={fila}
+                      prod={prod}
+                      disponible={stockMap[fila.id_producto] ?? null}
+                      impuestos={impuestos}
+                      tipoVenta={form.tipo_venta}
+                      expandido={expandidos.has(fila._key)}
+                      onToggleExpand={() => toggleExpandido(fila._key)}
+                      onQtyDelta={d => cambiarCantidad(i, d)}
+                      onChange={patch => updateItem(i, patch)}
+                      onRemove={() => removeItem(i)}
+                    />
+                  );
+                })
+              )}
             </div>
-          </div>
-        </div>
 
-        {/* ── Tabla — desktop md+ ── */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Producto</th>
-                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-24">Cantidad</th>
-                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-32">Precio unit.</th>
-                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-20">Desc %</th>
-                <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-36">Impuesto</th>
-                <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider w-32">Subtotal</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((fila, i) => (
-                <FilaItem
-                  key={fila._key} fila={fila} index={i}
-                  productos={productos} stockMap={stockMap}
-                  tipoVenta={form.tipo_venta}
-                  promociones={promociones}
-                  impuestos={impuestos}
-                  comisionPorc={comisionPorc}
-                  onChange={patch => updateItem(i, patch)}
-                  onRemove={() => removeItem(i)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totales */}
-        <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800">
-          <div className="flex justify-end">
-            <div className="w-full sm:w-72 space-y-2.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-500 dark:text-zinc-400">Subtotal</span>
-                <span className="font-mono font-semibold text-zinc-900 dark:text-white">Bs {fmtMonto(subtotal)}</span>
+            {/* Totales */}
+            <div className="px-3.5 py-3.5 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                <span>{totalUnidades} unidad{totalUnidades !== 1 ? 'es' : ''}</span>
+                <span className="font-mono">Subt. Bs {fmtMonto(subtotal)}</span>
               </div>
 
               <div className="flex items-center justify-between text-sm">
@@ -1195,7 +1052,6 @@ export default function VentaForm() {
                     className="w-14 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
                   />
                   <span className="text-xs text-zinc-400">%</span>
-                  <span className="font-mono text-sm text-zinc-500 w-20 text-right">−{fmtMonto(descMonto)}</span>
                 </div>
               </div>
 
@@ -1204,7 +1060,7 @@ export default function VentaForm() {
                 <input
                   type="number" min={0} step="0.01" value={form.impuesto}
                   onChange={e => setF('impuesto', e.target.value)}
-                  className="w-28 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+                  className="w-24 px-2 py-0.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-right focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
                 />
               </div>
 
@@ -1212,39 +1068,30 @@ export default function VentaForm() {
                 <span className="text-base font-bold text-zinc-900 dark:text-white">Total</span>
                 <span className="text-xl font-bold font-mono text-zinc-900 dark:text-white">Bs {fmtMonto(total)}</span>
               </div>
-            </div>
-          </div>
-        </div>
-      </SectionCard>
 
-      {/* ── Acciones desktop (duplicado al pie) ── */}
-      <div className="hidden lg:flex items-center gap-3">
-        <button
-          onClick={guardar} disabled={guardando}
-          className="px-6 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
-        >
-          {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear venta'}
-        </button>
-        <button
-          onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
-          className="px-6 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm font-medium transition-colors"
-        >
-          Cancelar
-        </button>
+              <button
+                onClick={guardar} disabled={guardando}
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-bold text-sm transition-colors mt-1"
+              >
+                {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear venta'}
+              </button>
+              <button
+                onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
+                className="w-full py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </SectionCard>
+        </div>
       </div>
 
       {/* ── Barra sticky mobile ── */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 flex items-center gap-3 shadow-xl">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">Total</p>
+          <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">Total · {totalUnidades} u.</p>
           <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white leading-tight">Bs {fmtMonto(total)}</p>
         </div>
-        <button
-          onClick={() => navigate(esEdicion ? `/ventas/${id}` : '/ventas')}
-          className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium transition-colors"
-        >
-          Cancelar
-        </button>
         <button
           onClick={guardar} disabled={guardando}
           className="px-5 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
@@ -1261,166 +1108,70 @@ export default function VentaForm() {
         />
       )}
 
-      {/* ── Modal producto rápido ── */}
-      {modalRapido && (
-        <Modal titulo="Agregar producto rápido" onClose={() => { setModalRapido(false); setRpError(''); }}>
-          <div className="space-y-3">
-            <p className="text-xs text-zinc-400">El producto se creará en el catálogo y se agregará al carrito.</p>
-
+      {/* ── Modal más opciones ── */}
+      {mostrarMasOpciones && (
+        <Modal titulo="Más opciones" onClose={() => setMostrarMasOpciones(false)}>
+          <div className="space-y-4">
             <div>
-              <FieldLabel>Nombre del producto *</FieldLabel>
-              <input
-                type="text" value={rpForm.nombre} onChange={e => setRp('nombre', e.target.value)}
-                placeholder="Ej: Ventilador 16 pulgadas"
-                className={inputCls}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <FieldLabel>Categoría *</FieldLabel>
-                <select value={rpForm.id_categoria} onChange={e => setRp('id_categoria', e.target.value)} className={inputCls}>
-                  <option value="">— seleccionar —</option>
-                  {categorias.map(c => <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>)}
-                </select>
-              </div>
-              <div>
-                <FieldLabel>Unidad *</FieldLabel>
-                <select value={rpForm.id_unidad} onChange={e => setRp('id_unidad', e.target.value)} className={inputCls}>
-                  <option value="">— seleccionar —</option>
-                  {unidades.map(u => <option key={u.id_unidad} value={u.id_unidad}>{u.nombre}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <FieldLabel>Costo (Bs) *</FieldLabel>
-                <input type="number" min={0} step="0.01" value={rpForm.precio_real}
-                  onChange={e => setRp('precio_real', e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <FieldLabel>P. venta (Bs) *</FieldLabel>
-                <input type="number" min={0} step="0.01" value={rpForm.precio_publico}
-                  onChange={e => setRp('precio_publico', e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <FieldLabel>P. mayor (Bs)</FieldLabel>
-                <input type="number" min={0} step="0.01" value={rpForm.precio_mayor}
-                  onChange={e => setRp('precio_mayor', e.target.value)}
-                  placeholder="Opcional" className={inputCls} />
-              </div>
-            </div>
-
-            {rpError && (
-              <p className="text-sm text-red-500 flex items-center gap-1.5">
-                <span>⚠</span> {rpError}
-              </p>
-            )}
-
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={guardarProductoRapido} disabled={rpGuardando}
-                className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
-              >
-                {rpGuardando ? 'Creando…' : 'Crear y agregar'}
-              </button>
-              <button
-                onClick={() => { setModalRapido(false); setRpError(''); }}
-                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Modal cliente rápido ── */}
-      {modalClienteRapido && (
-        <Modal titulo="Agregar cliente rápido" onClose={() => { setModalClienteRapido(false); setRcError(''); }}>
-          <div className="space-y-3">
-            <p className="text-xs text-zinc-400">El cliente se creará como minorista. Direcciones, email y demás datos se completan luego desde el módulo Clientes.</p>
-
-            <div>
-              <FieldLabel>Nombre / Razón social *</FieldLabel>
-              <input
-                type="text" value={rcForm.nombre} onChange={e => setRc('nombre', e.target.value)}
-                placeholder="Ej: Juan Pérez"
-                className={inputCls}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <FieldLabel>Documento</FieldLabel>
-                <input type="text" value={rcForm.documento}
-                  onChange={e => setRc('documento', e.target.value)}
-                  placeholder="Opcional" className={inputCls} />
-              </div>
-              <div>
-                <FieldLabel>Teléfono</FieldLabel>
-                <input type="text" value={rcForm.telefono}
-                  onChange={e => setRc('telefono', e.target.value)}
-                  placeholder="Opcional" className={inputCls} />
-              </div>
-            </div>
-
-            {puede('dar_credito', 'clientes') && (
-              <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group mt-3">
+              <FieldLabel>Moneda</FieldLabel>
+              <select value={form.id_moneda} onChange={e => setF('id_moneda', e.target.value)} className={inputCls}>
+                <option value="">— seleccionar —</option>
+                {monedas.map(m => <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>)}
+              </select>
+              {monedaSel && !monedaSel.es_moneda_base && (
+                <div className="mt-2">
+                  <label className="block text-[10px] text-zinc-400 mb-1">Tipo de cambio</label>
                   <input
-                    type="checkbox" checked={rcForm.habilitarCredito}
-                    onChange={e => setRc('habilitarCredito', e.target.checked)}
-                    className="w-4 h-4 rounded accent-yellow-400"
+                    type="number" min="0.000001" step="0.000001" value={form.tipo_cambio}
+                    onChange={e => setF('tipo_cambio', e.target.value)}
+                    className={inputCls}
                   />
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-                    Habilitar crédito
-                  </span>
-                </label>
+                </div>
+              )}
+            </div>
 
-                {rcForm.habilitarCredito && (
-                  <div className="grid grid-cols-2 gap-3 mt-3 pl-6 border-l-2 border-yellow-400/30 ml-1.5">
-                    <div>
-                      <FieldLabel>Límite de crédito *</FieldLabel>
-                      <input type="number" min={0} step="0.01" value={rcForm.limite_credito}
-                        onChange={e => setRc('limite_credito', e.target.value)}
-                        className={inputCls} />
-                    </div>
-                    <div>
-                      <FieldLabel>Días de crédito</FieldLabel>
-                      <input type="number" min={0} value={rcForm.dias_credito}
-                        onChange={e => setRc('dias_credito', e.target.value)}
-                        placeholder="0" className={inputCls} />
-                    </div>
-                  </div>
-                )}
+            <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group">
+              <input
+                type="checkbox" checked={form.requiere_entrega}
+                onChange={e => setF('requiere_entrega', e.target.checked)}
+                className="w-4 h-4 rounded accent-yellow-400"
+              />
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+                Requiere entrega a domicilio
+              </span>
+            </label>
+
+            {form.requiere_entrega && (
+              <div className="grid grid-cols-1 gap-3 pl-6 border-l-2 border-yellow-400/30 ml-1.5">
+                <div>
+                  <FieldLabel>Dirección de entrega</FieldLabel>
+                  <input type="text" value={form.direccion_entrega} onChange={e => setF('direccion_entrega', e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <FieldLabel>Fecha de entrega</FieldLabel>
+                  <input type="datetime-local" value={form.fecha_entrega} onChange={e => setF('fecha_entrega', e.target.value)} className={inputCls} />
+                </div>
               </div>
             )}
 
-            {rcError && (
-              <p className="text-sm text-red-500 flex items-center gap-1.5">
-                <span>⚠</span> {rcError}
-              </p>
-            )}
-
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={guardarClienteRapido} disabled={rcGuardando}
-                className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
-              >
-                {rcGuardando ? 'Creando…' : 'Crear y seleccionar'}
-              </button>
-              <button
-                onClick={() => { setModalClienteRapido(false); setRcError(''); }}
-                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
-                Cancelar
-              </button>
+            <div>
+              <FieldLabel>Observaciones</FieldLabel>
+              <textarea
+                value={form.observaciones} onChange={e => setF('observaciones', e.target.value)}
+                rows={3} className={inputCls} placeholder="Notas adicionales…"
+              />
             </div>
+
+            <button
+              onClick={() => setMostrarMasOpciones(false)}
+              className="w-full py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors"
+            >
+              Listo
+            </button>
           </div>
         </Modal>
       )}
+
     </div>
   );
 }

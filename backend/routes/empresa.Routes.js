@@ -33,5 +33,6 @@ router.get('/',           authMiddleware, checkPermission('ver',    'empresa'), 
 router.post('/',          authMiddleware, checkPermission('editar', 'empresa'),       ctrl.createEmpresa);
 router.put('/:id',        authMiddleware, checkPermission('editar', 'empresa'),       ctrl.updateEmpresa);
 router.post('/:id/logo',  authMiddleware, checkPermission('editar', 'empresa'),       uploadLogo.single('logo'), validateMagic(IMAGES_ONLY), ctrl.uploadLogo);
+router.delete('/:id/logo', authMiddleware, checkPermission('editar', 'empresa'),       ctrl.deleteLogo);
 
 module.exports = router;

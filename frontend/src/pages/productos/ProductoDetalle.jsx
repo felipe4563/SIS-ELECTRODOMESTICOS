@@ -76,7 +76,20 @@ function TabDatos({ producto, onActualizar }) {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    const v = type === 'checkbox' ? checked : value;
+
+    // Real (costo) + Logística se suman automáticamente al MCM, y el MCM
+    // se refleja como precio mayorista por defecto.
+    if (name === 'precio_real' || name === 'costo_logistica') {
+      setForm(prev => {
+        const next = { ...prev, [name]: v };
+        const mcm  = Number(next.precio_real || 0) + Number(next.costo_logistica || 0);
+        return { ...next, costo_mcm: mcm, precio_mayor: mcm };
+      });
+      return;
+    }
+
+    setForm(prev => ({ ...prev, [name]: v }));
   };
 
   const handleSave = async () => {

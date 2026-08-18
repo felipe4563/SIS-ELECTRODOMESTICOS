@@ -60,6 +60,9 @@ export default function Kardex() {
     finally  { setCargando(false); }
   };
 
+  // Búsqueda automática al entrar a la página, con los filtros por defecto (últimos 30 días)
+  useEffect(() => { buscar(); }, []); // eslint-disable-line
+
   const set = (k, v) => setFiltros(prev => ({ ...prev, [k]: v }));
 
   return (
@@ -179,24 +182,38 @@ export default function Kardex() {
                 <thead>
                   <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">
                     {['Fecha', 'Tipo', 'Producto', 'Depósito', 'Documento', 'Cantidad', 'Costo Unit.', 'Saldo Cant.', 'Saldo Costo', 'Usuario', 'Obs.'].map(h => (
-                      <th key={h} className="text-left px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{h}</th>
+                      <th
+                        key={h}
+                        className={`text-left px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap ${
+                          h === 'Producto'
+                            ? 'sticky left-0 z-10 w-[200px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]'
+                            : ''
+                        }`}
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {filas.map(f => {
                     const badge = EFECTO_BADGE[f.efecto] ?? { label: f.efecto, cls: 'bg-zinc-100 text-zinc-600' };
-                    const esEntrada = f.efecto === 'ENTRADA';
+                    // efecto ENTRADA/SALIDA es explícito y confiable (cantidad se guarda sin signo).
+                    // Para AJUSTE/TRANSFERENCIA el efecto es ambiguo (mismo valor en ambos sentidos)
+                    // y ahí sí se guarda la cantidad con signo, así que usamos eso.
+                    const esEntrada = f.efecto === 'ENTRADA' ? true
+                      : f.efecto === 'SALIDA' ? false
+                      : Number(f.cantidad) >= 0;
                     return (
-                      <tr key={f.id_kardex} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                      <tr key={f.id_kardex} className="group hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
                         <td className="px-4 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400 text-xs">{fmtFecha(f.fecha)}</td>
                         <td className="px-4 py-2.5 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge.cls}`}>
                             {f.tipo_movimiento || badge.label}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <p className="font-medium text-zinc-900 dark:text-white">{f.producto_nombre}</p>
+                        <td className="sticky left-0 z-10 px-4 py-2.5 whitespace-nowrap w-[200px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                          <p className="font-medium text-zinc-900 dark:text-white truncate" title={f.producto_nombre}>{f.producto_nombre}</p>
                           <p className="text-[11px] text-zinc-400 font-mono">{f.codigo_interno}</p>
                         </td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400">

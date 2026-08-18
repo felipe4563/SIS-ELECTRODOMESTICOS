@@ -14,27 +14,31 @@ function CardSelectable({
   p,
   selected,
   onToggle,
+  index,
 }: {
   p: Producto;
   selected: boolean;
   onToggle: (p: Producto) => void;
+  index: number;
 }) {
   const agotado = !p.disponible;
   const img = imgUrl(p.imagen_url);
 
   return (
     <article
+      className="producto-card"
       style={{
         background:    selected ? 'rgba(225,29,72,0.06)' : 'var(--color-card)',
         border:        `1px solid ${selected ? 'rgba(225,29,72,0.55)' : 'var(--color-border)'}`,
         borderRadius:  'var(--radius-md)',
         overflow:      'hidden',
         position:      'relative',
-        transition:    'border-color 0.2s, box-shadow 0.2s, background 0.2s',
+        transition:    'border-color 0.2s, box-shadow 0.2s, background 0.2s, transform 0.2s',
         display:       'flex',
         flexDirection: 'column',
         cursor:        'pointer',
         boxShadow:     selected ? '0 0 0 2px rgba(225,29,72,0.2)' : 'none',
+        animationDelay: `${Math.min(index, 20) * 35}ms`,
       }}
       onClick={() => onToggle(p)}
     >
@@ -251,10 +255,11 @@ export default function CatalogoClient({ productos, telefono }: Props) {
         gap:                 '1rem',
         paddingBottom:        seleccionados.length > 0 ? '5rem' : 0,
       }}>
-        {productos.map(p => (
+        {productos.map((p, i) => (
           <CardSelectable
             key={p.id_producto}
             p={p}
+            index={i}
             selected={!!seleccionados.find(x => x.id_producto === p.id_producto)}
             onToggle={toggle}
           />
@@ -363,6 +368,38 @@ export default function CatalogoClient({ productos, telefono }: Props) {
 
       <style>{`
         .ver-detalle-btn:hover { border-color: var(--color-primary) !important; color: var(--color-primary) !important; }
+
+        /* ── Animaciones de entrada ── */
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUpBar {
+          from { opacity: 0; transform: translateY(100%); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .producto-card {
+          opacity: 0;
+          animation: fadeInUp 0.45s ease-out forwards;
+        }
+        .producto-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+        }
+        .producto-card img {
+          transition: transform 0.35s ease;
+        }
+        .producto-card:hover img {
+          transform: scale(1.05);
+        }
+        .cotizar-bar {
+          animation: slideUpBar 0.3s ease-out;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .producto-card, .cotizar-bar { animation: none !important; opacity: 1 !important; }
+          .producto-card:hover { transform: none; }
+          .producto-card img, .producto-card:hover img { transition: none; transform: none; }
+        }
 
         /* ── Grid de productos responsivo ── */
         @media (max-width: 860px) {

@@ -148,4 +148,41 @@ const uploadLogo = async (req, res) => {
   }
 };
 
-module.exports = { getEmpresaPublico, getEmpresa, createEmpresa, updateEmpresa, uploadLogo };
+// DELETE /api/empresa/:id/logo
+const deleteLogo = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT logo_url FROM empresas WHERE id_empresa = ? AND activo = 1`, [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Empresa no encontrada' });
+
+    const old = rows[0].logo_url;
+    if (old && old.startsWith('/uploads/')) {
+      const oldPath = path.join(__dirname, '..', old);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    await db.promise().query(
+      `UPDATE empresas SET logo_url = NULL WHERE id_empresa = ?`, [id]
+    );
+
+    const ip = req.ip || req.socket?.remoteAddress || null;
+    await db.promise().query(
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen)
+       VALUES (?, 'empresas', ?, 'UPDATE', ?)`,
+      [req.user.id_usuario, id, ip]
+    );
+
+    const [updated] = await db.promise().query(
+      `SELECT * FROM empresas WHERE id_empresa = ?`, [id]
+    );
+    return res.json({ empresa: updated[0] });
+  } catch (err) {
+    console.error('[deleteLogo]', err);
+    return res.status(500).json({ error: 'Error al quitar el logo' });
+  }
+};
+
+module.exports = { getEmpresaPublico, getEmpresa, createEmpresa, updateEmpresa, uploadLogo, deleteLogo };

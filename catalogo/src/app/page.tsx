@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import ScrollReveal from '@/components/ScrollReveal';
+import TiltCard from '@/components/TiltCard';
 
 export const revalidate = 60;
 
@@ -51,6 +52,14 @@ export default async function HomePage() {
             0%,100% { transform:translateY(0) scale(1); }
             50%     { transform:translateY(-16px) scale(1.06); }
           }
+          @keyframes tagPulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(225,29,72,0.35); }
+            50%     { box-shadow: 0 0 0 6px rgba(225,29,72,0); }
+          }
+          @keyframes ctaGlow {
+            0%,100% { box-shadow: 0 4px 24px rgba(225,29,72,0.28); }
+            50%     { box-shadow: 0 4px 34px rgba(225,29,72,0.5); }
+          }
 
           /* ── Hero entry ── */
           .hero-tag   { animation: fadeInDown 0.55s cubic-bezier(.22,.68,0,1.25) both .05s; }
@@ -67,6 +76,15 @@ export default async function HomePage() {
 
           .hero-glow-1 { animation: glowDrift  9s ease-in-out infinite; }
           .hero-glow-2 { animation: glowDrift 13s ease-in-out infinite reverse; }
+          .hero-glow-3 { animation: glowDrift 11s ease-in-out infinite; }
+
+          .hero-tag-pill { animation: fadeInDown 0.55s cubic-bezier(.22,.68,0,1.25) both .05s, tagPulse 2.6s ease-in-out infinite 1s; }
+          .hero-cta { animation: ctaGlow 2.8s ease-in-out infinite 1.2s; }
+
+          .hero-stat-card { animation: scaleIn 0.55s cubic-bezier(.22,.68,0,1.2) both; }
+          .hero-stat-card:nth-child(1) { animation-delay:.62s; }
+          .hero-stat-card:nth-child(2) { animation-delay:.7s; }
+          .hero-stat-card:nth-child(3) { animation-delay:.78s; }
 
           /* ── Scroll reveal ── */
           [data-scroll] {
@@ -89,7 +107,8 @@ export default async function HomePage() {
 
           @media (prefers-reduced-motion: reduce) {
             .hero-tag, .hero-h1, .hero-desc, .hero-btns, .hero-stats,
-            .hero-appliances > *, .hero-glow-1, .hero-glow-2, [data-scroll] {
+            .hero-appliances > *, .hero-glow-1, .hero-glow-2, .hero-glow-3,
+            .hero-tag-pill, .hero-cta, .hero-stat-card, [data-scroll] {
               animation: none !important;
               opacity: 1 !important;
               transform: none !important;
@@ -110,6 +129,10 @@ export default async function HomePage() {
           {/* Glows flotantes */}
           <div className="hero-glow-1" style={{ position:'absolute', top:'-15%', right:'-8%', width:650, height:650, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(225,29,72,0.18) 0%, transparent 70%)', pointerEvents:'none' }} />
           <div className="hero-glow-2" style={{ position:'absolute', bottom:'-10%', left:'20%', width:400, height:400, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(225,29,72,0.07) 0%, transparent 70%)', pointerEvents:'none' }} />
+          <div className="hero-glow-3" style={{ position:'absolute', top:'30%', left:'-10%', width:340, height:340, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(225,29,72,0.1) 0%, transparent 70%)', pointerEvents:'none' }} />
+
+          {/* Textura de puntos */}
+          <div style={{ position:'absolute', inset:0, backgroundImage:'radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize:'26px 26px', maskImage:'radial-gradient(ellipse 80% 60% at 30% 40%, black 0%, transparent 75%)', WebkitMaskImage:'radial-gradient(ellipse 80% 60% at 30% 40%, black 0%, transparent 75%)', pointerEvents:'none' }} />
 
           {/* Grid lines */}
           <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(225,29,72,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(225,29,72,0.04) 1px, transparent 1px)', backgroundSize:'60px 60px', pointerEvents:'none' }} />
@@ -119,7 +142,7 @@ export default async function HomePage() {
 
               {/* LEFT: Text */}
               <div>
-                <span className="tag hero-tag" style={{ marginBottom:'1.5rem', display:'inline-block' }}>
+                <span className="tag hero-tag-pill" style={{ marginBottom:'1.5rem', display:'inline-block', padding:'0.4rem 1rem', fontSize:'0.72rem' }}>
                   ◈ Electrodomésticos
                 </span>
                 <h1 className="hero-h1" style={{
@@ -139,7 +162,7 @@ export default async function HomePage() {
                   stock disponible y asesoramiento personalizado.
                 </p>
                 <div className="hero-btns" style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-                  <Link href="/catalogo" className="btn-primary" style={{ padding:'0.8rem 2rem', fontSize:'0.85rem' }}>
+                  <Link href="/catalogo" className="btn-primary hero-cta" style={{ padding:'0.8rem 2rem', fontSize:'0.85rem' }}>
                     Explorar Catálogo
                   </Link>
                   {promociones.length > 0 && (
@@ -148,16 +171,43 @@ export default async function HomePage() {
                     </Link>
                   )}
                 </div>
-                <div className="hero-stats" style={{ display:'flex', gap:'1.5rem', marginTop:'2.5rem', flexWrap:'wrap' }}>
+                <div className="hero-stats" style={{ display:'flex', gap:'0.75rem', marginTop:'2.5rem', flexWrap:'wrap' }}>
                   {[
-                    { label:'Sistema', value:'Online', ok:true },
-                    { label:'Productos', value:`${productos.length}+` },
-                    { label:'Categorías', value:`${categorias.length}` },
+                    {
+                      label:'Sistema', value:'Online', ok:true,
+                      icon: <path d="M2 8.5C6 4.5 18 4.5 22 8.5M5.5 12C8 9.7 16 9.7 18.5 12M9 15.5C10.5 14 13.5 14 15 15.5M12 19h.01" />,
+                    },
+                    {
+                      label:'Productos', value:`${productos.length}+`,
+                      icon: <path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8" />,
+                    },
+                    {
+                      label:'Categorías', value:`${categorias.length}`,
+                      icon: <path d="M4 4h7v7H4V4zM13 4h7v7h-7V4zM4 13h7v7H4v-7zM13 13h7v7h-7v-7z" />,
+                    },
                   ].map(s => (
-                    <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ width:6, height:6, borderRadius:'50%', background:s.ok ? '#22c55e' : 'var(--color-primary)', boxShadow:s.ok ? '0 0 6px #22c55e' : '0 0 6px var(--color-primary)', flexShrink:0 }} />
-                      <span style={{ fontSize:'0.72rem', color:'var(--color-muted)', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-                        {s.label}: <span style={{ color:'var(--color-txt)', fontWeight:600 }}>{s.value}</span>
+                    <div key={s.label} className="hero-stat-card" style={{
+                      display:      'flex',
+                      alignItems:   'center',
+                      gap:           9,
+                      padding:      '0.6rem 0.9rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background:   'var(--color-card)',
+                      border:       '1px solid var(--color-border)',
+                    }}>
+                      <span style={{
+                        display:        'flex', alignItems:'center', justifyContent:'center',
+                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                        background: s.ok ? 'rgba(34,197,94,0.12)' : 'rgba(225,29,72,0.12)',
+                        color:      s.ok ? '#22c55e' : 'var(--color-primary)',
+                      }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {s.icon}
+                        </svg>
+                      </span>
+                      <span style={{ display:'flex', flexDirection:'column', lineHeight:1.2 }}>
+                        <span style={{ fontSize:'0.82rem', color:'var(--color-txt)', fontWeight:700 }}>{s.value}</span>
+                        <span style={{ fontSize:'0.62rem', color:'var(--color-muted)', letterSpacing:'0.06em', textTransform:'uppercase' }}>{s.label}</span>
                       </span>
                     </div>
                   ))}
@@ -173,13 +223,12 @@ export default async function HomePage() {
                   { label: 'Televisores',     desc: 'Entretenimiento HD',   src: '/hero/tv.jpg'      },
                 ]).map(item => (
                   <Link key={item.label} href="/catalogo" style={{ textDecoration:'none' }}>
-                    <div className="appliance-card" style={{
+                    <TiltCard className="appliance-card" style={{
                       background:    'var(--color-card)',
                       border:        '1px solid var(--color-border)',
                       borderRadius:  'var(--radius-md)',
                       overflow:      'hidden',
                       cursor:        'pointer',
-                      transition:    'border-color 0.2s, transform 0.2s, box-shadow 0.2s',
                     }}>
                       <div style={{ position:'relative', width:'100%', height:130, overflow:'hidden' }}>
                         <Image
@@ -204,7 +253,7 @@ export default async function HomePage() {
                           {item.desc}
                         </p>
                       </div>
-                    </div>
+                    </TiltCard>
                   </Link>
                 ))}
               </div>
@@ -225,7 +274,6 @@ export default async function HomePage() {
             }
             .appliance-card:hover {
               border-color: rgba(225,29,72,0.4) !important;
-              transform: translateY(-4px);
               box-shadow: 0 14px 36px rgba(0,0,0,0.45);
             }
             .appliance-card:hover .appliance-img {

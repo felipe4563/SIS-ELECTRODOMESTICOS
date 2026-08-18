@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { cotizacionesService } from '../../services/cotizaciones.service';
+import { clientesService } from '../../services/clientes.service';
 import api from '../../api/axios';
+
+const RC_FORM_VACIO = { nombre: '', telefono: '', direccion: '', ciudad: '' };
 
 const fmt   = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 const toNum = v => (isNaN(Number(v)) ? 0 : Number(v));
@@ -21,6 +24,7 @@ function Spinner() {
 function ProductoPicker({ value, productos, onChange, isMobile }) {
   const [open, setOpen] = useState(false);
   const [busq, setBusq] = useState('');
+  const [pos, setPos]   = useState({ top: 0, left: 0, width: 0, maxHeight: 320 });
   const btnRef          = useRef(null);
   const dropRef         = useRef(null);
 
@@ -34,6 +38,31 @@ function ProductoPicker({ value, productos, onChange, isMobile }) {
         )
         .slice(0, 50)
     : productos.slice(0, 50);
+
+  /* Posición del dropdown desktop (fixed, calculada desde el botón para no quedar
+     recortado por el overflow-x-auto de la tabla) */
+  const updatePos = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({
+      top: r.bottom + 4,
+      left: r.left,
+      width: r.width,
+      maxHeight: Math.max(160, Math.min(320, window.innerHeight - r.bottom - 16)),
+    });
+  };
+
+  useEffect(() => {
+    if (!open || isMobile) return;
+    updatePos();
+    const onScrollResize = () => updatePos();
+    window.addEventListener('scroll', onScrollResize, true);
+    window.addEventListener('resize', onScrollResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollResize, true);
+      window.removeEventListener('resize', onScrollResize);
+    };
+  }, [open, isMobile]);
 
   /* Cierre por click fuera (desktop) */
   useEffect(() => {
@@ -85,9 +114,13 @@ function ProductoPicker({ value, productos, onChange, isMobile }) {
             className={
               isMobile
                 ? 'fixed inset-x-0 bottom-0 z-50 flex flex-col bg-white dark:bg-zinc-900 rounded-t-2xl shadow-2xl border-t border-zinc-200 dark:border-zinc-700'
-                : 'absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden'
+                : 'fixed z-50 flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden'
             }
-            style={isMobile ? { maxHeight: '65vh' } : {}}
+            style={
+              isMobile
+                ? { maxHeight: '65vh' }
+                : { top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }
+            }
           >
             {/* Mobile header */}
             {isMobile && (
@@ -118,7 +151,7 @@ function ProductoPicker({ value, productos, onChange, isMobile }) {
             </div>
 
             {/* Lista */}
-            <ul className={`overflow-y-auto ${isMobile ? 'flex-1' : 'max-h-52'}`}>
+            <ul className="overflow-y-auto flex-1 min-h-0">
               {filtrados.length === 0 ? (
                 <li className="px-3 py-6 text-xs text-zinc-400 text-center">Sin resultados</li>
               ) : (
@@ -216,15 +249,6 @@ function FilaItem({ fila, index, productos, onChange, onRemove, isMobile }) {
             >
               Público Bs {fmt(prod.precio_publico)}
             </button>
-            {toNum(prod.precio_mayor) > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange({ precio_unitario: toNum(prod.precio_mayor) })}
-                className="text-xs px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors"
-              >
-                Mayor Bs {fmt(prod.precio_mayor)}
-              </button>
-            )}
           </div>
         )}
 
@@ -273,15 +297,6 @@ function FilaItem({ fila, index, productos, onChange, onRemove, isMobile }) {
             >
               Bs {fmt(prod.precio_publico)} ↑
             </button>
-            {toNum(prod.precio_mayor) > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange({ precio_unitario: toNum(prod.precio_mayor) })}
-                className="text-xs px-1.5 py-0.5 rounded-md text-zinc-400 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
-              >
-                Mayor Bs {fmt(prod.precio_mayor)} ↑
-              </button>
-            )}
           </div>
         )}
       </td>
@@ -327,6 +342,11 @@ export default function CotizacionForm() {
   const [guardando,   setGuardando]   = useState(false);
   const [cargando,    setCargando]    = useState(esEdicion);
   const [error,       setError]       = useState('');
+
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [rcForm, setRcForm]   = useState(RC_FORM_VACIO);
+  const [rcError, setRcError] = useState('');
+  const [rcGuardando, setRcGuardando] = useState(false);
 
   /* Cargar form-data en una sola llamada */
   useEffect(() => {
@@ -391,6 +411,61 @@ export default function CotizacionForm() {
   const addItem    = ()     => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
   const removeItem = i      => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
+
+  const setRc = (k, v) => setRcForm(p => ({ ...p, [k]: v }));
+
+  const clientesFiltrados = useMemo(() => clientes.filter(c => {
+    if (!busquedaCliente.trim()) return true;
+    const q = busquedaCliente.toLowerCase();
+    return (
+      (c.documento ?? '').toLowerCase().includes(q) ||
+      (c.nombres ?? '').toLowerCase().includes(q) ||
+      (c.apellidos ?? '').toLowerCase().includes(q) ||
+      (c.razon_social ?? '').toLowerCase().includes(q) ||
+      (c.codigo ?? '').toLowerCase().includes(q)
+    );
+  }).slice(0, 50), [clientes, busquedaCliente]);
+
+  // Si la búsqueda deja un único cliente posible, se selecciona solo (sin click extra en el select)
+  useEffect(() => {
+    if (!busquedaCliente.trim() || clientesFiltrados.length !== 1) return;
+    const unico = clientesFiltrados[0];
+    if (String(form.id_cliente) !== String(unico.id_cliente)) {
+      setF('id_cliente', String(unico.id_cliente));
+    }
+  }, [clientesFiltrados]); // eslint-disable-line
+
+  const guardarClienteRapido = async () => {
+    setRcError('');
+    const { nombre, telefono, direccion, ciudad } = rcForm;
+    if (!nombre.trim()) return setRcError('El nombre es requerido');
+    setRcGuardando(true);
+    try {
+      const res = await clientesService.create({
+        nombres: nombre.trim(),
+        documento: busquedaCliente.trim() || undefined,
+        telefono: telefono.trim() || undefined,
+      });
+      let nuevoCliente = res.data.cliente;
+
+      if (direccion.trim()) {
+        await clientesService.createDireccion(nuevoCliente.id_cliente, {
+          direccion: direccion.trim(),
+          ciudad: ciudad.trim() || undefined,
+          es_principal: true,
+        });
+      }
+
+      setClientes(prev => [...prev, nuevoCliente]);
+      setF('id_cliente', String(nuevoCliente.id_cliente));
+      setBusquedaCliente('');
+      setRcForm(RC_FORM_VACIO);
+    } catch (err) {
+      setRcError(err.response?.data?.error ?? 'Error al crear cliente');
+    } finally {
+      setRcGuardando(false);
+    }
+  };
 
   const subtotal  = items.reduce((s, it) => {
     const base = toNum(it.cantidad) * toNum(it.precio_unitario);
@@ -496,27 +571,111 @@ export default function CotizacionForm() {
           {/* Cliente */}
           <div className="sm:col-span-1 lg:col-span-2">
             <label className={labelCls}>Cliente <span className="text-red-400">*</span></label>
-            <select
-              value={form.id_cliente}
-              onChange={e => setF('id_cliente', e.target.value)}
-              className={inputCls}
-            >
-              <option value="">— seleccionar —</option>
-              {clientes.map(c => (
-                <option key={c.id_cliente} value={c.id_cliente}>
-                  [{c.codigo}] {c.razon_social || [c.nombres, c.apellidos].filter(Boolean).join(' ')}
-                </option>
-              ))}
-            </select>
-            {clienteInfo && (
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                {clienteInfo.tipo_documento && (
-                  <span>{clienteInfo.tipo_documento}: {clienteInfo.documento}</span>
+            <input
+              type="text" value={busquedaCliente} onChange={e => setBusquedaCliente(e.target.value)}
+              placeholder="Buscar por CI, nombre o código…"
+              className={`${inputCls} mb-1.5`}
+            />
+
+            {busquedaCliente.trim() && clientesFiltrados.length === 1 ? (
+              <div className="px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-2">
+                <span className="text-green-600 dark:text-green-400 text-sm">✓</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-300 truncate">
+                    {clientesFiltrados[0].razon_social || [clientesFiltrados[0].nombres, clientesFiltrados[0].apellidos].filter(Boolean).join(' ')}
+                  </p>
+                  {clienteInfo && (
+                    <p className="text-xs text-green-700 dark:text-green-400 mt-0.5 flex flex-wrap gap-x-2">
+                      {clienteInfo.tipo_documento && <span>{clienteInfo.tipo_documento}: {clienteInfo.documento}</span>}
+                      {clienteInfo.telefono && <span>· Tel: {clienteInfo.telefono}</span>}
+                      {clienteInfo.email && <span>· {clienteInfo.email}</span>}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button" onClick={() => setBusquedaCliente('')}
+                  className="text-xs text-green-600 dark:text-green-400 hover:underline shrink-0"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : clientesFiltrados.length > 0 ? (
+              <>
+                <select
+                  value={form.id_cliente}
+                  onChange={e => setF('id_cliente', e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">— seleccionar —</option>
+                  {clientesFiltrados.map(c => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      [{c.codigo}] {c.razon_social || [c.nombres, c.apellidos].filter(Boolean).join(' ')}
+                    </option>
+                  ))}
+                </select>
+                {clienteInfo && (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    {clienteInfo.tipo_documento && (
+                      <span>{clienteInfo.tipo_documento}: {clienteInfo.documento}</span>
+                    )}
+                    {clienteInfo.telefono && <span>· Tel: {clienteInfo.telefono}</span>}
+                    {clienteInfo.email && <span>· {clienteInfo.email}</span>}
+                  </p>
                 )}
-                {clienteInfo.telefono && <span>· Tel: {clienteInfo.telefono}</span>}
-                {clienteInfo.email && <span>· {clienteInfo.email}</span>}
-              </p>
-            )}
+              </>
+            ) : busquedaCliente.trim() ? (
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2.5">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  No se encontró a "{busquedaCliente.trim()}" — completá los datos para crearlo.
+                </p>
+
+                <div>
+                  <label className={labelCls}>Nombre / Razón social *</label>
+                  <input
+                    type="text" value={rcForm.nombre} onChange={e => setRc('nombre', e.target.value)}
+                    placeholder="Ej: Juan Pérez" className={inputCls}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelCls}>Teléfono</label>
+                  <input
+                    type="text" value={rcForm.telefono} onChange={e => setRc('telefono', e.target.value)}
+                    placeholder="Opcional" className={inputCls}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className={labelCls}>Dirección</label>
+                    <input
+                      type="text" value={rcForm.direccion} onChange={e => setRc('direccion', e.target.value)}
+                      placeholder="Opcional" className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Ciudad</label>
+                    <input
+                      type="text" value={rcForm.ciudad} onChange={e => setRc('ciudad', e.target.value)}
+                      placeholder="Opcional" className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                {rcError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1.5">
+                    <span>⚠</span> {rcError}
+                  </p>
+                )}
+
+                <button
+                  type="button" onClick={guardarClienteRapido} disabled={rcGuardando}
+                  className="w-full py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-xs transition-colors"
+                >
+                  {rcGuardando ? 'Creando…' : 'Crear y usar este cliente'}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* Tipo de pago */}

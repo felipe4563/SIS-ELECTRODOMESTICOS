@@ -5,6 +5,7 @@ import { useAbilityUpdater } from '../contexts/AbilityContext';
 import { usePermission }     from '../hooks/usePermission';
 import { useTheme }          from '../contexts/ThemeContext';
 import { useEmpresa }        from '../contexts/EmpresaContext';
+import { useSidebar }        from '../contexts/SidebarContext';
 
 /* ─── Sistema de íconos SVG ──────────────────────────────────────────────── */
 function Ic({ id, size = 15, className = '' }) {
@@ -72,6 +73,74 @@ const MENU = [
     ],
   },
   {
+    label: 'Ventas',
+    items: [
+      { label: 'Ventas',       path: '/ventas',       icon: 'bag',         anyOf: [['ver_propias','ventas'],['ver_sucursal','ventas'],['ver_todas','ventas']] },
+      { label: 'Cotizaciones', path: '/cotizaciones', icon: 'file-text',   action: 'ver',          subject: 'cotizaciones' },
+      { label: 'Cobros',       path: '/cobros',       icon: 'credit-card', action: 'ver',          subject: 'cobros' },
+      { label: 'Clientes',     path: '/clientes',     icon: 'users',       action: 'ver',          subject: 'clientes' },
+    ],
+  },
+  {
+    label: 'Servicio Técnico',
+    items: [
+      { label: 'Servicio Técnico', path: '/servicio-tecnico',          icon: 'wrench', anyOf: [['ver','servicio_tecnico'],['ver_todas','servicio_tecnico']] },
+      { label: 'Técnicos externos', path: '/servicio-tecnico/tecnicos', icon: 'tool',   anyOf: [['ver','servicio_tecnico'],['ver_todas','servicio_tecnico'],['gestionar_tecnicos','servicio_tecnico']] },
+    ],
+  },
+  {
+    label: 'Inventario',
+    items: [
+      { label: 'Stock',          path: '/inventario/stock',          icon: 'clipboard', action: 'ver',         subject: 'inventario', orAction: 'ver_todos_depositos' },
+      { label: 'Kardex',         path: '/inventario/kardex',         icon: 'scroll',    action: 'ver_kardex',  subject: 'inventario' },
+      { label: 'Alertas',        path: '/inventario/alertas',        icon: 'bell',      action: 'alertas_ver', subject: 'inventario' },
+      { label: 'Transferencias', path: '/inventario/transferencias', icon: 'transfer',  anyOf: [['transferir_solicitar','inventario'],['transferir_enviar','inventario'],['transferir_recibir','inventario'],['transferir_anular','inventario']] },
+      { label: 'Ajustes',        path: '/inventario/ajustes',        icon: 'wrench',    anyOf: [['ajuste_crear','inventario'],['ajuste_aprobar','inventario'],['ajuste_anular','inventario']] },
+    ],
+  },
+  {
+    label: 'Compras',
+    items: [
+      { label: 'Compras',     path: '/compras',     icon: 'cart',  action: 'ver', subject: 'compras' },
+      { label: 'Proveedores', path: '/proveedores', icon: 'truck', action: 'ver', subject: 'proveedores' },
+    ],
+  },
+  {
+    label: 'Catálogo',
+    items: [
+      { label: 'Productos',  path: '/productos',           icon: 'package', action: 'ver', subject: 'productos' },
+      { label: 'Marcas',     path: '/catalogo/marcas',     icon: 'tag',     action: 'ver', subject: 'marcas' },
+      { label: 'Categorías', path: '/catalogo/categorias', icon: 'folder',  action: 'ver', subject: 'categorias' },
+      { label: 'Unidades',   path: '/catalogo/unidades',   icon: 'ruler',   action: 'ver', subject: 'unidades' },
+    ],
+  },
+  {
+    label: 'Combos y Promociones',
+    items: [
+      { label: 'Combos',      path: '/combos',      icon: 'gift', action: 'ver', subject: 'combos' },
+      { label: 'Promociones', path: '/promociones', icon: 'tag',  action: 'ver', subject: 'promociones' },
+    ],
+  },
+  {
+    label: 'Caja',
+    items: [
+      { label: 'Caja',       path: '/caja',       icon: 'wallet',    action: 'ver',              subject: 'caja' },
+      { label: 'Libro Caja', path: '/caja/libro',  icon: 'clipboard', action: 'ver_libro', subject: 'caja' },
+    ],
+  },
+  {
+    label: 'Gastos',
+    items: [
+      { label: 'Gastos', path: '/gastos', icon: 'cash', action: 'ver', subject: 'gastos' },
+    ],
+  },
+  {
+    label: 'Reportes',
+    items: [
+      { label: 'Reportes', path: '/reportes', icon: 'bar-chart', action: 'ver', subject: 'reportes' },
+    ],
+  },
+  {
     label: 'Configuración',
     items: [
       { label: 'Empresa',         path: '/configuracion/empresa',      icon: 'building',  action: 'ver', subject: 'empresa' },
@@ -88,83 +157,6 @@ const MENU = [
     items: [
       { label: 'Usuarios', path: '/usuarios',       icon: 'user',   action: 'ver', subject: 'usuarios' },
       { label: 'Roles',    path: '/usuarios/roles', icon: 'shield', action: 'ver', subject: 'roles' },
-    ],
-  },
-  {
-    label: 'Proveedores',
-    items: [
-      { label: 'Proveedores', path: '/proveedores', icon: 'truck', action: 'ver', subject: 'proveedores' },
-    ],
-  },
-  {
-    label: 'Clientes',
-    items: [
-      { label: 'Clientes', path: '/clientes', icon: 'users', action: 'ver', subject: 'clientes' },
-    ],
-  },
-  {
-    label: 'Catálogo',
-    items: [
-      { label: 'Productos',  path: '/productos',           icon: 'package', action: 'ver', subject: 'productos' },
-      { label: 'Marcas',     path: '/catalogo/marcas',     icon: 'tag',     action: 'ver', subject: 'marcas' },
-      { label: 'Categorías', path: '/catalogo/categorias', icon: 'folder',  action: 'ver', subject: 'categorias' },
-      { label: 'Unidades',   path: '/catalogo/unidades',   icon: 'ruler',   action: 'ver', subject: 'unidades' },
-    ],
-  },
-  {
-    label: 'Compras',
-    items: [
-      { label: 'Compras', path: '/compras', icon: 'cart', action: 'ver', subject: 'compras' },
-    ],
-  },
-  {
-    label: 'Combos y Promociones',
-    items: [
-      { label: 'Combos',      path: '/combos',      icon: 'gift', action: 'ver', subject: 'combos' },
-      { label: 'Promociones', path: '/promociones', icon: 'tag',  action: 'ver', subject: 'promociones' },
-    ],
-  },
-  {
-    label: 'Inventario',
-    items: [
-      { label: 'Stock',          path: '/inventario/stock',          icon: 'clipboard', action: 'ver',         subject: 'inventario', orAction: 'ver_todos_depositos' },
-      { label: 'Kardex',         path: '/inventario/kardex',         icon: 'scroll',    action: 'ver_kardex',  subject: 'inventario' },
-      { label: 'Alertas',        path: '/inventario/alertas',        icon: 'bell',      action: 'alertas_ver', subject: 'inventario' },
-      { label: 'Transferencias', path: '/inventario/transferencias', icon: 'transfer',  anyOf: [['transferir_solicitar','inventario'],['transferir_enviar','inventario'],['transferir_recibir','inventario'],['transferir_anular','inventario']] },
-      { label: 'Ajustes',        path: '/inventario/ajustes',        icon: 'wrench',    anyOf: [['ajuste_crear','inventario'],['ajuste_aprobar','inventario'],['ajuste_anular','inventario']] },
-    ],
-  },
-  {
-    label: 'Ventas',
-    items: [
-      { label: 'Ventas',       path: '/ventas',       icon: 'bag',         anyOf: [['ver_propias','ventas'],['ver_sucursal','ventas'],['ver_todas','ventas']] },
-      { label: 'Cotizaciones', path: '/cotizaciones', icon: 'file-text',   action: 'ver',          subject: 'cotizaciones' },
-      { label: 'Cobros',       path: '/cobros',       icon: 'credit-card', action: 'ver',          subject: 'cobros' },
-    ],
-  },
-  {
-    label: 'Servicio Técnico',
-    items: [
-      { label: 'Servicio Técnico', path: '/servicio-tecnico',          icon: 'wrench', anyOf: [['ver','servicio_tecnico'],['ver_todas','servicio_tecnico']] },
-      { label: 'Técnicos externos', path: '/servicio-tecnico/tecnicos', icon: 'tool',   anyOf: [['ver','servicio_tecnico'],['ver_todas','servicio_tecnico'],['gestionar_tecnicos','servicio_tecnico']] },
-    ],
-  },
-  {
-    label: 'Gastos',
-    items: [
-      { label: 'Gastos', path: '/gastos', icon: 'cash', action: 'ver', subject: 'gastos' },
-    ],
-  },
-  {
-    label: 'Caja',
-    items: [
-      { label: 'Caja', path: '/caja', icon: 'wallet', action: 'ver', subject: 'caja' },
-    ],
-  },
-  {
-    label: 'Reportes',
-    items: [
-      { label: 'Reportes', path: '/reportes', icon: 'bar-chart', action: 'ver', subject: 'reportes' },
     ],
   },
   {
@@ -276,11 +268,12 @@ function MenuGroup({ grupo, onClose }) {
 }
 
 /* ─── Sidebar expandido ──────────────────────────────────────────────────── */
-function SidebarFull({ onClose } = {}) {
+function SidebarFull({ onClose, onColapsar } = {}) {
   const { usuario, logout } = useAuth();
   const { limpiar }         = useAbilityUpdater();
   const navigate            = useNavigate();
-  const { logoUrl }         = useEmpresa() ?? {};
+  const { logoUrl, empresa: empresaInfo } = useEmpresa() ?? {};
+  const nombreEmpresa = empresaInfo?.nombre_comercial || empresaInfo?.razon_social || 'Megaelectra';
 
   const handleLogout = async () => {
     limpiar();
@@ -294,11 +287,26 @@ function SidebarFull({ onClose } = {}) {
   return (
     <div className="flex flex-col h-full bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800/80 transition-colors duration-300">
       {/* Logo */}
-      <div className="flex flex-col items-center pt-5 pb-4 px-4 border-b border-zinc-100 dark:border-zinc-800/80">
-        <img src={logoUrl ?? '/logo.png'} alt="Logo"
-          className="h-12 w-auto max-w-[160px] object-contain select-none"
-          onError={e => { e.target.src = '/logo.png'; }}
-          draggable={false} />
+      <div className="flex items-center justify-between gap-2 pt-5 pb-4 px-4 border-b border-zinc-100 dark:border-zinc-800/80">
+        {empresaInfo?.logo_url ? (
+          <img src={logoUrl} alt="Logo"
+            className="h-11 w-auto max-w-[130px] object-contain select-none"
+            onError={e => { e.target.style.display = 'none'; }}
+            draggable={false} />
+        ) : (
+          <span className="text-base font-bold text-zinc-900 dark:text-white truncate leading-tight">
+            {nombreEmpresa}
+          </span>
+        )}
+        {onColapsar && (
+          <button
+            onClick={onColapsar}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors shrink-0"
+            aria-label="Ocultar menú" title="Ocultar menú"
+          >
+            <Ic id="hamburger" size={16} />
+          </button>
+        )}
       </div>
 
       {/* Usuario */}
@@ -364,12 +372,40 @@ function SidebarFull({ onClose } = {}) {
 }
 
 
+/* ─── Barra superior fina: hamburguesa + logo ─────────────────────────────── */
+function BarraSuperior({ onAbrir, className = '' }) {
+  const { logoUrl, empresa } = useEmpresa() ?? {};
+  const nombreEmpresa        = empresa?.nombre_comercial || empresa?.razon_social || '';
+
+  return (
+    <div className={`fixed top-0 left-0 right-0 h-16 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center px-4 gap-3 transition-colors duration-300 ${className}`}>
+      <button
+        onClick={onAbrir}
+        className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+        aria-label="Abrir menú"
+      >
+        <Ic id="hamburger" size={20} />
+      </button>
+      <img
+        src={logoUrl ?? '/logo.png'}
+        alt="Logo"
+        className="h-8 w-auto max-w-[36px] object-contain select-none shrink-0"
+        onError={e => { e.target.src = '/logo.png'; }}
+        draggable={false}
+      />
+      {nombreEmpresa && (
+        <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white leading-tight">
+          {nombreEmpresa}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ─── Sidebar móvil: barra superior + drawer ─────────────────────────────── */
 function SidebarMobile() {
   const [abierto, setAbierto] = useState(false);
-  const { logoUrl, empresa }  = useEmpresa() ?? {};
-  const location              = useLocation();
-  const nombreEmpresa         = empresa?.nombre_comercial || empresa?.razon_social || '';
+  const location               = useLocation();
 
   useEffect(() => { setAbierto(false); }, [location.pathname]);
 
@@ -377,28 +413,7 @@ function SidebarMobile() {
 
   return (
     <>
-      {/* Barra superior fija */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 z-30 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/80 flex items-center px-4 gap-3 transition-colors duration-300">
-        <button
-          onClick={() => setAbierto(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          aria-label="Abrir menú"
-        >
-          <Ic id="hamburger" size={20} />
-        </button>
-        <img
-          src={logoUrl ?? '/logo.png'}
-          alt="Logo"
-          className="h-8 w-auto max-w-[36px] object-contain select-none shrink-0"
-          onError={e => { e.target.src = '/logo.png'; }}
-          draggable={false}
-        />
-        {nombreEmpresa && (
-          <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white leading-tight">
-            {nombreEmpresa}
-          </span>
-        )}
-      </div>
+      <BarraSuperior onAbrir={() => setAbierto(true)} className="lg:hidden" />
 
       {/* Backdrop */}
       <div
@@ -427,16 +442,35 @@ function SidebarMobile() {
   );
 }
 
+/* ─── Botón para reabrir el sidebar cuando está colapsado (desktop) ──────── */
+export function BotonAbrirSidebar({ className = '' }) {
+  const { setColapsado } = useSidebar();
+  return (
+    <button
+      onClick={() => setColapsado(false)}
+      className={`w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors ${className}`}
+      aria-label="Mostrar menú" title="Mostrar menú"
+    >
+      <Ic id="hamburger" size={20} />
+    </button>
+  );
+}
+
 /* ─── Sidebar principal ──────────────────────────────────────────────────── */
 export default function Sidebar() {
+  const { colapsado, setColapsado } = useSidebar();
+
   return (
     <>
       <style>{SCROLL_CSS}</style>
 
-      {/* Desktop lg+: sidebar completo */}
-      <aside className="hidden lg:flex w-60 shrink-0 flex-col h-screen sticky top-0 z-30">
-        <SidebarFull />
-      </aside>
+      {/* Desktop lg+: sidebar completo — no se renderiza nada cuando está colapsado
+          (App.jsx dibuja la fila con el botón "Mostrar menú" en su propio lugar en el layout) */}
+      {!colapsado && (
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col h-screen sticky top-0 z-30">
+          <SidebarFull onColapsar={() => setColapsado(true)} />
+        </aside>
+      )}
 
       {/* Móvil: hamburger + drawer */}
       <SidebarMobile />

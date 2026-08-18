@@ -178,12 +178,13 @@ async function getArqueo(req, res) {
         cg.nombre AS categoria
       FROM gastos g
       LEFT JOIN categorias_gasto cg ON cg.id_categoria_gasto = g.id_categoria_gasto
-      WHERE g.id_sucursal = ?
-        AND g.estado != 'ANULADO'
-        AND g.fecha_creacion >= ?
-        AND g.fecha_creacion <= ?
+      WHERE g.estado != 'ANULADO'
+        AND (
+          g.id_arqueo = ?
+          OR (g.id_arqueo IS NULL AND g.id_sucursal = ? AND g.fecha_creacion >= ? AND g.fecha_creacion <= ?)
+        )
       ORDER BY g.fecha_creacion
-    `, [arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
+    `, [arqueo.id_arqueo, arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
 
     // Pagos a proveedores de todos los métodos durante el turno
     const [pagosCompra] = await db.promise().query(`
@@ -283,9 +284,12 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
     const [[{ total_gastos }]] = await db.promise().query(`
       SELECT COALESCE(SUM(monto), 0) AS total_gastos
       FROM gastos
-      WHERE id_sucursal = ? AND metodo_pago = 'EFECTIVO' AND estado != 'ANULADO'
-        AND fecha_creacion >= ?
-    `, [arqueo.id_sucursal, arqueo.fecha_apertura]);
+      WHERE metodo_pago = 'EFECTIVO' AND estado != 'ANULADO'
+        AND (
+          id_arqueo = ?
+          OR (id_arqueo IS NULL AND id_sucursal = ? AND fecha_creacion >= ?)
+        )
+    `, [arqueo.id_arqueo, arqueo.id_sucursal, arqueo.fecha_apertura]);
 
     // Pagos a proveedores en efectivo del turno
     const [[{ total_pagos_compra }]] = await db.promise().query(`
@@ -318,8 +322,105 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
 
 async function cerrarCaja(req, res) { return _cerrarArqueo(req, res, false); }
 
+// ── Libro Caja ────────────────────────────────────────────────────────────
+// Ingresos (cobros de ventas) + egresos (pagos a proveedores y gastos),
+// ordenados cronológicamente con saldo acumulado. No depende de un arqueo
+// puntual: se filtra por sucursal y rango de fechas, así cubre también los
+// gastos que nunca pasaron por una caja abierta.
+
+async function getLibroCaja(req, res) {
+  try {
+    let { id_sucursal, fecha_desde, fecha_hasta, metodo_pago } = req.query;
+
+    const verTodos = req.ability.can('ver_arqueo_todos', 'caja');
+    if (!verTodos) id_sucursal = req.user.id_sucursal;
+
+    const desde = fecha_desde ? `${fecha_desde} 00:00:00` : '1970-01-01 00:00:00';
+    const hasta = fecha_hasta ? `${fecha_hasta} 23:59:59` : '2999-12-31 23:59:59';
+
+    const sucCond  = alias => id_sucursal ? `AND ${alias}.id_sucursal = ?` : '';
+    const sucParam = id_sucursal ? [id_sucursal] : [];
+
+    const metCond  = alias => metodo_pago ? `AND ${alias}.metodo_pago = ?` : '';
+    const metParam = metodo_pago ? [metodo_pago] : [];
+
+    const [ingresos] = await db.promise().query(`
+      SELECT pv.id_pago, pv.numero, pv.fecha, pv.monto, pv.metodo_pago,
+        v.numero AS venta_numero,
+        CONCAT(cl.nombres, ' ', COALESCE(cl.apellidos, '')) AS referencia
+      FROM pagos_venta pv
+      JOIN ventas v    ON v.id_venta    = pv.id_venta
+      JOIN clientes cl ON cl.id_cliente = pv.id_cliente
+      WHERE pv.fecha >= ? AND pv.fecha <= ? ${sucCond('pv')} ${metCond('pv')}
+      ORDER BY pv.fecha
+    `, [desde, hasta, ...sucParam, ...metParam]);
+
+    const [egresosCompra] = await db.promise().query(`
+      SELECT pc.id_pago, pc.numero, pc.fecha, pc.monto, pc.metodo_pago,
+        c.numero AS compra_numero,
+        COALESCE(p.razon_social, p.nombre_comercial) AS referencia
+      FROM pagos_compra pc
+      LEFT JOIN compras c     ON c.id_compra    = pc.id_compra
+      LEFT JOIN proveedores p ON p.id_proveedor = pc.id_proveedor
+      WHERE pc.fecha >= ? AND pc.fecha <= ? ${sucCond('pc')} ${metCond('pc')}
+      ORDER BY pc.fecha
+    `, [desde, hasta, ...sucParam, ...metParam]);
+
+    const [gastos] = await db.promise().query(`
+      SELECT g.id_gasto, g.numero, g.fecha_creacion AS fecha, g.monto, g.metodo_pago,
+        g.descripcion AS referencia,
+        cg.nombre AS categoria
+      FROM gastos g
+      LEFT JOIN categorias_gasto cg ON cg.id_categoria_gasto = g.id_categoria_gasto
+      WHERE g.estado != 'ANULADO' AND g.fecha_creacion >= ? AND g.fecha_creacion <= ? ${sucCond('g')} ${metCond('g')}
+      ORDER BY g.fecha_creacion
+    `, [desde, hasta, ...sucParam, ...metParam]);
+
+    const movimientos = [
+      ...ingresos.map(r => ({
+        id: `V${r.id_pago}`, fecha: r.fecha, tipo: 'INGRESO', origen: 'VENTA',
+        numero: r.numero, documento: r.venta_numero, referencia: r.referencia?.trim() || null,
+        metodo_pago: r.metodo_pago, monto: Number(r.monto),
+      })),
+      ...egresosCompra.map(r => ({
+        id: `C${r.id_pago}`, fecha: r.fecha, tipo: 'EGRESO', origen: 'COMPRA',
+        numero: r.numero, documento: r.compra_numero, referencia: r.referencia ?? null,
+        metodo_pago: r.metodo_pago, monto: Number(r.monto),
+      })),
+      ...gastos.map(r => ({
+        id: `G${r.id_gasto}`, fecha: r.fecha, tipo: 'EGRESO', origen: 'GASTO',
+        numero: r.numero, documento: r.categoria ?? null, referencia: r.referencia,
+        metodo_pago: r.metodo_pago, monto: Number(r.monto),
+      })),
+    ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    const totalIngresos = ingresos.reduce((s, r) => s + Number(r.monto), 0);
+    const totalEgresos   = egresosCompra.reduce((s, r) => s + Number(r.monto), 0)
+                          + gastos.reduce((s, r) => s + Number(r.monto), 0);
+
+    let saldo = 0;
+    for (const m of movimientos) {
+      saldo += m.tipo === 'INGRESO' ? m.monto : -m.monto;
+      m.saldo = +saldo.toFixed(2);
+    }
+
+    res.json({
+      movimientos,
+      totales: {
+        ingresos: +totalIngresos.toFixed(2),
+        egresos:  +totalEgresos.toFixed(2),
+        saldo:    +saldo.toFixed(2),
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al obtener el libro caja' });
+  }
+}
+
 module.exports = {
   getCajas, crearCaja, updateCaja,
   getArqueos, getArqueoActual, getArqueo,
   abrirCaja, cerrarCaja,
+  getLibroCaja,
 };

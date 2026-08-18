@@ -19,17 +19,25 @@ function calcSubtotal(it) {
 }
 
 // ── Ítem de producto (card responsivo) ───────────────────────────────────────
-function ItemProducto({ fila, productos, impuestos, onChange, onRemove, esUnico }) {
+function ItemProducto({ fila, productos, impuestos, idProveedor, onChange, onRemove, esUnico }) {
   const [busqueda, setBusqueda] = useState('');
+  const [verTodos, setVerTodos] = useState(false);
+
+  const productosDelProveedor = useMemo(
+    () => idProveedor ? productos.filter(p => String(p.id_proveedor_default) === String(idProveedor)) : productos,
+    [productos, idProveedor]
+  );
+  const hayFiltroProveedor = Boolean(idProveedor) && productosDelProveedor.length !== productos.length;
+  const base = (verTodos || !hayFiltroProveedor) ? productos : productosDelProveedor;
 
   const opciones = useMemo(() => {
-    if (!busqueda) return productos.slice(0, 60);
+    if (!busqueda) return base.slice(0, 60);
     const q = busqueda.toLowerCase();
-    return productos.filter(p =>
+    return base.filter(p =>
       p.producto.toLowerCase().includes(q) ||
       p.codigo_interno.toLowerCase().includes(q)
     ).slice(0, 60);
-  }, [productos, busqueda]);
+  }, [base, busqueda]);
 
   const sub = calcSubtotal(fila);
 
@@ -45,6 +53,16 @@ function ItemProducto({ fila, productos, impuestos, onChange, onRemove, esUnico 
             onChange={e => setBusqueda(e.target.value)}
             className={inputCls + ' text-xs'}
           />
+          {hayFiltroProveedor && (
+            <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 cursor-pointer select-none w-fit">
+              <input
+                type="checkbox" checked={verTodos}
+                onChange={e => setVerTodos(e.target.checked)}
+                className="w-3.5 h-3.5 rounded accent-yellow-400"
+              />
+              Ver todos los productos (no solo los de este proveedor)
+            </label>
+          )}
           <select
             value={fila.id_producto}
             onChange={e => {
@@ -248,7 +266,7 @@ export default function CompraForm() {
   const handleGuardar = async () => {
     setError('');
     if (!datos.id_proveedor || !datos.id_sucursal || !datos.id_deposito_destino || !datos.id_moneda)
-      return setError('Completa los campos obligatorios: proveedor, sucursal, depósito y moneda');
+      return setError('Completa los campos obligatorios: proveedor, depósito destino y moneda');
     if (items.some(it => !it.id_producto || Number(it.cantidad) <= 0))
       return setError('Cada ítem debe tener un producto y cantidad mayor a 0');
 
@@ -328,24 +346,27 @@ export default function CompraForm() {
               placeholder="Opcional" className={inputCls} />
           </div>
 
-          {/* Sucursal */}
+          {/* Depósito destino (define la sucursal automáticamente) */}
           <div>
-            <label className={labelCls}>Sucursal *</label>
-            <select value={datos.id_sucursal} onChange={e => setD('id_sucursal', e.target.value)} className={inputCls}>
-              <option value="">— Seleccionar —</option>
-              {catalogo.sucursales.map(s => (
-                <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Depósito */}
-          <div>
-            <label className={labelCls}>Depósito destino *</label>
-            <select value={datos.id_deposito_destino} onChange={e => setD('id_deposito_destino', e.target.value)} className={inputCls}>
+            <label className={labelCls}>Depósito / Almacén destino *</label>
+            <select
+              value={datos.id_deposito_destino}
+              onChange={e => {
+                const idDep = e.target.value;
+                const dep   = catalogo.depositos.find(d => String(d.id_deposito) === idDep);
+                setDatos(p => ({
+                  ...p,
+                  id_deposito_destino: idDep,
+                  id_sucursal: dep ? String(dep.id_sucursal) : '',
+                }));
+              }}
+              className={inputCls}
+            >
               <option value="">— Seleccionar —</option>
               {catalogo.depositos.map(d => (
-                <option key={d.id_deposito} value={d.id_deposito}>{d.codigo} — {d.nombre}</option>
+                <option key={d.id_deposito} value={d.id_deposito}>
+                  {d.codigo} — {d.nombre} ({d.sucursal_nombre})
+                </option>
               ))}
             </select>
           </div>
@@ -417,6 +438,7 @@ export default function CompraForm() {
               fila={it}
               productos={catalogo.productos}
               impuestos={catalogo.impuestos}
+              idProveedor={datos.id_proveedor}
               onChange={(k, v) => updateItem(idx, k, v)}
               onRemove={() => removeItem(idx)}
               esUnico={items.length === 1}

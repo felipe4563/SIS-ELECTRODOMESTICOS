@@ -2,7 +2,7 @@ import api from '../api/axios';
 
 export const productosService = {
   getFormData: ()          => api.get('/productos/form-data'),
-  getAll:      ()          => api.get('/productos'),
+  getAll:      ()          => api.get('/productos', { params: { limit: 5000 } }),
   getOne:      (id)        => api.get(`/productos/${id}`),
   create:   (data)      => api.post('/productos', data),
   update:   (id, data)  => api.put(`/productos/${id}`, data),

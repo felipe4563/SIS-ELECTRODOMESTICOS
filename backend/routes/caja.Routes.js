@@ -9,6 +9,7 @@ router.post('/',       authMiddleware, checkPermission('gestionar', 'caja'), ctr
 router.put('/:id',     authMiddleware, checkPermission('gestionar', 'caja'), ctrl.updateCaja);
 
 // Arqueos — rutas estáticas ANTES que /:id
+router.get('/libro-caja',                  authMiddleware, checkPermission('ver_libro', 'caja'), ctrl.getLibroCaja);
 router.get('/arqueos/actual',              authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueoActual);
 router.get('/arqueos',                     authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueos);
 router.get('/arqueos/:id',                 authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueo);

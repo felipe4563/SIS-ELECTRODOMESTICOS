@@ -383,9 +383,8 @@ export default function StockConsolidado() {
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">
-                      <th className="w-1 p-0" aria-hidden />
-                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Código</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap min-w-[180px]">Producto</th>
+                      <th className="sticky left-0 z-10 w-1 p-0 bg-zinc-50 dark:bg-zinc-800/60" aria-hidden />
+                      <th className="sticky left-1 z-10 text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[220px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">Producto</th>
                       <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Marca</th>
                       <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Unidad</th>
                       <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Stock Mín.</th>
@@ -396,19 +395,21 @@ export default function StockConsolidado() {
                           <span className="block text-[10px] text-zinc-400 dark:text-zinc-500 truncate max-w-[100px]">{d.nombre}</span>
                         </th>
                       ))}
-                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700">Total</th>
-                      <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Estado</th>
+                      <th className="sticky right-[110px] z-10 text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700 w-[96px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">Total</th>
+                      <th className="sticky right-0 z-10 text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[110px] bg-zinc-50 dark:bg-zinc-800/60">Estado</th>
                     </tr>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
-                      <td className="w-1 p-0" aria-hidden />
-                      <td colSpan={5} />
+                      <td className="sticky left-0 z-10 w-1 p-0 bg-zinc-50/50 dark:bg-zinc-800/30" aria-hidden />
+                      <td className="sticky left-1 z-10 w-[220px] bg-zinc-50/50 dark:bg-zinc-800/30" />
+                      <td colSpan={3} />
                       {depositos.map(d => (
                         <Fragment key={d.id_deposito}>
                           <td className="text-right px-3 py-1.5 border-l border-zinc-200 dark:border-zinc-700">Disp.</td>
                           <td className="text-right px-3 py-1.5">Res.</td>
                         </Fragment>
                       ))}
-                      <td colSpan={2} />
+                      <td className="sticky right-[110px] z-10 w-[96px] bg-zinc-50/50 dark:bg-zinc-800/30" />
+                      <td className="sticky right-0 z-10 w-[110px] bg-zinc-50/50 dark:bg-zinc-800/30" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -419,19 +420,15 @@ export default function StockConsolidado() {
                       const est = estadoStock(totalDisp, p.stock_minimo);
 
                       return (
-                        <tr key={p.id_producto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                          <td className="w-1 p-0">
+                        <tr key={p.id_producto} className="group hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                          <td className="sticky left-0 z-10 w-1 p-0 bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40">
                             <div className={`w-[3px] h-full min-h-[44px] ${est.bar}`} />
                           </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap">
-                            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400">{p.codigo_interno}</span>
-                            {p.codigo_barras && (
-                              <span className="block font-mono text-[10px] text-zinc-400 dark:text-zinc-600">{p.codigo_barras}</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 min-w-[180px]">
-                            <p className="font-medium text-zinc-900 dark:text-white leading-tight">{p.producto}</p>
-                            {p.detalle && <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate max-w-[220px]">{p.detalle}</p>}
+                          <td className="sticky left-1 z-10 px-4 py-2.5 w-[220px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                            <p className="font-medium text-zinc-900 dark:text-white leading-tight truncate" title={p.producto}>{p.producto}</p>
+                            <p className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
+                              {p.codigo_interno}{p.codigo_barras ? ` · ${p.codigo_barras}` : ''}
+                            </p>
                           </td>
                           <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">{p.marca_nombre}</td>
                           <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-500">
@@ -460,10 +457,10 @@ export default function StockConsolidado() {
                               </Fragment>
                             );
                           })}
-                          <td className="px-4 py-2.5 whitespace-nowrap text-right font-mono tabular-nums font-bold text-zinc-900 dark:text-white border-l border-zinc-200 dark:border-zinc-700">
+                          <td className="sticky right-[110px] z-10 px-4 py-2.5 whitespace-nowrap text-right font-mono tabular-nums font-bold text-zinc-900 dark:text-white border-l border-zinc-200 dark:border-zinc-700 w-[96px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                             {fmtNum(totalDisp)}
                           </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap text-center">
+                          <td className="sticky right-0 z-10 px-4 py-2.5 whitespace-nowrap text-center w-[110px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${est.badge}`}>
                               {est.label}
                             </span>
