@@ -47,6 +47,7 @@ import Alertas             from './pages/inventario/Alertas';
 import Transferencias      from './pages/inventario/Transferencias';
 import TransferenciaForm   from './pages/inventario/TransferenciaForm';
 import TransferenciaDetalle from './pages/inventario/TransferenciaDetalle';
+import TransferenciaImprimirDirecto from './pages/inventario/TransferenciaImprimirDirecto';
 import Ajustes             from './pages/inventario/Ajustes';
 import AjusteForm          from './pages/inventario/AjusteForm';
 import AjusteDetalle       from './pages/inventario/AjusteDetalle';
@@ -55,6 +56,7 @@ import AjusteDetalle       from './pages/inventario/AjusteDetalle';
 import Compras           from './pages/compras/Compras';
 import CompraForm        from './pages/compras/CompraForm';
 import CompraDetalle     from './pages/compras/CompraDetalle';
+import CompraImprimirDirecto from './pages/compras/CompraImprimirDirecto';
 import EtiquetasImprimir from './pages/productos/EtiquetasImprimir';
 
 // ── Gastos ────────────────────────────────────────────────────────────────────
@@ -85,6 +87,7 @@ import Cotizaciones       from './pages/cotizaciones/Cotizaciones';
 import CotizacionForm     from './pages/cotizaciones/CotizacionForm';
 import CotizacionDetalle  from './pages/cotizaciones/CotizacionDetalle';
 import CotizacionPDF      from './pages/cotizaciones/CotizacionPDF';
+import CotizacionImprimir from './pages/cotizaciones/CotizacionImprimir';
 
 // ── Cobros ────────────────────────────────────────────────────────────────────
 import Cobros      from './pages/cobros/Cobros';
@@ -314,6 +317,9 @@ export default function App() {
               <Route path="/compras/:id/editar" element={
                 <PageRoute action="editar_pre_pedido" subject="compras"><CompraForm /></PageRoute>
               } />
+              <Route path="/compras/:id/imprimir" element={
+                <PageRoute action="imprimir" subject="compras"><CompraImprimirDirecto /></PageRoute>
+              } />
               <Route path="/compras/:id/etiquetas" element={
                 <ProtectedRoute action="ver" subject="compras">
                   <EtiquetasImprimir />
@@ -329,6 +335,9 @@ export default function App() {
               } />
               <Route path="/inventario/transferencias/:id" element={
                 <PageRoute action="ver" subject="inventario"><TransferenciaDetalle /></PageRoute>
+              } />
+              <Route path="/inventario/transferencias/:id/imprimir" element={
+                <PageRoute action="ver" subject="inventario"><TransferenciaImprimirDirecto /></PageRoute>
               } />
 
               {/* Ajustes de inventario */}
@@ -365,6 +374,9 @@ export default function App() {
               } />
               <Route path="/cotizaciones/:id/editar" element={
                 <PageRoute action="editar" subject="cotizaciones"><CotizacionForm /></PageRoute>
+              } />
+              <Route path="/cotizaciones/:id/imprimir" element={
+                <PageRoute action="imprimir" subject="cotizaciones"><CotizacionImprimir /></PageRoute>
               } />
               <Route path="/cotizaciones/:id/pdf" element={
                 <PageRoute action="ver" subject="cotizaciones"><CotizacionPDF /></PageRoute>

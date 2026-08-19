@@ -309,6 +309,44 @@ const updateCompra = async (req, res) => {
   }
 };
 
+// ── Registrar/editar N° de factura del proveedor (cualquier estado, salvo ANULADO) ──
+
+const actualizarFacturaCompra = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { numero_factura } = req.body;
+
+    const [[compra]] = await db.promise().query(
+      `SELECT estado FROM compras WHERE id_compra = ?`, [id]
+    );
+    if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
+    if (compra.estado === 'ANULADO')
+      return res.status(409).json({ error: 'No se puede editar la factura de una compra anulada' });
+
+    const valor = numero_factura?.trim() || null;
+
+    try {
+      await db.promise().query(
+        `UPDATE compras SET numero_factura = ? WHERE id_compra = ?`, [valor, id]
+      );
+    } catch (e) {
+      if (e.code === 'ER_DUP_ENTRY')
+        return res.status(409).json({ error: 'Ese número de factura ya está registrado en otra compra' });
+      throw e;
+    }
+
+    await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
+
+    const [[updated]] = await db.promise().query(
+      `SELECT * FROM compras WHERE id_compra = ?`, [id]
+    );
+    res.json({ compra: updated });
+  } catch (err) {
+    console.error('[actualizarFacturaCompra]', err);
+    res.status(500).json({ error: 'Error al actualizar la factura' });
+  }
+};
+
 // ── Aprobar compra PRE_PEDIDO → CONFIRMADO ────────────────────────────────────
 
 const aprobarCompra = async (req, res) => {
@@ -734,7 +772,7 @@ const anularPago = async (req, res) => {
 module.exports = {
   getFormData,
   getCompras, getCompra,
-  createCompra, updateCompra,
+  createCompra, updateCompra, actualizarFacturaCompra,
   aprobarCompra, confirmarPedido, recibirMercaderia, anularCompra,
   createPago, anularPago,
   actualizarCuota,

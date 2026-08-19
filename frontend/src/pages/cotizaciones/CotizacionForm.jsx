@@ -208,9 +208,10 @@ function FilaItem({ fila, index, productos, onChange, onRemove, isMobile }) {
       type="number"
       min={field === 'cantidad' ? 0.01 : 0}
       max={field === 'descuento_porc' ? 100 : undefined}
-      step="0.01"
+      step={field === 'garantia_anos' ? '1' : '0.01'}
       value={value}
       onChange={e => onChange({ [field]: e.target.value })}
+      placeholder={field === 'garantia_anos' ? '—' : undefined}
       className={`w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 ${extra}`}
     />
   );
@@ -266,6 +267,10 @@ function FilaItem({ fila, index, productos, onChange, onRemove, isMobile }) {
             {numInput('descuento_porc', fila.descuento_porc, 'text-right')}
           </div>
         </div>
+        <div>
+          <label className="text-xs text-zinc-400 dark:text-zinc-500 block mb-1">Garantía (años)</label>
+          {numInput('garantia_anos', fila.garantia_anos ?? '', 'text-center')}
+        </div>
 
         <div className="flex items-center justify-between pt-1 border-t border-zinc-200 dark:border-zinc-700/60">
           <span className="text-xs text-zinc-400">Subtotal</span>
@@ -303,6 +308,7 @@ function FilaItem({ fila, index, productos, onChange, onRemove, isMobile }) {
       <td className="px-2 py-2 w-24">{numInput('cantidad', fila.cantidad, 'text-right')}</td>
       <td className="px-2 py-2 w-28">{numInput('precio_unitario', fila.precio_unitario, 'text-right')}</td>
       <td className="px-2 py-2 w-20">{numInput('descuento_porc', fila.descuento_porc, 'text-right')}</td>
+      <td className="px-2 py-2 w-20">{numInput('garantia_anos', fila.garantia_anos ?? '', 'text-center')}</td>
       <td className="px-2 py-2 w-28 text-right">
         <span className="font-mono text-sm font-semibold text-zinc-900 dark:text-white">Bs {fmt(subtotal)}</span>
       </td>
@@ -337,7 +343,7 @@ export default function CotizacionForm() {
     tipo_cotizacion: 'CONTADO', fecha_vencimiento: '',
     descuento_porc: 0, impuesto: 0, observaciones: '',
   });
-  const [items,       setItems]       = useState([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
+  const [items,       setItems]       = useState([{ id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, garantia_anos: '' }]);
   const [clienteInfo, setClienteInfo] = useState(null);
   const [guardando,   setGuardando]   = useState(false);
   const [cargando,    setCargando]    = useState(esEdicion);
@@ -380,6 +386,7 @@ export default function CotizacionForm() {
             cantidad:       d.cantidad,
             precio_unitario: d.precio_unitario,
             descuento_porc: d.descuento_porc ?? 0,
+            garantia_anos: d.garantia_anos ?? '',
           })));
         })
         .catch(() => navigate('/cotizaciones'))
@@ -408,7 +415,7 @@ export default function CotizacionForm() {
   }, [form.id_cliente, clientes]);
 
   const setF       = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const addItem    = ()     => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0 }]);
+  const addItem    = ()     => setItems(p => [...p, { id_producto: '', cantidad: 1, precio_unitario: 0, descuento_porc: 0, garantia_anos: '' }]);
   const removeItem = i      => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
 
@@ -794,6 +801,7 @@ export default function CotizacionForm() {
                   <th className="text-right px-2 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide w-24">Cantidad</th>
                   <th className="text-right px-2 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide w-28">Precio</th>
                   <th className="text-right px-2 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide w-20">Desc %</th>
+                  <th className="text-right px-2 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide w-20">Garantía</th>
                   <th className="text-right px-2 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide w-28">Subtotal</th>
                   <th className="w-10" />
                 </tr>

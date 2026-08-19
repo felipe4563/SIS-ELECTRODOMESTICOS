@@ -196,6 +196,14 @@ export default function CotizacionDetalle() {
             )}
             {puede('imprimir', 'cotizaciones') && (
               <button
+                onClick={() => navigate(`/cotizaciones/${id}/imprimir`)}
+                className="px-3 py-2 rounded-xl text-sm font-semibold border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Imprimir
+              </button>
+            )}
+            {puede('imprimir', 'cotizaciones') && (
+              <button
                 disabled={descargando}
                 onClick={async () => {
                   setDescargando(true);
@@ -350,6 +358,20 @@ export default function CotizacionDetalle() {
                   <td className="px-5 py-3">
                     <p className="font-medium text-zinc-900 dark:text-white">{d.producto}</p>
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">{d.codigo_interno}</p>
+                    {d.producto_detalle && (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                    )}
+                    {(d.marca || d.modelo || d.color || d.capacidad || d.garantia_anos) && (
+                      <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        {[
+                          d.marca     && `Marca: ${d.marca}`,
+                          d.modelo    && `Modelo: ${d.modelo}`,
+                          d.color     && `Color: ${d.color}`,
+                          d.capacidad && `Cap: ${d.capacidad}`,
+                          d.garantia_anos && `Garantía: ${d.garantia_anos} año${d.garantia_anos > 1 ? 's' : ''}`,
+                        ].filter(Boolean).join('  ·  ')}
+                      </p>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right text-zinc-700 dark:text-zinc-300 font-mono">
                     {fmt(d.cantidad)} {d.unidad_nombre}
@@ -376,6 +398,20 @@ export default function CotizacionDetalle() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{d.producto}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">{d.codigo_interno}</p>
+                {d.producto_detalle && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                )}
+                {(d.marca || d.modelo || d.color || d.capacidad || d.garantia_anos) && (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+                    {[
+                      d.marca     && `Marca: ${d.marca}`,
+                      d.modelo    && `Modelo: ${d.modelo}`,
+                      d.color     && `Color: ${d.color}`,
+                      d.capacidad && `Cap: ${d.capacidad}`,
+                      d.garantia_anos && `Garantía: ${d.garantia_anos} año${d.garantia_anos > 1 ? 's' : ''}`,
+                    ].filter(Boolean).join('  ·  ')}
+                  </p>
+                )}
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                   {fmt(d.cantidad)} × Bs {fmt(d.precio_unitario)}
                   {Number(d.descuento_porc) > 0 && <span className="text-red-400 ml-1">-{d.descuento_porc}%</span>}

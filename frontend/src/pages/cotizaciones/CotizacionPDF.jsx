@@ -150,9 +150,12 @@ function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
             <View style={[S.cProd, { paddingVertical: 5, paddingHorizontal: 6 }]}>
               <Text style={S.prodName}>{d.producto}</Text>
               {d.codigo_interno && <Text style={S.prodCode}>{d.codigo_interno}</Text>}
-              {d.marca  && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Marca: </Text>{d.marca}</Text>}
-              {d.modelo && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Modelo: </Text>{d.modelo}</Text>}
-              {d.color  && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Color: </Text>{d.color}</Text>}
+              {d.producto_detalle && <Text style={S.prodSpec}>{d.producto_detalle}</Text>}
+              {d.marca     && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Marca: </Text>{d.marca}</Text>}
+              {d.modelo    && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Modelo: </Text>{d.modelo}</Text>}
+              {d.color     && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Color: </Text>{d.color}</Text>}
+              {d.capacidad && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Capacidad: </Text>{d.capacidad}</Text>}
+              {d.garantia_anos && <Text style={S.prodSpec}><Text style={S.prodSpecLbl}>Garantía: </Text>{d.garantia_anos} año{d.garantia_anos > 1 ? 's' : ''}</Text>}
             </View>
             <Text style={[S.td, S.cCant, S.right]}>{fmt(d.cantidad)} {d.unidad_nombre}</Text>
             <Text style={[S.td, S.cPrecio, S.right]}>Bs {fmt(d.precio_unitario)}</Text>

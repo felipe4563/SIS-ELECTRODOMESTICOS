@@ -31,6 +31,61 @@ const labelCls = 'block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-
 
 const thCls = 'px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 whitespace-nowrap';
 
+// ── Campo editable: N° de factura del proveedor ────────────────────────────────
+function FacturaProvCell({ id, value, editable, onSaved }) {
+  const [edit,    setEdit]    = useState(false);
+  const [val,     setVal]     = useState(value ?? '');
+  const [saving,  setSaving]  = useState(false);
+  const [errLocal, setErrLocal] = useState('');
+
+  if (!edit) {
+    return (
+      <div>
+        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-0.5">Factura prov.</p>
+        {editable ? (
+          <button
+            onClick={() => { setVal(value ?? ''); setErrLocal(''); setEdit(true); }}
+            className="font-medium text-left leading-snug underline decoration-dashed underline-offset-2 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+          >
+            {value || <span className="text-zinc-400 dark:text-zinc-500 italic font-normal">Sin registrar — click para agregar</span>}
+          </button>
+        ) : (
+          <p className="font-medium text-zinc-900 dark:text-white leading-snug">{value || '—'}</p>
+        )}
+      </div>
+    );
+  }
+
+  const guardar = async () => {
+    setSaving(true); setErrLocal('');
+    try {
+      await onSaved(id, val.trim());
+      setEdit(false);
+    } catch (err) {
+      setErrLocal(err.response?.data?.error ?? 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-0.5">Factura prov.</p>
+      <div className="flex items-center gap-1">
+        <input
+          type="text" value={val} onChange={e => setVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') guardar(); if (e.key === 'Escape') setEdit(false); }}
+          placeholder="Nº de factura" autoFocus disabled={saving}
+          className="w-32 px-2 py-1 rounded-lg border border-amber-400 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none"
+        />
+        <button onClick={guardar} disabled={saving} className="text-green-500 hover:text-green-400 font-bold text-xs">✓</button>
+        <button onClick={() => setEdit(false)} disabled={saving} className="text-zinc-400 hover:text-zinc-300 text-xs">✕</button>
+      </div>
+      {errLocal && <p className="text-xs text-red-500 mt-1">{errLocal}</p>}
+    </div>
+  );
+}
+
 // ── Modal base ────────────────────────────────────────────────────────────────
 function Modal({ titulo, onClose, children }) {
   return (
@@ -395,6 +450,8 @@ export default function CompraDetalle() {
   const puedeVerCostos     = puede('ver_costos',         'compras');
   const puedeGestionCuotas = puede('gestionar_cuotas',   'compras');
   const puedeImprimir      = puede('imprimir',           'compras');
+  const puedeEditarFactura = (puede('editar_pre_pedido', 'compras') || puede('recibir', 'compras') || puede('recibir_parcial', 'compras'))
+    && compra.estado !== 'ANULADO';
 
   const etiquetasDisponibles = detalle.filter(d => d.codigo_interno);
 
@@ -540,6 +597,12 @@ export default function CompraDetalle() {
               </button>
             )}
             {puedeImprimir && (
+              <button onClick={() => navigate(`/compras/${id}/imprimir`)}
+                className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                Imprimir
+              </button>
+            )}
+            {puedeImprimir && (
               <button
                 disabled={descargando}
                 onClick={async () => {
@@ -581,13 +644,21 @@ export default function CompraDetalle() {
                 ['Est. llegada',   fmtFecha(compra.fecha_estim_llegada)],
                 ['Fecha recep.',   fmtFecha(compra.fecha_recepcion)],
                 ['Creado por',     `${compra.crea_nombres} ${compra.crea_apellidos}`],
-                ...(compra.numero_factura ? [['Factura prov.', compra.numero_factura]] : []),
               ].map(([label, value]) => (
                 <div key={label}>
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-0.5">{label}</p>
                   <p className="font-medium text-zinc-900 dark:text-white leading-snug">{value}</p>
                 </div>
               ))}
+              <FacturaProvCell
+                id={compra.id_compra}
+                value={compra.numero_factura}
+                editable={puedeEditarFactura}
+                onSaved={async (id, nuevoValor) => {
+                  const { data } = await comprasService.actualizarFactura(id, nuevoValor);
+                  setData(prev => ({ ...prev, compra: data.compra }));
+                }}
+              />
             </div>
             {compra.observaciones && (
               <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">

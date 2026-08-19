@@ -122,9 +122,11 @@ const getCotizacion = async (req, res) => {
 
     const [detalle] = await db.promise().query(
       `SELECT cd.*, p.producto, p.codigo_interno, p.codigo_barras,
-              p.imagen_url, um.nombre AS unidad_nombre
+              p.imagen_url, p.detalle AS producto_detalle, p.capacidad, p.modelo, p.color,
+              m.nombre AS marca, um.nombre AS unidad_nombre
        FROM cotizacion_detalle cd
        JOIN productos       p  ON p.id_producto = cd.id_producto
+       JOIN marcas          m  ON m.id_marca    = p.id_marca
        JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
        WHERE cd.id_cotizacion = ?`, [id]
     );
@@ -176,11 +178,11 @@ const createCotizacion = async (req, res) => {
       await db.promise().query(
         `INSERT INTO cotizacion_detalle
            (id_cotizacion, id_producto, cantidad, precio_unitario,
-            descuento_porc, descuento_monto, impuesto_porc, subtotal, observacion)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+            descuento_porc, descuento_monto, impuesto_porc, subtotal, observacion, garantia_anos)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [id_cotizacion, it.id_producto, it.cantidad, it.precio_unitario,
          it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-         it.impuesto_porc ?? 0, sub, it.observacion ?? null]
+         it.impuesto_porc ?? 0, sub, it.observacion ?? null, it.garantia_anos || null]
       );
     }
 
@@ -234,11 +236,11 @@ const updateCotizacion = async (req, res) => {
       await db.promise().query(
         `INSERT INTO cotizacion_detalle
            (id_cotizacion, id_producto, cantidad, precio_unitario,
-            descuento_porc, descuento_monto, impuesto_porc, subtotal, observacion)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+            descuento_porc, descuento_monto, impuesto_porc, subtotal, observacion, garantia_anos)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [id, it.id_producto, it.cantidad, it.precio_unitario,
          it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-         it.impuesto_porc ?? 0, sub, it.observacion ?? null]
+         it.impuesto_porc ?? 0, sub, it.observacion ?? null, it.garantia_anos || null]
       );
     }
 
@@ -460,9 +462,11 @@ const getPDF = async (req, res) => {
     if (!cot) return res.status(404).json({ mensaje: 'Cotización no encontrada' });
 
     const [detalle] = await db.promise().query(
-      `SELECT cd.*, p.producto, p.codigo_interno, um.nombre AS unidad_nombre
+      `SELECT cd.*, p.producto, p.codigo_interno, p.detalle AS producto_detalle,
+              p.capacidad, p.modelo, p.color, m.nombre AS marca, um.nombre AS unidad_nombre
        FROM cotizacion_detalle cd
        JOIN productos       p  ON p.id_producto = cd.id_producto
+       JOIN marcas          m  ON m.id_marca    = p.id_marca
        JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
        WHERE cd.id_cotizacion = ?`, [id]
     );

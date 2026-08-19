@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { usePermission } from '../../hooks/usePermission';
+import { useEmpresa } from '../../contexts/EmpresaContext';
+import { descargarVentaPDF } from './VentaPDF';
 
 const fmtFecha  = s => s ? new Date(s).toLocaleString('es-BO')  : '—';
 const fmtFechaS = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
@@ -73,12 +75,14 @@ export default function VentaDetalle() {
   const navigate  = useNavigate();
   const [searchParams] = useSearchParams();
   const { puede } = usePermission();
+  const { logoUrl } = useEmpresa() ?? {};
 
   const [venta,      setVenta]      = useState(null);
   const [cargando,   setCargando]   = useState(true);
   const [modal,      setModal]      = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [error,      setError]      = useState('');
+  const [descargando, setDescargando] = useState(false);
 
   const [cobro,            setCobro]           = useState({ metodo_pago: 'EFECTIVO', monto: '', numero_referencia: '', observaciones: '', id_cuota: '' });
   const [nroFactura,       setNroFactura]       = useState('');
@@ -272,6 +276,18 @@ export default function VentaDetalle() {
               <button onClick={() => navigate(`/ventas/${id}/imprimir`)}
                 className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium text-sm transition-colors">
                 Imprimir
+              </button>
+            )}
+            {puedeImprimir && (
+              <button
+                disabled={descargando}
+                onClick={async () => {
+                  setDescargando(true);
+                  try { await descargarVentaPDF(id, logoUrl); }
+                  finally { setDescargando(false); }
+                }}
+                className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium text-sm transition-colors disabled:opacity-50">
+                {descargando ? 'Generando…' : 'Comprobante PDF'}
               </button>
             )}
             {puedeEditar && (

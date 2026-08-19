@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { inventarioService } from '../../services/inventario.service';
 import { usePermission }     from '../../hooks/usePermission';
+import { useEmpresa }        from '../../contexts/EmpresaContext';
+import { StockReporteHTML, descargarStockReportePDF } from './StockReporte';
 
 const toNum  = n => { const v = Number(n ?? 0); return isNaN(v) ? 0 : v; };
 const fmtNum = n => toNum(n).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -84,6 +86,7 @@ export default function StockConsolidado() {
   const { puede } = usePermission();
   const verTodos     = puede('ver_todos_depositos', 'inventario');
   const puedeEditMin = puede('stock_minimo_editar', 'inventario');
+  const { empresa, logoUrl } = useEmpresa() ?? {};
 
   const [data,      setData]      = useState({ depositos: [], productos: [] });
   const [cargando,  setCargando]  = useState(true);
@@ -92,6 +95,7 @@ export default function StockConsolidado() {
   const [filMarca,  setFilMarca]  = useState('');
   const [filCat,    setFilCat]    = useState('');
   const [filEstado, setFilEstado] = useState('');
+  const [descargando, setDescargando] = useState(false);
 
   const cargar = async () => {
     setCargando(true);
@@ -209,13 +213,50 @@ export default function StockConsolidado() {
             )}
           </p>
         </div>
-        <button
-          onClick={cargar}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all"
-        >
-          <span className={cargando ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
-          <span className="hidden sm:inline">Actualizar</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {!cargando && productosFiltrados.length > 0 && (
+            <>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all"
+              >
+                <span className="hidden sm:inline">Imprimir</span>
+                <span className="sm:hidden">🖨️</span>
+              </button>
+              <button
+                disabled={descargando}
+                onClick={async () => {
+                  setDescargando(true);
+                  try {
+                    await descargarStockReportePDF(productosFiltrados, depositos, empresa, logoUrl);
+                  } finally { setDescargando(false); }
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all disabled:opacity-50"
+              >
+                <span className="hidden sm:inline">{descargando ? 'Generando…' : 'PDF'}</span>
+                <span className="sm:hidden">📄</span>
+              </button>
+            </>
+          )}
+          <button
+            onClick={cargar}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all"
+          >
+            <span className={cargando ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
+            <span className="hidden sm:inline">Actualizar</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Documento oculto — solo visible al imprimir (window.print) */}
+      <div className="hidden print:block">
+        <StockReporteHTML
+          productos={productosFiltrados}
+          depositos={depositos}
+          empresa={empresa}
+          logoUrl={logoUrl}
+          filtros={{ busqueda, marca: filMarca, categoria: filCat, estado: filEstado }}
+        />
       </div>
 
       {/* ── Stat cards — 2×2 en móvil, 4 en línea en desktop ── */}
@@ -505,6 +546,23 @@ export default function StockConsolidado() {
           )}
         </>
       )}
+
+      {/* CSS de impresión */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #documento-stock, #documento-stock * { visibility: visible !important; }
+          #documento-stock {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            color: #000 !important;
+          }
+          @page { size: A4 landscape; margin: 10mm; }
+        }
+      `}</style>
     </div>
   );
 }

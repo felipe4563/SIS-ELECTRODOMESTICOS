@@ -373,7 +373,8 @@ CREATE TABLE `cotizacion_detalle` (
   `id_impuesto` int(11) DEFAULT NULL,
   `impuesto_porc` decimal(5,2) DEFAULT 0.00,
   `subtotal` decimal(14,2) NOT NULL,
-  `observacion` varchar(255) DEFAULT NULL
+  `observacion` varchar(255) DEFAULT NULL,
+  `garantia_anos` tinyint(3) unsigned DEFAULT NULL COMMENT 'Años de garantía ofrecidos para este producto en la cotización'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

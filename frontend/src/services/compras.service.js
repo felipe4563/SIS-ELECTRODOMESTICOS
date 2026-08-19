@@ -6,6 +6,7 @@ export const comprasService = {
   getOne:          (id)                 => api.get(`/compras/${id}`),
   create:          (data)               => api.post('/compras', data),
   update:          (id, data)           => api.put(`/compras/${id}`, data),
+  actualizarFactura: (id, numero_factura) => api.put(`/compras/${id}/factura`, { numero_factura }),
   aprobar:         (id)                 => api.post(`/compras/${id}/aprobar`),
   confirmar:       (id, data)           => api.post(`/compras/${id}/confirmar`, data),
   recibir:         (id, data)           => api.post(`/compras/${id}/recibir`, data),

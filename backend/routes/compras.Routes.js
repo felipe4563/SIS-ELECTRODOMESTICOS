@@ -15,6 +15,9 @@ router.get ('/',    authMiddleware, puedeVerCompras,                            
 router.post('/',    authMiddleware, checkPermission('crear_pre_pedido', 'compras'), ctrl.createCompra);
 router.get ('/:id', authMiddleware, puedeVerCompras,                               ctrl.getCompra);
 router.put ('/:id', authMiddleware, checkPermission('editar_pre_pedido','compras'), ctrl.updateCompra);
+router.put ('/:id/factura', authMiddleware,
+  checkAnyPermission([['editar_pre_pedido', 'compras'], ['recibir', 'compras'], ['recibir_parcial', 'compras']]),
+  ctrl.actualizarFacturaCompra);
 
 router.post('/:id/aprobar',   authMiddleware, checkPermission('aprobar',           'compras'), ctrl.aprobarCompra);
 router.post('/:id/confirmar', authMiddleware, checkPermission('confirmar_pedido',  'compras'), ctrl.confirmarPedido);
