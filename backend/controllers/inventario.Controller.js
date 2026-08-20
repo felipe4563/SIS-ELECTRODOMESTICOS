@@ -34,7 +34,7 @@ const getStockConsolidado = async (req, res) => {
     const [rows] = await db.promise().query(
       `SELECT
          p.id_producto, p.codigo_interno, p.codigo_barras,
-         p.producto, p.detalle, p.stock_minimo, p.activo,
+         p.producto, p.detalle, p.modelo, p.color, p.capacidad, p.stock_minimo, p.activo,
          m.nombre  AS marca_nombre,
          c.nombre  AS categoria_nombre,
          u.nombre  AS unidad_nombre,
@@ -65,6 +65,9 @@ const getStockConsolidado = async (req, res) => {
           codigo_barras:    r.codigo_barras,
           producto:         r.producto,
           detalle:          r.detalle,
+          modelo:           r.modelo,
+          color:            r.color,
+          capacidad:        r.capacidad,
           stock_minimo:     r.stock_minimo,
           activo:           r.activo,
           marca_nombre:     r.marca_nombre,
@@ -267,8 +270,11 @@ const getKardexFormData = async (req, res) => {
     );
 
     const [productos] = await db.promise().query(
-      `SELECT p.id_producto, p.codigo_interno, p.producto
-       FROM productos p WHERE p.activo = 1
+      `SELECT p.id_producto, p.codigo_interno, p.producto,
+              p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca
+       FROM productos p
+       JOIN marcas m ON m.id_marca = p.id_marca
+       WHERE p.activo = 1
        ORDER BY p.producto ASC`
     );
 

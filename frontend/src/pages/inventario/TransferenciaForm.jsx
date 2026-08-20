@@ -5,8 +5,10 @@ import { inventarioService }      from '../../services/inventario.service';
 
 const fmtNum = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
+const qtyBtnCls = 'w-7 h-7 shrink-0 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-bold leading-none';
+
 // ── Fila de producto ──────────────────────────────────────────────────────────
-function FilaItem({ fila, productos, stockOrigen, onChange, onRemove }) {
+function FilaItem({ fila, productos, stockOrigen, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
@@ -72,20 +74,28 @@ function FilaItem({ fila, productos, stockOrigen, onChange, onRemove }) {
       </td>
 
       {/* Cantidad */}
-      <td className="px-3 py-2.5 w-32">
-        <input
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={fila.cantidad}
-          onChange={e => onChange('cantidad', e.target.value)}
-          className={`w-full px-2 py-1.5 text-xs rounded-lg border text-right font-mono
-            focus:outline-none focus:ring-1
-            ${excede
-              ? 'border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 focus:ring-orange-400'
-              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-yellow-400'
-            }`}
-        />
+      <td className="px-3 py-2.5 w-40">
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => onQtyDelta(-1)} className={qtyBtnCls}>−</button>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={fila.cantidad}
+            onChange={e => onChange('cantidad', e.target.value)}
+            className={`w-full px-2 py-1.5 text-xs rounded-lg border text-right font-mono
+              focus:outline-none focus:ring-1
+              ${excede
+                ? 'border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 focus:ring-orange-400'
+                : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-yellow-400'
+              }`}
+          />
+          <button
+            type="button" onClick={() => onQtyDelta(1)}
+            disabled={disponible !== null && Number(fila.cantidad) >= disponible}
+            className={qtyBtnCls}
+          >+</button>
+        </div>
         {excede && (
           <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 text-right">
             Supera el disponible
@@ -105,7 +115,7 @@ function FilaItem({ fila, productos, stockOrigen, onChange, onRemove }) {
 }
 
 // ── Fila de producto (tarjeta móvil) ─────────────────────────────────────────
-function FilaItemCard({ fila, productos, stockOrigen, onChange, onRemove }) {
+function FilaItemCard({ fila, productos, stockOrigen, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p =>
@@ -161,16 +171,24 @@ function FilaItemCard({ fila, productos, stockOrigen, onChange, onRemove }) {
             </span>
           )}
         </div>
-        <div className="w-28">
+        <div className="w-36">
           <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1 block">Cantidad</label>
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={fila.cantidad}
-            onChange={e => onChange('cantidad', e.target.value)}
-            className={`w-full px-2.5 py-1.5 text-xs rounded-lg border text-right font-mono focus:outline-none focus:ring-1 ${excede ? 'border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 focus:ring-orange-400' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-yellow-400'}`}
-          />
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => onQtyDelta(-1)} className={qtyBtnCls}>−</button>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={fila.cantidad}
+              onChange={e => onChange('cantidad', e.target.value)}
+              className={`w-full px-2.5 py-1.5 text-xs rounded-lg border text-right font-mono focus:outline-none focus:ring-1 ${excede ? 'border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 focus:ring-orange-400' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-yellow-400'}`}
+            />
+            <button
+              type="button" onClick={() => onQtyDelta(1)}
+              disabled={disponible !== null && Number(fila.cantidad) >= disponible}
+              className={qtyBtnCls}
+            >+</button>
+          </div>
           {excede && <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 text-right">Supera el disponible</p>}
         </div>
         <button
@@ -197,6 +215,7 @@ export default function TransferenciaForm() {
   const [items,     setItems]     = useState([{ id_producto: '', cantidad: 1 }]);
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState('');
+  const [busquedaStock, setBusquedaStock] = useState('');
 
   // Cargar catálogos
   useEffect(() => {
@@ -212,6 +231,7 @@ export default function TransferenciaForm() {
   const handleOrigenChange = async (id) => {
     setForm(p => ({ ...p, id_deposito_origen: id, id_deposito_destino: p.id_deposito_destino === id ? '' : p.id_deposito_destino }));
     setStockOrigen({});
+    setBusquedaStock('');
     if (!id) return;
     setCargandoStock(true);
     try {
@@ -229,6 +249,17 @@ export default function TransferenciaForm() {
   const removeItem = i  => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
 
+  const cambiarCantidad = (i, delta) => {
+    setItems(prev => prev.map((it, idx) => {
+      if (idx !== i) return it;
+      const disponible = it.id_producto ? (stockOrigen[String(it.id_producto)] ?? null) : null;
+      let nueva = Number(it.cantidad || 0) + delta;
+      if (disponible !== null) nueva = Math.min(nueva, disponible);
+      nueva = Math.max(0.01, nueva);
+      return { ...it, cantidad: nueva };
+    }));
+  };
+
   // Agregar un producto desde la lista de "stock disponible en origen"
   const agregarProducto = (p) => {
     setItems(prev => {
@@ -242,6 +273,17 @@ export default function TransferenciaForm() {
       const nuevaFila = { id_producto: String(p.id_producto), cantidad: 1 };
       if (vacio >= 0) return prev.map((it, i) => i === vacio ? nuevaFila : it);
       return [...prev, nuevaFila];
+    });
+  };
+
+  // Quitar una unidad de un producto ya agregado (desde la lista de "stock disponible en origen")
+  const quitarUnidadProducto = (p) => {
+    setItems(prev => {
+      const idx = prev.findIndex(it => String(it.id_producto) === String(p.id_producto));
+      if (idx < 0) return prev;
+      const nueva = Number(prev[idx].cantidad) - 1;
+      if (nueva <= 0) return prev.filter((_, i) => i !== idx);
+      return prev.map((it, i) => i === idx ? { ...it, cantidad: nueva } : it);
     });
   };
 
@@ -287,6 +329,11 @@ export default function TransferenciaForm() {
       disponible: disp,
     }))
     .filter(p => p.id_producto)
+    .filter(p =>
+      !busquedaStock ||
+      p.producto.toLowerCase().includes(busquedaStock.toLowerCase()) ||
+      p.codigo_interno.toLowerCase().includes(busquedaStock.toLowerCase())
+    )
     .sort((a, b) => b.disponible - a.disponible);
 
   const cantidadesSeleccionadas = items.reduce((acc, it) => {
@@ -409,9 +456,23 @@ export default function TransferenciaForm() {
             )}
           </div>
 
+          {!cargandoStock && (
+            <div className="px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
+              <input
+                type="text"
+                value={busquedaStock}
+                onChange={e => setBusquedaStock(e.target.value)}
+                placeholder="Buscar producto por nombre o código…"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+            </div>
+          )}
+
           {!cargandoStock && productosConStock.length === 0 && (
             <div className="px-5 py-6 text-center text-sm text-zinc-400">
-              No hay productos con stock disponible en este depósito
+              {busquedaStock
+                ? `Sin resultados para "${busquedaStock}"`
+                : 'No hay productos con stock disponible en este depósito'}
             </div>
           )}
 
@@ -437,6 +498,14 @@ export default function TransferenciaForm() {
                         <div className="min-w-0">
                           <p className="text-sm text-zinc-800 dark:text-zinc-200 truncate">{p.producto}</p>
                           <p className="text-[11px] font-mono text-zinc-400">{p.codigo_interno}</p>
+                          {p.producto_detalle && (
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{p.producto_detalle}</p>
+                          )}
+                          {(p.marca || p.modelo || p.color || p.capacidad) && (
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+                              {[p.marca, p.modelo, p.color, p.capacidad].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <span className="font-mono font-semibold text-green-600 dark:text-green-400 shrink-0">{fmtNum(p.disponible)}</span>
@@ -452,7 +521,7 @@ export default function TransferenciaForm() {
                       <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Producto</th>
                       <th className="text-left px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Código</th>
                       <th className="text-right px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Disponible</th>
-                      <th className="w-10" />
+                      <th className="w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800">
@@ -461,24 +530,44 @@ export default function TransferenciaForm() {
                       return (
                         <tr
                           key={p.id_producto}
-                          onClick={() => agregarProducto(p)}
-                          className="cursor-pointer hover:bg-yellow-50 dark:hover:bg-yellow-900/10 transition-colors"
+                          className="hover:bg-yellow-50 dark:hover:bg-yellow-900/10 transition-colors"
                         >
                           <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">
-                            <span className="flex items-center gap-2">
+                            <div className="flex items-start gap-2">
                               {enCarrito > 0 && (
-                                <span className="shrink-0 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center">
+                                <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center">
                                   {enCarrito}
                                 </span>
                               )}
-                              {p.producto}
-                            </span>
+                              <div className="min-w-0">
+                                <p>{p.producto}</p>
+                                {p.producto_detalle && (
+                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{p.producto_detalle}</p>
+                                )}
+                                {(p.marca || p.modelo || p.color || p.capacidad) && (
+                                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                    {[p.marca, p.modelo, p.color, p.capacidad].filter(Boolean).join(' · ')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
                           </td>
                           <td className="px-4 py-2 font-mono text-xs text-zinc-400">{p.codigo_interno}</td>
                           <td className="px-4 py-2 text-right font-mono font-semibold text-green-600 dark:text-green-400">
                             {fmtNum(p.disponible)}
                           </td>
-                          <td className="px-4 py-2 text-center text-yellow-500 font-bold">+</td>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center justify-end gap-1">
+                              {enCarrito > 0 && (
+                                <button type="button" onClick={() => quitarUnidadProducto(p)} className={qtyBtnCls}>−</button>
+                              )}
+                              <button
+                                type="button" onClick={() => agregarProducto(p)}
+                                disabled={enCarrito >= p.disponible}
+                                className={qtyBtnCls}
+                              >+</button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -516,6 +605,7 @@ export default function TransferenciaForm() {
               productos={productos}
               stockOrigen={stockOrigen}
               onChange={(k, v) => updateItem(i, k, v)}
+              onQtyDelta={d => cambiarCantidad(i, d)}
               onRemove={() => removeItem(i)}
             />
           ))}
@@ -547,6 +637,7 @@ export default function TransferenciaForm() {
                 productos={productos}
                 stockOrigen={stockOrigen}
                 onChange={(k, v) => updateItem(i, k, v)}
+                onQtyDelta={d => cambiarCantidad(i, d)}
                 onRemove={() => removeItem(i)}
               />
             ))}

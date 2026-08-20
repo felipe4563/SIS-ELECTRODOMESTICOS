@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { inventarioService } from '../../services/inventario.service';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -37,6 +37,10 @@ export default function Kardex() {
   const [cargando, setCargando] = useState(false);
   const [buscado,  setBuscado]  = useState(false);
 
+  // Buscador de producto (autocompletar)
+  const [buscProd,   setBuscProd]   = useState('');
+  const [prodAbierto, setProdAbierto] = useState(false);
+
   useEffect(() => {
     inventarioService.getFormData()
       .then(r => {
@@ -60,10 +64,37 @@ export default function Kardex() {
     finally  { setCargando(false); }
   };
 
-  // Búsqueda automática al entrar a la página, con los filtros por defecto (últimos 30 días)
-  useEffect(() => { buscar(); }, []); // eslint-disable-line
+  // Búsqueda automática: al entrar y cada vez que cambian los filtros (con debounce)
+  useEffect(() => {
+    const t = setTimeout(() => { buscar(); }, 400);
+    return () => clearTimeout(t);
+  }, [filtros]); // eslint-disable-line
 
   const set = (k, v) => setFiltros(prev => ({ ...prev, [k]: v }));
+
+  const productoSeleccionado = productos.find(p => String(p.id_producto) === String(filtros.id_producto));
+
+  const productosFiltrados = useMemo(() => {
+    const q = buscProd.trim().toLowerCase();
+    if (!q) return productos;
+    return productos.filter(p =>
+      p.producto.toLowerCase().includes(q) ||
+      p.codigo_interno.toLowerCase().includes(q) ||
+      (p.marca ?? '').toLowerCase().includes(q) ||
+      (p.modelo ?? '').toLowerCase().includes(q)
+    );
+  }, [productos, buscProd]);
+
+  const seleccionarProducto = p => {
+    set('id_producto', p.id_producto);
+    setBuscProd('');
+    setProdAbierto(false);
+  };
+
+  const limpiarProducto = () => {
+    set('id_producto', '');
+    setBuscProd('');
+  };
 
   return (
     <div className="space-y-5">
@@ -81,21 +112,67 @@ export default function Kardex() {
         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600 mb-4">Filtros</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
-          {/* Producto */}
-          <div>
+          {/* Producto — buscador con autocompletar */}
+          <div className="relative">
             <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Producto</label>
-            <select
-              value={filtros.id_producto}
-              onChange={e => set('id_producto', e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            >
-              <option value="">Todos los productos</option>
-              {productos.map(p => (
-                <option key={p.id_producto} value={p.id_producto}>
-                  {p.codigo_interno} — {p.producto}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                value={productoSeleccionado ? `${productoSeleccionado.codigo_interno} — ${productoSeleccionado.producto}` : buscProd}
+                onChange={e => {
+                  if (filtros.id_producto) set('id_producto', '');
+                  setBuscProd(e.target.value);
+                  setProdAbierto(true);
+                }}
+                onFocus={() => setProdAbierto(true)}
+                onBlur={() => setTimeout(() => setProdAbierto(false), 150)}
+                placeholder="Buscar por código, producto, marca…"
+                className="w-full px-3 py-2 pr-8 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+              {(filtros.id_producto || buscProd) && (
+                <button
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={limpiarProducto}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-sm leading-none"
+                  title="Limpiar"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {prodAbierto && !filtros.id_producto && (
+              <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg">
+                {productosFiltrados.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-zinc-400">Sin resultados</div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { set('id_producto', ''); setBuscProd(''); setProdAbierto(false); }}
+                      className="w-full text-left px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700/50 border-b border-zinc-100 dark:border-zinc-700"
+                    >
+                      Todos los productos
+                    </button>
+                    {productosFiltrados.slice(0, 50).map(p => (
+                      <button
+                        type="button"
+                        key={p.id_producto}
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => seleccionarProducto(p)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-yellow-50 dark:hover:bg-zinc-700/50 border-b border-zinc-50 dark:border-zinc-700/50 last:border-0"
+                      >
+                        <p className="font-medium text-zinc-900 dark:text-white truncate">{p.producto}</p>
+                        <p className="text-[11px] text-zinc-400 font-mono">
+                          {p.codigo_interno}{p.marca ? ` · ${p.marca}` : ''}{p.modelo ? ` · ${p.modelo}` : ''}
+                        </p>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Depósito */}

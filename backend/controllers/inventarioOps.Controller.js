@@ -88,9 +88,11 @@ const getTransferencia = async (req, res) => {
     const [detalle] = await db.promise().query(
       `SELECT td.id_detalle, td.id_producto, td.cantidad_enviada, td.cantidad_recibida, td.observacion,
               p.producto AS producto_nombre, p.codigo_interno,
+              p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca,
               um.nombre AS unidad_nombre
        FROM transferencia_detalle td
        JOIN productos p       ON p.id_producto = td.id_producto
+       JOIN marcas    m       ON m.id_marca    = p.id_marca
        JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
        WHERE td.id_transferencia = ?
        ORDER BY td.id_detalle`, [id]

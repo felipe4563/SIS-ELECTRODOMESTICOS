@@ -6,8 +6,14 @@ import {
 import { ventasService } from '../../services/ventas.service';
 
 /* ─── Helpers (mismos que VentaImprimir.jsx) ──────────────────────────────── */
-const fmt   = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
-const fecha = s => s ? new Date(s).toLocaleString('es-BO') : '—';
+const fmt       = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+const fecha     = s => s ? new Date(s).toLocaleString('es-BO') : '—';
+const fechaCorta = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
+
+const METODO_PAGO_LABEL = {
+  EFECTIVO: 'Efectivo', QR: 'QR', TRANSFERENCIA: 'Transferencia',
+  CHEQUE: 'Cheque', TARJETA_DEBITO: 'Tarjeta débito', TARJETA_CREDITO: 'Tarjeta crédito', OTRO: 'Otro',
+};
 
 /* ─── Estilos ──────────────────────────────────────────────────────────────── */
 const S = StyleSheet.create({
@@ -35,6 +41,9 @@ const S = StyleSheet.create({
   secTitle: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#9ca3af',
               textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
 
+  legendBox: { borderWidth: 1, borderColor: '#1a1a1a', padding: 6, marginBottom: 10, alignItems: 'center' },
+  legendTxt: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', letterSpacing: 0.3 },
+
   tHead:    { flexDirection: 'row', backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
   tRow:     { flexDirection: 'row', borderLeftWidth: 1, borderRightWidth: 1,
               borderBottomWidth: 1, borderColor: '#e5e7eb' },
@@ -54,8 +63,15 @@ const S = StyleSheet.create({
   pNom:   { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#111827' },
   pSpec:  { fontSize: 7, color: '#6b7280', marginTop: 1 },
 
-  totWrap:  { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, marginBottom: 14 },
+  totWrap:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 8, marginBottom: 14 },
   totBox:   { width: 210 },
+
+  payWrap:  { flex: 1, paddingRight: 12 },
+  payTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 3 },
+  payRow:   { flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#374151', marginBottom: 1 },
+  payRowB:  { flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 1 },
+  entTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#111827', marginTop: 8, marginBottom: 2 },
+  entTxt:   { fontSize: 8, color: '#374151' },
   totRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2,
               borderBottomWidth: 1, borderBottomColor: '#f3f4f6', borderBottomStyle: 'dashed' },
   totLbl:   { fontSize: 8, color: '#4b5563' },
@@ -74,7 +90,7 @@ const S = StyleSheet.create({
   firmaTit: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#4b5563' },
 
   footer:   { borderTopWidth: 1.5, borderTopColor: '#111827', paddingTop: 6, marginTop: 16, textAlign: 'center' },
-  footNota: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#374151', fontStyle: 'italic' },
+  footNota: { fontSize: 8, fontFamily: 'Helvetica-BoldOblique', color: '#374151' },
 });
 
 /* ─── Documento PDF ────────────────────────────────────────────────────────── */
@@ -113,21 +129,25 @@ function VentaDoc({ data: d, logoUrl }) {
             <Text style={S.lbl}>Cliente</Text>
             <Text style={S.val}>{clienteNombre}</Text>
             {d.cliente_documento && <Text style={S.sub}>{d.tipo_documento}: {d.cliente_documento}</Text>}
+            {(d.cliente_telefono || d.cliente_celular) && (
+              <Text style={S.sub}>Tel: {[d.cliente_telefono, d.cliente_celular].filter(Boolean).join(' / ')}</Text>
+            )}
+            {d.cliente_direccion && (
+              <Text style={[S.sub, { fontFamily: 'Helvetica-Bold' }]}>Dir: {d.cliente_direccion}{d.cliente_ciudad ? `, ${d.cliente_ciudad}` : ''}</Text>
+            )}
           </View>
           <View style={S.col}>
             <Text style={S.lbl}>Condición</Text>
             <Text style={S.val}>{d.condicion_pago === 'CREDITO' ? `Crédito (${d.dias_credito} días)` : 'Contado'}</Text>
-            {d.requiere_entrega && d.direccion_entrega && (
-              <>
-                <Text style={[S.lbl, { marginTop: 6 }]}>Entrega</Text>
-                <Text style={S.sub}>{d.direccion_entrega}</Text>
-                {d.fecha_entrega && <Text style={S.sub}>Fecha: {fecha(d.fecha_entrega)}</Text>}
-              </>
+            {d.metodo_pago && (
+              <Text style={S.sub}>Forma de pago: {METODO_PAGO_LABEL[d.metodo_pago] ?? d.metodo_pago}</Text>
             )}
           </View>
         </View>
 
-        <View style={S.divider} />
+        <View style={S.legendBox}>
+          <Text style={S.legendTxt}>RECIBÍ, PROBANDO Y EN BUENAS CONDICIONES, LO SIGUIENTE:</Text>
+        </View>
 
         {/* ── Tabla productos ── */}
         <Text style={S.secTitle}>Detalle de Productos</Text>
@@ -148,9 +168,10 @@ function VentaDoc({ data: d, logoUrl }) {
               <Text style={[S.td, S.cN, { color: '#9ca3af' }]}>{i + 1}</Text>
               <View style={[S.cProd, { paddingVertical: 5, paddingHorizontal: 5 }]}>
                 <Text style={S.pNom}>{it.producto}</Text>
-                {(it.marca || it.modelo || it.color || it.numero_serie) && (
+                {it.producto_detalle && <Text style={S.pSpec}>{it.producto_detalle}</Text>}
+                {(it.marca || it.modelo || it.color || it.capacidad || it.numero_serie) && (
                   <Text style={S.pSpec}>
-                    {[it.marca && `Marca: ${it.marca}`, it.modelo && `Mod: ${it.modelo}`, it.color && `Color: ${it.color}`, it.numero_serie && `S/N: ${it.numero_serie}`]
+                    {[it.marca && `Marca: ${it.marca}`, it.modelo && `Mod: ${it.modelo}`, it.color && `Color: ${it.color}`, it.capacidad && `Cap: ${it.capacidad}`, it.numero_serie && `S/N: ${it.numero_serie}`]
                       .filter(Boolean).join('  ·  ')}
                   </Text>
                 )}
@@ -163,8 +184,50 @@ function VentaDoc({ data: d, logoUrl }) {
           );
         })}
 
-        {/* ── Totales ── */}
+        {/* ── Pago / Entrega (izquierda) + Totales (derecha) ── */}
         <View style={S.totWrap}>
+          <View style={S.payWrap}>
+            <Text style={S.payTitle}>PAGO</Text>
+            {(d.pagos ?? []).length > 0 ? (
+              (d.pagos ?? []).map(p => (
+                <View key={p.id_pago} style={S.payRow}>
+                  <Text>{fechaCorta(p.fecha)} · {METODO_PAGO_LABEL[p.metodo_pago] ?? p.metodo_pago}:</Text>
+                  <Text>Bs {fmt(p.monto)}</Text>
+                </View>
+              ))
+            ) : d.metodo_pago && (
+              <View style={S.payRow}>
+                <Text>Forma de pago:</Text>
+                <Text>{METODO_PAGO_LABEL[d.metodo_pago] ?? d.metodo_pago}</Text>
+              </View>
+            )}
+            {Number(d.saldo_pendiente ?? 0) <= 0 ? (
+              <View style={S.payRowB}>
+                <Text>PAGO TOTAL:</Text>
+                <Text>Bs {fmt(d.total)}</Text>
+              </View>
+            ) : (
+              <>
+                <View style={S.payRow}>
+                  <Text>A cuenta:</Text>
+                  <Text>Bs {fmt((d.pagos ?? []).length ? (d.pagos ?? []).reduce((s, p) => s + Number(p.monto), 0) : Number(d.total) - Number(d.saldo_pendiente ?? 0))}</Text>
+                </View>
+                <View style={S.payRowB}>
+                  <Text>SALDO:</Text>
+                  <Text>Bs {fmt(d.saldo_pendiente)}</Text>
+                </View>
+              </>
+            )}
+
+            {d.requiere_entrega && d.direccion_entrega && (
+              <>
+                <Text style={S.entTitle}>DIRECCIÓN DE ENTREGA</Text>
+                <Text style={S.entTxt}>{d.direccion_entrega}</Text>
+                {d.fecha_entrega && <Text style={S.entTxt}>Fecha: {fecha(d.fecha_entrega)}</Text>}
+              </>
+            )}
+          </View>
+
           <View style={S.totBox}>
             <View style={S.totRow}>
               <Text style={S.totLbl}>Subtotal:</Text>

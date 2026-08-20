@@ -9,6 +9,7 @@ const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtDT    = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 const fmtNum   = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+const specLinea = d => [d.marca_nombre && `Marca: ${d.marca_nombre}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
 const ESTADO_BADGE = {
   PRE_PEDIDO: { label: 'Pre-pedido', cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400' },
@@ -748,7 +749,13 @@ export default function CompraDetalle() {
                       <tr key={d.id_detalle} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
                         <td className="px-4 py-3">
                           <p className="font-medium text-zinc-900 dark:text-white">{d.producto}</p>
-                          <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno} · {d.marca_nombre}</p>
+                          <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
+                          {d.producto_detalle && (
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                          )}
+                          {specLinea(d) && (
+                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300">
                           {fmtNum(d.cantidad)} <span className="text-xs text-zinc-400">{d.unidad_codigo}</span>
@@ -778,8 +785,16 @@ export default function CompraDetalle() {
                 const pendiente = +(Number(d.cantidad) - Number(d.cantidad_recibida)).toFixed(4);
                 return (
                   <div key={d.id_detalle} className="px-4 py-4">
-                    <p className="font-medium text-zinc-900 dark:text-white text-sm">{d.producto}</p>
-                    <p className="text-[11px] font-mono text-zinc-400 mt-0.5 mb-3">{d.codigo_interno} · {d.marca_nombre}</p>
+                    <div className="mb-3">
+                      <p className="font-medium text-zinc-900 dark:text-white text-sm">{d.producto}</p>
+                      <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
+                      {d.producto_detalle && (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                      )}
+                      {specLinea(d) && (
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <p className="text-zinc-400 mb-0.5">Pedido</p>

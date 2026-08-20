@@ -17,6 +17,8 @@ function totalDe(p, depositos) {
   return depositos.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
 }
 
+const specLinea = p => [p.modelo && `Mod: ${p.modelo}`, p.color && `Color: ${p.color}`, p.capacidad && `Cap: ${p.capacidad}`].filter(Boolean).join('  ·  ');
+
 function resumenFiltros(filtros) {
   const partes = [];
   if (filtros.busqueda) partes.push(`Búsqueda: "${filtros.busqueda}"`);
@@ -77,6 +79,8 @@ export function StockReporteHTML({ productos, depositos, empresa: e, logoUrl, fi
                 <td style={{ padding: '4px 5px' }}>
                   <div style={{ fontWeight: 'bold', fontSize: '8px', color: '#111827' }}>{p.producto}</div>
                   <div style={{ fontSize: '7px', color: '#9ca3af' }}>{p.codigo_interno}</div>
+                  {p.detalle && <div style={{ fontSize: '7px', color: '#6b7280' }}>{p.detalle}</div>}
+                  {specLinea(p) && <div style={{ fontSize: '7px', color: '#6b7280' }}>{specLinea(p)}</div>}
                 </td>
                 <td style={{ fontSize: '8px', color: '#374151', padding: '4px 5px' }}>{p.marca_nombre}</td>
                 <td style={{ textAlign: 'right', fontSize: '8px', color: '#374151', fontFamily: 'Courier, monospace', padding: '4px 5px' }}>{fmtNum(p.stock_minimo)}</td>
@@ -140,6 +144,7 @@ const S = StyleSheet.create({
   cEst:   { width: 55, textAlign: 'center' },
   pNom:   { fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: '#111827' },
   pCod:   { fontSize: 6.5, color: '#9ca3af', marginTop: 1 },
+  pDet:   { fontSize: 6.5, color: '#6b7280', marginTop: 1 },
 
   footer:   { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 6, marginTop: 10,
               flexDirection: 'row', justifyContent: 'space-between' },
@@ -182,6 +187,8 @@ function StockReportePDFDoc({ productos, depositos, empresa: e, logoUrl }) {
               <View style={[S.cProd, { paddingVertical: 4, paddingHorizontal: 4 }]}>
                 <Text style={S.pNom}>{p.producto}</Text>
                 <Text style={S.pCod}>{p.codigo_interno}</Text>
+                {p.detalle && <Text style={S.pDet}>{p.detalle}</Text>}
+                {specLinea(p) && <Text style={S.pDet}>{specLinea(p)}</Text>}
               </View>
               <Text style={[S.td, S.cMarca]}>{p.marca_nombre}</Text>
               <Text style={[S.td, S.cMin, S.mono]}>{fmtNum(p.stock_minimo)}</Text>

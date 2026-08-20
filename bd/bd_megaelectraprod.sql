@@ -1050,9 +1050,10 @@ CREATE TABLE `roles` (
 
 INSERT INTO `roles` (`id_rol`, `nombre`, `descripcion`, `es_sistema`, `activo`) VALUES
 (1, 'ADMINISTRADOR', 'Dueño / Administrador del negocio. Acceso total al sistema.', 1, 1),
-(2, 'VENDEDOR', 'Solo atribución en ventas/cotizaciones (id_vendedor). No opera el sistema, sin permisos.', 0, 1),
-(3, 'ALMACENERO', 'Controla inventario, recibe mercadería de compras y gestiona transferencias.', 0, 1),
-(4, 'CAJERO', 'Atiende mostrador: ventas, cobros y turno de caja.', 0, 1);
+(2, 'VENTAS', 'Solo atribución en ventas/cotizaciones (id_vendedor). No opera el sistema, sin permisos.', 0, 1),
+(3, 'JEFE DE ALMACEN', 'Controla inventario, recibe mercadería de compras y gestiona transferencias.', 0, 1),
+(4, 'CAJA-VENTAS', 'Atiende mostrador: ventas, cobros y turno de caja.', 0, 1),
+(5, 'ENCARGADO DE ALMACEN', 'Apoya la gestión de inventario, recepción de mercadería y transferencias.', 0, 1);
 
 -- --------------------------------------------------------
 
@@ -1358,7 +1359,28 @@ INSERT INTO `rol_permiso` (`id_rol`, `id_permiso`) VALUES
 (4, 218),
 (4, 220),
 (4, 222),
-(4, 226);
+(4, 226),
+(5, 1),
+(5, 32),
+(5, 42),
+(5, 44),
+(5, 46),
+(5, 48),
+(5, 66),
+(5, 72),
+(5, 73),
+(5, 79),
+(5, 81),
+(5, 83),
+(5, 84),
+(5, 85),
+(5, 86),
+(5, 92),
+(5, 135),
+(5, 146),
+(5, 183),
+(5, 215),
+(5, 217);
 
 -- --------------------------------------------------------
 
@@ -1609,6 +1631,9 @@ CREATE TABLE `usuarios` (
   `documento` varchar(20) DEFAULT NULL,
   `email` varchar(120) DEFAULT NULL,
   `telefono` varchar(30) DEFAULT NULL,
+  `celular` varchar(30) DEFAULT NULL,
+  `direccion` varchar(255) DEFAULT NULL,
+  `celular_emergencia` varchar(30) DEFAULT NULL,
   `id_rol` int(11) NOT NULL,
   `id_sucursal_default` int(11) DEFAULT NULL,
   `foto_url` varchar(255) DEFAULT NULL,
@@ -1657,6 +1682,7 @@ CREATE TABLE `ventas` (
   `id_moneda` int(11) NOT NULL,
   `tipo_cambio` decimal(18,6) DEFAULT 1.000000,
   `condicion_pago` enum('CONTADO','CREDITO') NOT NULL DEFAULT 'CONTADO',
+  `metodo_pago` enum('EFECTIVO','QR','TRANSFERENCIA') DEFAULT NULL COMMENT 'Forma de pago con la que se registró la venta',
   `dias_credito` int(11) DEFAULT 0,
   `fecha_vencimiento` date DEFAULT NULL,
   `subtotal` decimal(14,2) NOT NULL DEFAULT 0.00,
@@ -2489,7 +2515,7 @@ ALTER TABLE `proveedor_cuentas_pago`
 -- AUTO_INCREMENT de la tabla `roles`
 --
 ALTER TABLE `roles`
-  MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_rol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `servicios_tecnicos`

@@ -283,8 +283,14 @@ export default function VentaDetalle() {
                 disabled={descargando}
                 onClick={async () => {
                   setDescargando(true);
-                  try { await descargarVentaPDF(id, logoUrl); }
-                  finally { setDescargando(false); }
+                  try {
+                    await descargarVentaPDF(id, logoUrl);
+                  } catch (err) {
+                    console.error('[descargarVentaPDF]', err);
+                    setPageError(err.response?.data?.mensaje ?? err.response?.data?.error ?? 'No se pudo generar el comprobante PDF');
+                  } finally {
+                    setDescargando(false);
+                  }
                 }}
                 className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium text-sm transition-colors disabled:opacity-50">
                 {descargando ? 'Generando…' : 'Comprobante PDF'}
@@ -379,9 +385,12 @@ export default function VentaDetalle() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-zinc-900 dark:text-white">{d.producto}</p>
                       <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
-                      {(d.marca || d.modelo || d.color) && (
+                      {d.producto_detalle && (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                      )}
+                      {(d.marca || d.modelo || d.color || d.capacidad) && (
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                          {[d.marca, d.modelo, d.color].filter(Boolean).join(' · ')}
+                          {[d.marca, d.modelo, d.color, d.capacidad].filter(Boolean).join(' · ')}
                         </p>
                       )}
                       {/* N° de serie */}
@@ -493,9 +502,12 @@ export default function VentaDetalle() {
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-zinc-900 dark:text-white leading-snug">{d.producto}</p>
                     <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
-                    {(d.marca || d.modelo || d.color) && (
+                    {d.producto_detalle && (
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                    )}
+                    {(d.marca || d.modelo || d.color || d.capacidad) && (
                       <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                        {[d.marca, d.modelo, d.color].filter(Boolean).join(' · ')}
+                        {[d.marca, d.modelo, d.color, d.capacidad].filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </div>

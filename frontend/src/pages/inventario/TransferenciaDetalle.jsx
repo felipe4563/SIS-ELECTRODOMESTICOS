@@ -7,6 +7,7 @@ import { descargarTransferenciaPDF } from './TransferenciaImprimir';
 
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO') : '—';
 const fmtCant  = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+const specLinea = d => [d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
 const ESTADO_BADGE = {
   SOLICITADA:  { label: 'Solicitada',  cls: 'bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-400' },
@@ -194,6 +195,12 @@ export default function TransferenciaDetalle() {
                 <div>
                   <p className="font-medium text-sm text-zinc-900 dark:text-white">{d.producto_nombre}</p>
                   <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                  {d.producto_detalle && (
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
+                  )}
+                  {specLinea(d) && (
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
+                  )}
                 </div>
                 {d.unidad_nombre && (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Unidad: {d.unidad_nombre}</p>
@@ -237,6 +244,12 @@ export default function TransferenciaDetalle() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-zinc-900 dark:text-white">{d.producto_nombre}</p>
                       <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                      {d.producto_detalle && (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
+                      )}
+                      {specLinea(d) && (
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{d.unidad_nombre}</td>
                     <td className="px-4 py-3 font-mono text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</td>

@@ -73,6 +73,8 @@ const S = StyleSheet.create({
   cSub:   { width: 88, textAlign: 'right' },
   pNom:   { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#111827' },
   pMarca: { fontSize: 7, color: '#9ca3af', marginTop: 1 },
+  pDet:   { fontSize: 7, color: '#6b7280', marginTop: 1 },
+  pSpec:  { fontSize: 7, color: '#9ca3af', marginTop: 1 },
 
   // Totales
   totWrap:  { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, marginBottom: 14 },
@@ -119,6 +121,7 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
   const fmtM = (n) => `${sym} ${fmt(n)}`;
   const est  = ESTADO_COLOR[c.estado] ?? ESTADO_COLOR.ANULADO;
   const pagosActivos = pagos.filter(p => p.estado !== 'ANULADO');
+  const specLinea = d => [d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
   return (
     <Document>
@@ -203,6 +206,8 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
             <View style={[S.cProd, { paddingVertical: 5, paddingHorizontal: 5 }]}>
               <Text style={S.pNom}>{d.producto}</Text>
               {d.marca_nombre && <Text style={S.pMarca}>{d.marca_nombre}</Text>}
+              {d.producto_detalle && <Text style={S.pDet}>{d.producto_detalle}</Text>}
+              {specLinea(d) && <Text style={S.pSpec}>{specLinea(d)}</Text>}
             </View>
             <Text style={[S.td, S.cCant, S.right]}>{fmtN(d.cantidad)}</Text>
             <Text style={[S.td, S.cUm, { fontSize: 7, color: '#9ca3af' }]}>{d.unidad_codigo}</Text>

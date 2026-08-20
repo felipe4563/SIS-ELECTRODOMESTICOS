@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { inventarioService } from '../../services/inventario.service';
 import { usePermission }     from '../../hooks/usePermission';
 import { useEmpresa }        from '../../contexts/EmpresaContext';
-import { StockReporteHTML, descargarStockReportePDF } from './StockReporte';
+import { descargarStockReportePDF } from './StockReporte';
+import StockImprimirBoton from './StockImprimirBoton';
 
 const toNum  = n => { const v = Number(n ?? 0); return isNaN(v) ? 0 : v; };
 const fmtNum = n => toNum(n).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const specLinea = p => [p.modelo && `Mod: ${p.modelo}`, p.color && `Color: ${p.color}`, p.capacidad && `Cap: ${p.capacidad}`].filter(Boolean).join('  ·  ');
 
 // ── Celda inline editable de stock mínimo ────────────────────────────────────
 function StockMinCell({ id_producto, value, editable, onSave }) {
@@ -216,13 +218,13 @@ export default function StockConsolidado() {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {!cargando && productosFiltrados.length > 0 && (
             <>
-              <button
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all"
-              >
-                <span className="hidden sm:inline">Imprimir</span>
-                <span className="sm:hidden">🖨️</span>
-              </button>
+              <StockImprimirBoton
+                productos={productosFiltrados}
+                depositos={depositos}
+                empresa={empresa}
+                logoUrl={logoUrl}
+                filtros={{ busqueda, marca: filMarca, categoria: filCat, estado: filEstado }}
+              />
               <button
                 disabled={descargando}
                 onClick={async () => {
@@ -246,17 +248,6 @@ export default function StockConsolidado() {
             <span className="hidden sm:inline">Actualizar</span>
           </button>
         </div>
-      </div>
-
-      {/* Documento oculto — solo visible al imprimir (window.print) */}
-      <div className="hidden print:block">
-        <StockReporteHTML
-          productos={productosFiltrados}
-          depositos={depositos}
-          empresa={empresa}
-          logoUrl={logoUrl}
-          filtros={{ busqueda, marca: filMarca, categoria: filCat, estado: filEstado }}
-        />
       </div>
 
       {/* ── Stat cards — 2×2 en móvil, 4 en línea en desktop ── */}
@@ -369,6 +360,12 @@ export default function StockConsolidado() {
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
                         {p.marca_nombre} · {p.unidad_nombre}
                       </p>
+                      {p.detalle && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 -mt-2">{p.detalle}</p>
+                      )}
+                      {specLinea(p) && (
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500 -mt-2">{specLinea(p)}</p>
+                      )}
 
                       {/* Depósitos */}
                       {depositos.length > 0 && (
@@ -470,6 +467,12 @@ export default function StockConsolidado() {
                             <p className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
                               {p.codigo_interno}{p.codigo_barras ? ` · ${p.codigo_barras}` : ''}
                             </p>
+                            {p.detalle && (
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{p.detalle}</p>
+                            )}
+                            {specLinea(p) && (
+                              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">{specLinea(p)}</p>
+                            )}
                           </td>
                           <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">{p.marca_nombre}</td>
                           <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-500">
@@ -547,22 +550,6 @@ export default function StockConsolidado() {
         </>
       )}
 
-      {/* CSS de impresión */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #documento-stock, #documento-stock * { visibility: visible !important; }
-          #documento-stock {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            margin: 0 !important;
-            background: white !important;
-            color: #000 !important;
-          }
-          @page { size: A4 landscape; margin: 10mm; }
-        }
-      `}</style>
     </div>
   );
 }

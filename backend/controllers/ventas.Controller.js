@@ -34,6 +34,60 @@ async function tipoMov(codigo) {
   return tm ?? null;
 }
 
+// Expande los ítems de tipo combo (id_combo + cantidad de combos) en líneas de
+// producto individuales (una por cada producto del combo), repartiendo el
+// precio_combo proporcionalmente al precio publicado de cada producto. El
+// último producto del combo se lleva el resto exacto para no arrastrar
+// diferencias de redondeo. Los ítems que ya son de producto pasan intactos.
+async function expandirItemsConCombos(items) {
+  const resultado = [];
+  for (const it of items) {
+    if (!it.id_combo) { resultado.push(it); continue; }
+
+    const cantidadCombo = Number(it.cantidad) || 0;
+    if (cantidadCombo <= 0) continue;
+
+    const [[combo]] = await db.promise().query(
+      `SELECT id_combo, precio_combo FROM combos WHERE id_combo = ? AND activo = 1`,
+      [it.id_combo]
+    );
+    if (!combo) throw new Error(`Combo no encontrado o inactivo (id ${it.id_combo})`);
+
+    const [detalle] = await db.promise().query(
+      `SELECT cd.id_producto, cd.cantidad, p.precio_publico, p.precio_mayor
+       FROM combo_detalle cd JOIN productos p ON p.id_producto = cd.id_producto
+       WHERE cd.id_combo = ?`,
+      [it.id_combo]
+    );
+    if (!detalle.length) throw new Error(`El combo "${combo.id_combo}" no tiene productos configurados`);
+
+    const totalPrecio = +(Number(combo.precio_combo) * cantidadCombo).toFixed(2);
+    const pesos = detalle.map(d => Number(d.precio_publico || d.precio_mayor || 0) * Number(d.cantidad));
+    const sumaPesos = pesos.reduce((a, b) => a + b, 0);
+
+    let acumulado = 0;
+    detalle.forEach((d, i) => {
+      const cantidadTotal = +(Number(d.cantidad) * cantidadCombo).toFixed(4);
+      const esUltimo = i === detalle.length - 1;
+      const peso = sumaPesos > 0 ? pesos[i] / sumaPesos : 1 / detalle.length;
+      const subtotalLinea = esUltimo ? +(totalPrecio - acumulado).toFixed(2) : +(totalPrecio * peso).toFixed(2);
+      acumulado += subtotalLinea;
+
+      resultado.push({
+        id_producto:     d.id_producto,
+        cantidad:        cantidadTotal,
+        precio_unitario: cantidadTotal > 0 ? +(subtotalLinea / cantidadTotal).toFixed(4) : 0,
+        descuento_porc:  0,
+        impuesto_porc:   0,
+        id_combo:        it.id_combo,
+        numero_serie:    null,
+        observacion:     it.observacion ?? null,
+      });
+    });
+  }
+  return resultado;
+}
+
 function calcTotalesVenta(items, body) {
   let subtotal = 0;
   for (const it of items) {
@@ -182,7 +236,7 @@ const getVenta = async (req, res) => {
 
     const [detalle] = await db.promise().query(
       `SELECT vd.*, p.producto, p.codigo_interno, p.codigo_barras, p.imagen_url,
-              p.modelo, p.color, m.nombre AS marca,
+              p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca,
               um.nombre AS unidad_nombre
        FROM venta_detalle vd
        JOIN productos       p  ON p.id_producto = vd.id_producto
@@ -228,14 +282,21 @@ const createVenta = async (req, res) => {
   try {
     const {
       tipo_venta = 'MENOR', id_sucursal, id_deposito, id_cliente, id_moneda = 1,
-      tipo_cambio = 1, condicion_pago = 'CONTADO', dias_credito = 0,
+      tipo_cambio = 1, condicion_pago = 'CONTADO', metodo_pago = null, dias_credito = 0,
       descuento_porc = 0, impuesto = 0, requiere_entrega = 0,
-      direccion_entrega, fecha_entrega, observaciones, items = [],
+      direccion_entrega, fecha_entrega, observaciones, items: itemsRaw = [],
       id_vendedor,
     } = req.body;
 
     if (!id_sucursal || !id_deposito || !id_cliente) {
       return res.status(400).json({ mensaje: 'Sucursal, depósito y cliente son obligatorios' });
+    }
+
+    let items;
+    try {
+      items = await expandirItemsConCombos(itemsRaw);
+    } catch (err) {
+      return res.status(400).json({ mensaje: err.message });
     }
     if (!items.length) {
       return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
@@ -300,15 +361,15 @@ const createVenta = async (req, res) => {
     const [ins] = await db.promise().query(
       `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
         id_usuario_registro,
-        id_moneda, tipo_cambio, condicion_pago, dias_credito, fecha_vencimiento,
+        id_moneda, tipo_cambio, condicion_pago, metodo_pago, dias_credito, fecha_vencimiento,
         subtotal, descuento_porc, descuento_monto, impuesto, total, saldo_pendiente,
         estado, requiere_entrega, direccion_entrega, fecha_entrega, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
       [
         numero, tipo_venta, id_sucursal, id_deposito, id_cliente,
         id_vendedor || req.user.id_usuario,
         req.user.id_usuario,
-        id_moneda, tipo_cambio, condicion_pago, dias_credito,
+        id_moneda, tipo_cambio, condicion_pago, metodo_pago || null, dias_credito,
         condicion_pago === 'CREDITO' && dias_credito > 0
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
@@ -351,12 +412,12 @@ const createVenta = async (req, res) => {
 
       await db.promise().query(
         `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, observacion, numero_serie)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, id_combo, observacion, numero_serie)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id_venta, it.id_producto, it.cantidad, it.precio_unitario, precio_base,
           it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
           it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
-          it.observacion ?? null, it.numero_serie?.trim() || null]
+          it.id_combo ?? null, it.observacion ?? null, it.numero_serie?.trim() || null]
       );
     }
 
@@ -378,11 +439,17 @@ const updateVenta = async (req, res) => {
     if (venta.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede editar una venta en borrador' });
 
     const {
-      id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito,
+      id_cliente, id_moneda, tipo_cambio, condicion_pago, metodo_pago = null, dias_credito,
       descuento_porc = 0, impuesto = 0, requiere_entrega, direccion_entrega,
-      fecha_entrega, observaciones, items = [], id_vendedor,
+      fecha_entrega, observaciones, items: itemsRaw = [], id_vendedor,
     } = req.body;
 
+    let items;
+    try {
+      items = await expandirItemsConCombos(itemsRaw);
+    } catch (err) {
+      return res.status(400).json({ mensaje: err.message });
+    }
     if (!items.length) return res.status(400).json({ mensaje: 'Debe agregar al menos un producto' });
     for (const it of items) {
       if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
@@ -410,13 +477,13 @@ const updateVenta = async (req, res) => {
     const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
 
     await db.promise().query(
-      `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, dias_credito=?,
+      `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, metodo_pago=?, dias_credito=?,
         fecha_vencimiento=?, subtotal=?, descuento_porc=?, descuento_monto=?, impuesto=?, total=?,
         requiere_entrega=?, direccion_entrega=?, fecha_entrega=?, observaciones=?,
         id_vendedor=COALESCE(?,id_vendedor)
        WHERE id_venta = ?`,
       [
-        id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito,
+        id_cliente, id_moneda, tipo_cambio, condicion_pago, metodo_pago || null, dias_credito,
         condicion_pago === 'CREDITO' && dias_credito > 0
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
@@ -466,12 +533,12 @@ const updateVenta = async (req, res) => {
 
       await db.promise().query(
         `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, observacion, numero_serie)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, id_combo, observacion, numero_serie)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, it.id_producto, it.cantidad, it.precio_unitario, precio_base,
           it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
           it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
-          it.observacion ?? null, it.numero_serie?.trim() || null]
+          it.id_combo ?? null, it.observacion ?? null, it.numero_serie?.trim() || null]
       );
     }
 
@@ -1109,6 +1176,8 @@ const getTicket = async (req, res) => {
       `SELECT v.*,
               c.razon_social AS cliente_razon, c.nombres AS cliente_nombres, c.apellidos AS cliente_apellidos,
               c.documento AS cliente_documento, c.tipo_documento,
+              c.telefono AS cliente_telefono, c.celular AS cliente_celular,
+              cd.direccion AS cliente_direccion, cd.ciudad AS cliente_ciudad,
               s.nombre AS sucursal_nombre, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono,
               d.nombre AS deposito_nombre,
               mon.codigo AS moneda_codigo, mon.simbolo AS moneda_simbolo,
@@ -1124,20 +1193,26 @@ const getTicket = async (req, res) => {
        JOIN usuarios   uv  ON uv.id_usuario  = v.id_vendedor
        LEFT JOIN usuarios ur ON ur.id_usuario = v.id_usuario_registro
        LEFT JOIN empresas e ON e.activo = 1
+       LEFT JOIN cliente_direcciones cd ON cd.id_cliente = c.id_cliente AND cd.es_principal = 1
        WHERE v.id_venta = ?`, [id]
     );
     if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
 
     const [detalle] = await db.promise().query(
       `SELECT vd.*, p.producto, p.codigo_interno,
-              m.nombre AS marca, p.modelo, p.color
+              m.nombre AS marca, p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad
        FROM venta_detalle vd
        JOIN productos p ON p.id_producto = vd.id_producto
        JOIN marcas    m ON m.id_marca    = p.id_marca
        WHERE vd.id_venta = ?`, [id]
     );
 
-    res.json({ ...venta, detalle });
+    const [pagos] = await db.promise().query(
+      `SELECT id_pago, fecha, metodo_pago, monto, numero_referencia
+       FROM pagos_venta WHERE id_venta = ? ORDER BY fecha`, [id]
+    );
+
+    res.json({ ...venta, detalle, pagos });
   } catch (err) {
     console.error('[getTicket]', err);
     res.status(500).json({ error: 'Error al obtener datos del ticket' });
@@ -1183,8 +1258,10 @@ const getFormData = async (req, res) => {
       `SELECT p.id_producto, p.codigo_interno, p.codigo_barras,
               p.producto, p.precio_publico, p.precio_mayor, p.precio_real,
               p.id_categoria, p.id_marca, p.id_impuesto_default, p.activo,
-              p.imagen_url
+              p.imagen_url, p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad,
+              m.nombre AS marca
        FROM productos p
+       JOIN marcas m ON m.id_marca = p.id_marca
        WHERE p.activo = 1
        ORDER BY p.producto
        LIMIT 200`
@@ -1236,6 +1313,33 @@ const getFormData = async (req, res) => {
       promociones = promoRows.map(p => ({ ...p, aplicaciones: aplicsMap[p.id_promocion] ?? [] }));
     }
 
+    // Combos vigentes, con el detalle de productos que los componen
+    const [comboRows] = await db.promise().query(
+      `SELECT id_combo, codigo, nombre, descripcion, precio_combo, imagen_url
+       FROM combos
+       WHERE activo = 1
+         AND (fecha_inicio IS NULL OR fecha_inicio <= ?)
+         AND (fecha_fin IS NULL OR fecha_fin >= ?)
+       ORDER BY nombre`,
+      [today, today]
+    );
+    let combos = comboRows;
+    if (comboRows.length) {
+      const idsCombo = comboRows.map(c => c.id_combo);
+      const [comboDet] = await db.promise().query(
+        `SELECT cd.id_combo, cd.id_producto, cd.cantidad, p.producto AS producto_nombre
+         FROM combo_detalle cd JOIN productos p ON p.id_producto = cd.id_producto
+         WHERE cd.id_combo IN (?)`,
+        [idsCombo]
+      );
+      const detCombosMap = {};
+      for (const d of comboDet) {
+        if (!detCombosMap[d.id_combo]) detCombosMap[d.id_combo] = [];
+        detCombosMap[d.id_combo].push({ id_producto: d.id_producto, cantidad: d.cantidad, producto_nombre: d.producto_nombre });
+      }
+      combos = comboRows.map(c => ({ ...c, detalle: detCombosMap[c.id_combo] ?? [] }));
+    }
+
     // Clientes activos
     const [clientes] = await db.promise().query(
       `SELECT id_cliente, codigo, tipo_cliente, tipo_documento, documento,
@@ -1250,7 +1354,7 @@ const getFormData = async (req, res) => {
        FROM usuarios WHERE activo = 1 ORDER BY nombres, apellidos`
     );
 
-    res.json({ sucursales, depositos, productos, monedas, impuestos, categorias, unidades, promociones, clientes, vendedores });
+    res.json({ sucursales, depositos, productos, monedas, impuestos, categorias, unidades, promociones, combos, clientes, vendedores });
   } catch (err) {
     console.error('[getFormData]', err);
     res.status(500).json({ error: 'Error al obtener datos del formulario' });

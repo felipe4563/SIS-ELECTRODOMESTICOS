@@ -53,10 +53,18 @@ function Ticket80({ data, logoUrl }) {
       {/* Cliente */}
       <div style={{ marginBottom: '4px' }}>
         <div style={{ fontWeight: 'bold' }}>CLIENTE</div>
-        <div>{clienteNombre}</div>
+        <div style={{ fontWeight: 'bold' }}>{clienteNombre}</div>
         {data.cliente_documento && <div>{data.tipo_documento}: {data.cliente_documento}</div>}
+        {(data.cliente_telefono || data.cliente_celular) && (
+          <div>Tel: {[data.cliente_telefono, data.cliente_celular].filter(Boolean).join(' / ')}</div>
+        )}
+        {data.cliente_direccion && (
+          <div style={{ fontWeight: 'bold' }}>Dir: {data.cliente_direccion}{data.cliente_ciudad ? `, ${data.cliente_ciudad}` : ''}</div>
+        )}
       </div>
 
+      <Divisor />
+      <Leyenda />
       <Divisor />
 
       {/* Detalle */}
@@ -67,15 +75,14 @@ function Ticket80({ data, logoUrl }) {
       {/* Totales */}
       <Totales data={data} />
 
-      {/* Entrega */}
+      <Divisor />
+      <PagoResumen data={data} />
+
+      {/* Entrega (dirección distinta a la del cliente) */}
       {data.requiere_entrega && data.direccion_entrega && (
         <>
           <Divisor />
-          <div style={{ fontSize: '10px' }}>
-            <div style={{ fontWeight: 'bold' }}>ENTREGA:</div>
-            <div>{data.direccion_entrega}</div>
-            {data.fecha_entrega && <div>Fecha: {fmtFecha(data.fecha_entrega)}</div>}
-          </div>
+          <EntregaInfo data={data} />
         </>
       )}
 
@@ -129,29 +136,33 @@ function Ticket110({ data, logoUrl }) {
 
       <Divisor />
 
-      {/* ── Sección media: Cliente | Condición/Entrega ── */}
+      {/* ── Sección media: Cliente | Condición ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '4px' }}>
         {/* Cliente */}
         <div>
           <div style={{ fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>CLIENTE</div>
           <div style={{ fontSize: '10px', fontWeight: 'bold', wordBreak: 'break-word' }}>{clienteNombre}</div>
           {data.cliente_documento && <div style={{ fontSize: '9px' }}>{data.tipo_documento}: {data.cliente_documento}</div>}
+          {(data.cliente_telefono || data.cliente_celular) && (
+            <div style={{ fontSize: '9px' }}>Tel: {[data.cliente_telefono, data.cliente_celular].filter(Boolean).join(' / ')}</div>
+          )}
+          {data.cliente_direccion && (
+            <div style={{ fontSize: '9px', fontWeight: 'bold' }}>Dir: {data.cliente_direccion}{data.cliente_ciudad ? `, ${data.cliente_ciudad}` : ''}</div>
+          )}
         </div>
 
-        {/* Condición + Entrega */}
+        {/* Condición */}
         <div style={{ borderLeft: '1px dashed #999', paddingLeft: '8px' }}>
           <div style={{ fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>CONDICIÓN</div>
           <div style={{ fontSize: '10px' }}>{data.condicion_pago === 'CREDITO' ? `Crédito (${data.dias_credito} días)` : 'Contado'}</div>
-          {data.requiere_entrega && data.direccion_entrega && (
-            <>
-              <div style={{ fontWeight: 'bold', fontSize: '10px', marginTop: '4px', marginBottom: '2px' }}>ENTREGA</div>
-              <div style={{ fontSize: '9px' }}>{data.direccion_entrega}</div>
-              {data.fecha_entrega && <div style={{ fontSize: '9px' }}>Fecha: {fmtFechaCorta(data.fecha_entrega)}</div>}
-            </>
+          {data.metodo_pago && (
+            <div style={{ fontSize: '9px' }}>Forma de pago: {METODO_PAGO_LABEL[data.metodo_pago] ?? data.metodo_pago}</div>
           )}
         </div>
       </div>
 
+      <Divisor />
+      <Leyenda fontSize="9px" />
       <Divisor />
 
       {/* ── Detalle de productos — tabla ancha ── */}
@@ -178,9 +189,12 @@ function Ticket110({ data, logoUrl }) {
                 <span style={{ fontSize: '10px', fontWeight: 'bold', textAlign: 'right' }}>Bs {fmtMonto(sub)}</span>
               </div>
               {/* Especificaciones en línea */}
-              {(d.marca || d.modelo || d.color || d.numero_serie) && (
+              {d.producto_detalle && (
+                <div style={{ fontSize: '9px', color: '#333', paddingLeft: '2px', marginTop: '1px' }}>{d.producto_detalle}</div>
+              )}
+              {(d.marca || d.modelo || d.color || d.capacidad || d.numero_serie) && (
                 <div style={{ fontSize: '8px', color: '#444', paddingLeft: '2px', marginTop: '1px' }}>
-                  {[d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.numero_serie && `S/N: ${d.numero_serie}`].filter(Boolean).join('  ·  ')}
+                  {[d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`, d.numero_serie && `S/N: ${d.numero_serie}`].filter(Boolean).join('  ·  ')}
                 </div>
               )}
             </div>
@@ -212,6 +226,17 @@ function Ticket110({ data, logoUrl }) {
           )}
         </div>
       </div>
+
+      <Divisor />
+      <PagoResumen data={data} fontSize="9px" />
+
+      {/* Entrega (dirección distinta a la del cliente) */}
+      {data.requiere_entrega && data.direccion_entrega && (
+        <>
+          <Divisor />
+          <EntregaInfo data={data} fontSize="9px" />
+        </>
+      )}
 
       <Divisor />
       <Nota />
@@ -294,18 +319,24 @@ function TicketA4({ data, logoUrl }) {
           <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '3px' }}>Cliente</div>
           <div style={{ fontWeight: 'bold', fontSize: '11px', marginBottom: '2px' }}>{clienteNombre}</div>
           {data.cliente_documento && <div style={{ color: '#444' }}>{data.tipo_documento}: {data.cliente_documento}</div>}
+          {(data.cliente_telefono || data.cliente_celular) && (
+            <div style={{ color: '#444' }}>Tel: {[data.cliente_telefono, data.cliente_celular].filter(Boolean).join(' / ')}</div>
+          )}
+          {data.cliente_direccion && (
+            <div style={{ fontWeight: 'bold' }}>Dir: {data.cliente_direccion}{data.cliente_ciudad ? `, ${data.cliente_ciudad}` : ''}</div>
+          )}
         </div>
         <div>
           <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '3px' }}>Condición de pago</div>
           <div>{data.condicion_pago === 'CREDITO' ? `Crédito — ${data.dias_credito} días` : 'Contado'}</div>
-          {data.requiere_entrega && data.direccion_entrega && (
-            <>
-              <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginTop: '5px', marginBottom: '2px' }}>Entrega</div>
-              <div>{data.direccion_entrega}</div>
-              {data.fecha_entrega && <div>Fecha: {fmtFecha(data.fecha_entrega)}</div>}
-            </>
+          {data.metodo_pago && (
+            <div style={{ color: '#444' }}>Forma de pago: {METODO_PAGO_LABEL[data.metodo_pago] ?? data.metodo_pago}</div>
           )}
         </div>
+      </div>
+
+      <div style={{ textAlign: 'center', fontSize: '10px', fontWeight: 'bold', letterSpacing: '0.3px', border: '1px solid #1a1a1a', padding: '5px', marginBottom: '8px' }}>
+        RECIBÍ, PROBANDO Y EN BUENAS CONDICIONES, LO SIGUIENTE:
       </div>
 
       {/* ── Tabla de productos ── */}
@@ -326,9 +357,12 @@ function TicketA4({ data, logoUrl }) {
               <tr key={i} style={{ borderBottom: '1px solid #ebebeb' }}>
                 <td style={{ padding: '4px 6px', verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 'bold' }}>{d.producto}</div>
-                  {(d.marca || d.modelo || d.color || d.numero_serie) && (
+                  {d.producto_detalle && (
+                    <div style={{ fontSize: '9px', color: '#333', marginTop: '1px' }}>{d.producto_detalle}</div>
+                  )}
+                  {(d.marca || d.modelo || d.color || d.capacidad || d.numero_serie) && (
                     <div style={{ fontSize: '8px', color: '#666', marginTop: '1px' }}>
-                      {[d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.numero_serie && `S/N: ${d.numero_serie}`].filter(Boolean).join('  ·  ')}
+                      {[d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`, d.numero_serie && `S/N: ${d.numero_serie}`].filter(Boolean).join('  ·  ')}
                     </div>
                   )}
                 </td>
@@ -342,8 +376,16 @@ function TicketA4({ data, logoUrl }) {
         </tbody>
       </table>
 
-      {/* ── Totales ── */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+      {/* ── Pago / Entrega (izquierda) + Totales (derecha), a la misma altura ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'start', marginBottom: '12px' }}>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <PagoResumen data={data} fontSize="10px" />
+          {data.requiere_entrega && data.direccion_entrega && (
+            <EntregaInfo data={data} fontSize="10px" />
+          )}
+        </div>
+
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
           <tbody>
             <tr>
@@ -420,6 +462,60 @@ const Row = ({ label, value, bold }) => (
   </div>
 );
 
+const METODO_PAGO_LABEL = {
+  EFECTIVO: 'Efectivo', QR: 'QR', TRANSFERENCIA: 'Transferencia',
+  CHEQUE: 'Cheque', TARJETA_DEBITO: 'Tarjeta débito', TARJETA_CREDITO: 'Tarjeta crédito', OTRO: 'Otro',
+};
+
+const Leyenda = ({ fontSize = '10px' }) => (
+  <div style={{ fontSize, fontWeight: 'bold', textAlign: 'center', padding: '4px 0', letterSpacing: '0.3px' }}>
+    RECIBÍ, PROBANDO Y EN BUENAS CONDICIONES, LO SIGUIENTE:
+  </div>
+);
+
+const PagoResumen = ({ data, fontSize = '10px' }) => {
+  const saldo       = Number(data.saldo_pendiente ?? 0);
+  const pagos       = data.pagos ?? [];
+  const aCuenta     = pagos.length ? pagos.reduce((s, p) => s + Number(p.monto), 0) : Number(data.total) - saldo;
+  const esPagoTotal = saldo <= 0;
+  return (
+    <div style={{ fontSize }}>
+      <div style={{ fontWeight: 'bold' }}>PAGO</div>
+
+      {pagos.length > 0 ? (
+        <div style={{ marginBottom: '2px' }}>
+          {pagos.map(p => (
+            <Row
+              key={p.id_pago}
+              label={`${fmtFechaCorta(p.fecha)} · ${METODO_PAGO_LABEL[p.metodo_pago] ?? p.metodo_pago}:`}
+              value={`Bs ${fmtMonto(p.monto)}`}
+            />
+          ))}
+        </div>
+      ) : data.metodo_pago && (
+        <Row label="Forma de pago:" value={METODO_PAGO_LABEL[data.metodo_pago] ?? data.metodo_pago} />
+      )}
+
+      {esPagoTotal ? (
+        <Row label="PAGO TOTAL:" value={`Bs ${fmtMonto(data.total)}`} bold />
+      ) : (
+        <>
+          <Row label="A cuenta:" value={`Bs ${fmtMonto(aCuenta)}`} />
+          <Row label="SALDO:" value={`Bs ${fmtMonto(saldo)}`} bold />
+        </>
+      )}
+    </div>
+  );
+};
+
+const EntregaInfo = ({ data, fontSize = '10px' }) => (
+  <div style={{ fontSize }}>
+    <div style={{ fontWeight: 'bold' }}>DIRECCIÓN DE ENTREGA</div>
+    <div>{data.direccion_entrega}</div>
+    {data.fecha_entrega && <div>Fecha: {fmtFecha(data.fecha_entrega)}</div>}
+  </div>
+);
+
 const Nota = () => (
   <div style={{ textAlign: 'center', fontSize: '11px', fontWeight: 'bold', padding: '4px 0', lineHeight: '1.4' }}>
     NOTA: NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES.<br />
@@ -480,17 +576,21 @@ const DetalleProductos = ({ data }) => (
             P.Unit: Bs {fmtMonto(d.precio_unitario)}
             {Number(d.descuento_porc) > 0 && ` · Dto. ${d.descuento_porc}%`}
           </div>
-          {(d.marca || d.modelo || d.color) && (
+          {d.producto_detalle && (
+            <div style={{ fontSize: '9px', color: '#333', paddingLeft: '2px', marginTop: '2px' }}>{d.producto_detalle}</div>
+          )}
+          {(d.marca || d.modelo || d.color || d.capacidad) && (
             <table style={{ fontSize: '9px', color: '#333', marginTop: '2px', marginLeft: '2px', borderCollapse: 'collapse' }}>
               <tbody>
                 {d.marca    && <tr><td style={{ fontWeight: 'bold', paddingRight: '4px', whiteSpace: 'nowrap' }}>Marca:</td><td>{d.marca}</td></tr>}
                 {d.modelo   && <tr><td style={{ fontWeight: 'bold', paddingRight: '4px', whiteSpace: 'nowrap' }}>Modelo:</td><td>{d.modelo}</td></tr>}
                 {d.color    && <tr><td style={{ fontWeight: 'bold', paddingRight: '4px', whiteSpace: 'nowrap' }}>Color:</td><td>{d.color}</td></tr>}
+                {d.capacidad && <tr><td style={{ fontWeight: 'bold', paddingRight: '4px', whiteSpace: 'nowrap' }}>Cap:</td><td>{d.capacidad}</td></tr>}
                 {d.numero_serie && <tr><td style={{ fontWeight: 'bold', paddingRight: '4px', whiteSpace: 'nowrap' }}>S/N:</td><td style={{ fontFamily: 'monospace' }}>{d.numero_serie}</td></tr>}
               </tbody>
             </table>
           )}
-          {d.numero_serie && !d.marca && !d.modelo && !d.color && (
+          {d.numero_serie && !d.marca && !d.modelo && !d.color && !d.capacidad && (
             <div style={{ fontSize: '9px', color: '#333', paddingLeft: '2px', fontFamily: 'monospace' }}>S/N: {d.numero_serie}</div>
           )}
         </div>

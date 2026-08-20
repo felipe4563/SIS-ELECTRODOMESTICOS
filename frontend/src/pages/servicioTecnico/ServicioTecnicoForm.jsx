@@ -322,6 +322,26 @@ export default function ServicioTecnicoForm() {
           </div>
         </div>
 
+        {/* ── Sucursal ── */}
+        <div className={SECTION}>
+          <div className="flex items-center gap-2.5">
+            <span className="w-0.5 h-5 rounded-full bg-yellow-400 flex-shrink-0" />
+            <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Sucursal</h2>
+          </div>
+          <div>
+            <label className={LABEL}>Sucursal</label>
+            <select value={formData.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT}>
+              <option value="">Seleccionar sucursal…</option>
+              {catalogo.sucursales.map(s => (
+                <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+              ))}
+            </select>
+            {formData.tipo_origen === 'INVENTARIO' && (
+              <p className="mt-1 text-[11px] text-zinc-400">Elegí la sucursal primero para filtrar los depósitos y productos disponibles</p>
+            )}
+          </div>
+        </div>
+
         {/* ── Cliente / Producto de inventario ── */}
         {formData.tipo_origen === 'CLIENTE' ? (
           <div className={SECTION}>
@@ -444,15 +464,6 @@ export default function ServicioTecnicoForm() {
             <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Recepción</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={LABEL}>Sucursal</label>
-              <select value={formData.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT}>
-                <option value="">Seleccionar sucursal…</option>
-                {catalogo.sucursales.map(s => (
-                  <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
-                ))}
-              </select>
-            </div>
             <div>
               <label className={LABEL}>Fecha de recepción</label>
               <input type="datetime-local" value={formData.fecha_recepcion}

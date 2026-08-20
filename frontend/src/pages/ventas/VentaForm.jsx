@@ -67,6 +67,44 @@ function Ic({ id, size = 15, className = '' }) {
   );
 }
 
+/* ─── Tile de combo (grilla estilo POS) ──────────────────────────────────── */
+function ComboTile({ combo, enCarrito, onClick }) {
+  const [errImg, setErrImg] = useState(false);
+  const img = buildImgUrl(combo.imagen_url);
+
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex flex-col items-stretch text-left bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:border-yellow-400 dark:hover:border-yellow-400 hover:shadow-md active:scale-[0.98] transition-all overflow-hidden group"
+    >
+      {enCarrito > 0 && (
+        <span className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center shadow">
+          {enCarrito}
+        </span>
+      )}
+      <span className="absolute top-1.5 left-1.5 z-10 text-[9px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+        COMBO
+      </span>
+      <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
+        {img && !errImg ? (
+          <img src={img} alt={combo.nombre} className="w-full h-full object-cover" onError={() => setErrImg(true)} />
+        ) : (
+          <Ic id="package" size={28} className="text-zinc-300 dark:text-zinc-600" />
+        )}
+      </div>
+      <div className="px-2.5 py-2 space-y-0.5">
+        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-tight line-clamp-2 min-h-[2.2em]">
+          {combo.nombre}
+        </p>
+        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight line-clamp-1">
+          {combo.detalle.length} producto{combo.detalle.length !== 1 ? 's' : ''} incluido{combo.detalle.length !== 1 ? 's' : ''}
+        </p>
+        <p className="font-mono font-bold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(combo.precio_combo)}</p>
+      </div>
+    </button>
+  );
+}
+
 /* ─── Tile de producto (grilla estilo POS) ───────────────────────────────── */
 function ProductoTile({ prod, disponible, promoPorc, enCarrito, onClick }) {
   const [errImg, setErrImg] = useState(false);
@@ -98,6 +136,14 @@ function ProductoTile({ prod, disponible, promoPorc, enCarrito, onClick }) {
         <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-tight line-clamp-2 min-h-[2.2em]">
           {prod.producto}
         </p>
+        {prod.producto_detalle && (
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight line-clamp-1">{prod.producto_detalle}</p>
+        )}
+        {(prod.marca || prod.modelo || prod.color || prod.capacidad) && (
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-tight line-clamp-1">
+            {[prod.marca, prod.modelo, prod.color, prod.capacidad].filter(Boolean).join(' · ')}
+          </p>
+        )}
         <div className="flex items-center justify-between gap-1">
           <p className="font-mono font-bold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(resolverPrecio(prod, prod.__tipoVenta))}</p>
           {disponible !== null && disponible <= 5 && (
@@ -106,6 +152,51 @@ function ProductoTile({ prod, disponible, promoPorc, enCarrito, onClick }) {
         </div>
       </div>
     </button>
+  );
+}
+
+/* ─── Línea del carrito — combo (panel de orden) ─────────────────────────── */
+function CartLineaCombo({ fila, onQtyDelta, onRemove }) {
+  const subtotal = Number(fila.combo.precio_combo) * Number(fila.cantidad ?? 0);
+  return (
+    <div className="border border-purple-200 dark:border-purple-800/60 bg-purple-50/40 dark:bg-purple-900/10 rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">COMBO</span>
+            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{fila.combo.nombre}</p>
+          </div>
+          <p className="text-xs text-zinc-400 font-mono">Bs {fmtMonto(fila.combo.precio_combo)} c/u</p>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onQtyDelta(-1)}
+            className="w-6 h-6 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <Ic id="minus" size={12} />
+          </button>
+          <span className="w-6 text-center text-sm font-mono font-semibold text-zinc-900 dark:text-white">{fila.cantidad}</span>
+          <button
+            onClick={() => onQtyDelta(1)}
+            className="w-6 h-6 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            <Ic id="plus" size={12} />
+          </button>
+        </div>
+
+        <p className="w-20 text-right font-mono font-semibold text-sm text-zinc-900 dark:text-white shrink-0">
+          {fmtMonto(subtotal)}
+        </p>
+
+        <button
+          onClick={onRemove}
+          className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+        >
+          <Ic id="trash" size={13} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -123,6 +214,14 @@ function CartLinea({ fila, prod, disponible, impuestos, tipoVenta, expandido, on
       <div className="flex items-center gap-2.5 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{prod?.producto ?? '—'}</p>
+          {prod?.producto_detalle && (
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{prod.producto_detalle}</p>
+          )}
+          {prod && (prod.marca || prod.modelo || prod.color || prod.capacidad) && (
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+              {[prod.marca, prod.modelo, prod.color, prod.capacidad].filter(Boolean).join(' · ')}
+            </p>
+          )}
           <p className="text-xs text-zinc-400 font-mono">Bs {fmtMonto(fila.precio_unitario)} c/u</p>
         </div>
 
@@ -273,18 +372,21 @@ export default function VentaForm() {
   const [monedas,     setMonedas]     = useState([]);
   const [stockMap,    setStockMap]    = useState({});
   const [promociones, setPromociones] = useState([]);
+  const [combos,      setCombos]      = useState([]);
   const [categorias,  setCategorias]  = useState([]);
   const [impuestos,   setImpuestos]   = useState([]);
   const [vendedores,  setVendedores]  = useState([]);
 
   const [form, setForm] = useState({
     tipo_venta: 'MENOR', id_sucursal: '', id_deposito: '', id_cliente: '',
-    id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0,
+    id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', metodo_pago: 'EFECTIVO', dias_credito: 0,
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
     id_vendedor: '',
   });
   const [items, setItems] = useState([]);
+  const [comboItems, setComboItems] = useState([]);
+  const [vistaCatalogo, setVistaCatalogo] = useState('productos'); // 'productos' | 'combos'
   const [expandidos, setExpandidos] = useState(() => new Set());
   const [clienteInfo, setClienteInfo] = useState(null);
   const [guardando,    setGuardando]    = useState(false);
@@ -316,7 +418,7 @@ export default function VentaForm() {
     ventasService.formData().then(r => {
       const { sucursales: suc, depositos: deps, productos: prods,
               monedas: mons, impuestos: imps, categorias: cats,
-              promociones: promos, clientes: clis,
+              promociones: promos, combos: combs, clientes: clis,
               vendedores: vends } = r.data;
 
       setSucursales(suc ?? []);
@@ -327,6 +429,7 @@ export default function VentaForm() {
       setImpuestos(imps ?? []);
       setCategorias(cats ?? []);
       setPromociones(promos ?? []);
+      setCombos(combs ?? []);
       setVendedores(vends ?? []);
 
       if (!esEdicion) {
@@ -365,7 +468,7 @@ export default function VentaForm() {
             tipo_venta: v.tipo_venta, id_sucursal: String(v.id_sucursal),
             id_deposito: String(v.id_deposito), id_cliente: String(v.id_cliente),
             id_moneda: String(v.id_moneda), tipo_cambio: v.tipo_cambio,
-            condicion_pago: v.condicion_pago, dias_credito: v.dias_credito,
+            condicion_pago: v.condicion_pago, metodo_pago: v.metodo_pago ?? 'EFECTIVO', dias_credito: v.dias_credito,
             descuento_porc: v.descuento_porc ?? 0, impuesto: v.impuesto ?? 0,
             requiere_entrega: Boolean(v.requiere_entrega),
             direccion_entrega: v.direccion_entrega ?? '',
@@ -512,7 +615,25 @@ export default function VentaForm() {
   };
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, patch) => setItems(p => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
-  const limpiarItems = () => setItems([]);
+  const limpiarItems = () => { setItems([]); setComboItems([]); };
+
+  // ── Combos ────────────────────────────────────────────────────────────────
+  const agregarComboAlCarrito = useCallback((combo) => {
+    setComboItems(prev => {
+      const idx = prev.findIndex(it => String(it.id_combo) === String(combo.id_combo));
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], cantidad: next[idx].cantidad + 1 };
+        return next;
+      }
+      return [...prev, { _key: crypto.randomUUID(), id_combo: combo.id_combo, combo, cantidad: 1 }];
+    });
+  }, []);
+
+  const cambiarCantidadCombo = (i, delta) => {
+    setComboItems(prev => prev.map((it, idx) => idx === i ? { ...it, cantidad: Math.max(1, Number(it.cantidad) + delta) } : it));
+  };
+  const removeComboItem = i => setComboItems(p => p.filter((_, idx) => idx !== i));
 
   const toggleExpandido = (key) => setExpandidos(prev => {
     const next = new Set(prev);
@@ -520,16 +641,19 @@ export default function VentaForm() {
     return next;
   });
 
-  const subtotal  = items.reduce((s, it) => {
+  const subtotalProductos = items.reduce((s, it) => {
     const base = Number(it.cantidad ?? 0) * Number(it.precio_unitario ?? 0);
     const desc = base * (Number(it.descuento_porc ?? 0) / 100);
     const imp  = (base - desc) * (Number(it.impuesto_porc ?? 0) / 100);
     return s + (base - desc + imp);
   }, 0);
+  const subtotalCombos = comboItems.reduce((s, it) => s + Number(it.combo.precio_combo) * Number(it.cantidad ?? 0), 0);
+  const subtotal  = subtotalProductos + subtotalCombos;
   const descMonto = subtotal * (Number(form.descuento_porc) / 100);
   const impuesto  = Number(form.impuesto);
   const total     = subtotal - descMonto + impuesto;
-  const totalUnidades = items.reduce((s, it) => s + Number(it.cantidad ?? 0), 0);
+  const totalUnidades = items.reduce((s, it) => s + Number(it.cantidad ?? 0), 0)
+    + comboItems.reduce((s, it) => s + Number(it.cantidad ?? 0), 0);
 
   const guardar = async () => {
     setError('');
@@ -537,11 +661,14 @@ export default function VentaForm() {
       return setError('Sucursal, depósito y cliente son obligatorios');
     }
     const itemsValidos = items.filter(it => it.id_producto && Number(it.cantidad) > 0);
-    if (!itemsValidos.length) return setError('Agregá al menos un producto con cantidad válida');
+    const comboItemsValidos = comboItems
+      .filter(it => it.id_combo && Number(it.cantidad) > 0)
+      .map(it => ({ id_combo: it.id_combo, cantidad: it.cantidad }));
+    if (!itemsValidos.length && !comboItemsValidos.length) return setError('Agregá al menos un producto o combo con cantidad válida');
 
     setGuardando(true);
     try {
-      const payload = { ...form, items: itemsValidos };
+      const payload = { ...form, items: [...itemsValidos, ...comboItemsValidos] };
       let ventaId = id;
       if (esEdicion) {
         await ventasService.update(id, payload);
@@ -641,6 +768,15 @@ export default function VentaForm() {
       return !categoriaSel || String(p.id_categoria) === String(categoriaSel);
     })
     .slice(0, 60);
+
+  const combosVisibles = combos.filter(c =>
+    !busquedaProducto.trim() || c.nombre.toLowerCase().includes(busquedaProducto.toLowerCase())
+  );
+
+  const cantidadesCombosEnCarrito = comboItems.reduce((acc, it) => {
+    acc[it.id_combo] = (acc[it.id_combo] ?? 0) + Number(it.cantidad ?? 0);
+    return acc;
+  }, {});
 
   const cantidadesEnCarrito = items.reduce((acc, it) => {
     acc[it.id_producto] = (acc[it.id_producto] ?? 0) + Number(it.cantidad ?? 0);
@@ -763,12 +899,22 @@ export default function VentaForm() {
           </div>
         </div>
 
-        {form.condicion_pago === 'CREDITO' && (
-          <div className="mt-2.5 w-40">
-            <FieldLabel>Días de crédito</FieldLabel>
-            <input type="number" min={0} value={form.dias_credito} onChange={e => setF('dias_credito', e.target.value)} className={compactCls} />
+        <div className="mt-2.5 flex flex-wrap gap-2.5">
+          <div className="w-40">
+            <FieldLabel>Forma de pago</FieldLabel>
+            <select value={form.metodo_pago} onChange={e => setF('metodo_pago', e.target.value)} className={compactCls}>
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="QR">QR</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+            </select>
           </div>
-        )}
+          {form.condicion_pago === 'CREDITO' && (
+            <div className="w-40">
+              <FieldLabel>Días de crédito</FieldLabel>
+              <input type="number" min={0} value={form.dias_credito} onChange={e => setF('dias_credito', e.target.value)} className={compactCls} />
+            </div>
+          )}
+        </div>
 
         <div className="border-t border-zinc-100 dark:border-zinc-800 mt-3 pt-3">
           <FieldLabel>Cliente *</FieldLabel>
@@ -942,97 +1088,156 @@ export default function VentaForm() {
             </button>
           </div>
 
-          {/* Categorías + buscador */}
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1 sidebar-scroll">
-              <button
-                onClick={() => setCategoriaSel('')}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                  categoriaSel === '' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                }`}
-              >
-                Todos
-              </button>
-              {categorias.map(c => (
+          {/* Tab Productos / Combos */}
+          {combos.length > 0 && (
+            <div className="flex p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl gap-0.5 w-fit">
+              {[['productos', 'Productos'], ['combos', `Combos (${combos.length})`]].map(([val, lbl]) => (
                 <button
-                  key={c.id_categoria}
-                  onClick={() => setCategoriaSel(String(c.id_categoria))}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                    categoriaSel === String(c.id_categoria) ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  key={val} type="button"
+                  onClick={() => setVistaCatalogo(val)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    vistaCatalogo === val ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 dark:text-zinc-400'
                   }`}
                 >
-                  {c.nombre}
+                  {lbl}
                 </button>
               ))}
             </div>
+          )}
 
-            <div className="relative">
-              <Ic id="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-              <input
-                type="text" value={busquedaProducto} onChange={e => setBusquedaProducto(e.target.value)}
-                placeholder="Buscar producto por nombre o código…"
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-              />
-            </div>
-
-            {/* Grilla de productos */}
-            {productosVisibles.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-2 text-zinc-400">
-                <Ic id="package" size={32} className="text-zinc-300 dark:text-zinc-700" />
-                <p className="text-sm font-medium">Sin productos con stock para este filtro</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-                {productosVisibles.map(p => (
-                  <ProductoTile
-                    key={p.id_producto}
-                    prod={{ ...p, __tipoVenta: form.tipo_venta }}
-                    disponible={stockMap[p.id_producto] ?? null}
-                    promoPorc={resolverPromo(p, promociones)}
-                    enCarrito={cantidadesEnCarrito[p.id_producto] ?? 0}
-                    onClick={() => agregarAlCarrito(p)}
-                  />
+          {vistaCatalogo === 'productos' ? (
+            /* Categorías + buscador */
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1 sidebar-scroll">
+                <button
+                  onClick={() => setCategoriaSel('')}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                    categoriaSel === '' ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  Todos
+                </button>
+                {categorias.map(c => (
+                  <button
+                    key={c.id_categoria}
+                    onClick={() => setCategoriaSel(String(c.id_categoria))}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                      categoriaSel === String(c.id_categoria) ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {c.nombre}
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
+
+              <div className="relative">
+                <Ic id="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text" value={busquedaProducto} onChange={e => setBusquedaProducto(e.target.value)}
+                  placeholder="Buscar producto por nombre o código…"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                />
+              </div>
+
+              {/* Grilla de productos */}
+              {productosVisibles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2 text-zinc-400">
+                  <Ic id="package" size={32} className="text-zinc-300 dark:text-zinc-700" />
+                  <p className="text-sm font-medium">Sin productos con stock para este filtro</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                  {productosVisibles.map(p => (
+                    <ProductoTile
+                      key={p.id_producto}
+                      prod={{ ...p, __tipoVenta: form.tipo_venta }}
+                      disponible={stockMap[p.id_producto] ?? null}
+                      promoPorc={resolverPromo(p, promociones)}
+                      enCarrito={cantidadesEnCarrito[p.id_producto] ?? 0}
+                      onClick={() => agregarAlCarrito(p)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Buscador + grilla de combos */
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3">
+              <div className="relative">
+                <Ic id="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text" value={busquedaProducto} onChange={e => setBusquedaProducto(e.target.value)}
+                  placeholder="Buscar combo por nombre…"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                />
+              </div>
+
+              {combosVisibles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2 text-zinc-400">
+                  <Ic id="package" size={32} className="text-zinc-300 dark:text-zinc-700" />
+                  <p className="text-sm font-medium">Sin combos vigentes para este filtro</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+                  {combosVisibles.map(c => (
+                    <ComboTile
+                      key={c.id_combo}
+                      combo={c}
+                      enCarrito={cantidadesCombosEnCarrito[c.id_combo] ?? 0}
+                      onClick={() => agregarComboAlCarrito(c)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Columna panel de orden ── */}
         <div className="lg:sticky lg:top-4 space-y-3">
           <SectionCard
             title="Orden"
-            actions={items.length > 0 && (
+            actions={(items.length > 0 || comboItems.length > 0) && (
               <button onClick={limpiarItems} className="text-[11px] px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Limpiar
               </button>
             )}
           >
             <div className="p-3.5 space-y-2 max-h-[50vh] lg:max-h-[calc(100vh-22rem)] overflow-y-auto">
-              {items.length === 0 ? (
+              {items.length === 0 && comboItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-2 text-zinc-400">
                   <Ic id="cart" size={30} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-xs text-center">Tocá un producto para agregarlo</p>
+                  <p className="text-xs text-center">Tocá un producto o combo para agregarlo</p>
                 </div>
               ) : (
-                items.map((fila, i) => {
-                  const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
-                  return (
-                    <CartLinea
+                <>
+                  {comboItems.map((fila, i) => (
+                    <CartLineaCombo
                       key={fila._key}
                       fila={fila}
-                      prod={prod}
-                      disponible={stockMap[fila.id_producto] ?? null}
-                      impuestos={impuestos}
-                      tipoVenta={form.tipo_venta}
-                      expandido={expandidos.has(fila._key)}
-                      onToggleExpand={() => toggleExpandido(fila._key)}
-                      onQtyDelta={d => cambiarCantidad(i, d)}
-                      onChange={patch => updateItem(i, patch)}
-                      onRemove={() => removeItem(i)}
+                      onQtyDelta={d => cambiarCantidadCombo(i, d)}
+                      onRemove={() => removeComboItem(i)}
                     />
-                  );
-                })
+                  ))}
+                  {items.map((fila, i) => {
+                    const prod = productos.find(p => String(p.id_producto) === String(fila.id_producto));
+                    return (
+                      <CartLinea
+                        key={fila._key}
+                        fila={fila}
+                        prod={prod}
+                        disponible={stockMap[fila.id_producto] ?? null}
+                        impuestos={impuestos}
+                        tipoVenta={form.tipo_venta}
+                        expandido={expandidos.has(fila._key)}
+                        onToggleExpand={() => toggleExpandido(fila._key)}
+                        onQtyDelta={d => cambiarCantidad(i, d)}
+                        onChange={patch => updateItem(i, patch)}
+                        onRemove={() => removeItem(i)}
+                      />
+                    );
+                  })}
+                </>
               )}
             </div>
 

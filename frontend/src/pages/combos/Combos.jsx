@@ -132,7 +132,9 @@ export default function Combos() {
     return productos
       .filter(p =>
         (p.nombre || p.producto || '').toLowerCase().includes(q) ||
-        p.codigo_interno?.toLowerCase().includes(q)
+        p.codigo_interno?.toLowerCase().includes(q) ||
+        p.marca?.toLowerCase().includes(q) ||
+        p.modelo?.toLowerCase().includes(q)
       )
       .slice(0, 30);
   }, [productos, prodSearch]);
@@ -199,6 +201,11 @@ export default function Combos() {
       producto_nombre:  prod.nombre ?? prod.producto,
       codigo_interno:   prod.codigo_interno,
       precio_publico:   prod.precio_publico,
+      marca:            prod.marca,
+      modelo:           prod.modelo,
+      color:            prod.color,
+      producto_detalle: prod.producto_detalle,
+      capacidad:        prod.capacidad,
       cantidad:         1,
     }]);
     setProdSearch('');
@@ -675,9 +682,19 @@ export default function Combos() {
                           disabled={detalle.some(d => d.id_producto === p.id_producto)}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-yellow-50 dark:hover:bg-yellow-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-700/50 last:border-b-0"
                         >
-                          <span>
-                            <span className="font-mono text-xs text-yellow-600 dark:text-yellow-400 mr-2">{p.codigo_interno}</span>
-                            <span className="text-zinc-800 dark:text-zinc-200">{p.nombre ?? p.producto}</span>
+                          <span className="min-w-0">
+                            <span className="block">
+                              <span className="font-mono text-xs text-yellow-600 dark:text-yellow-400 mr-2">{p.codigo_interno}</span>
+                              <span className="text-zinc-800 dark:text-zinc-200">{p.nombre ?? p.producto}</span>
+                            </span>
+                            {(p.marca || p.modelo || p.color || p.capacidad) && (
+                              <span className="block text-[10px] text-zinc-400 leading-tight">
+                                {[p.marca, p.modelo, p.color, p.capacidad].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                            {p.producto_detalle && (
+                              <span className="block text-[10px] text-zinc-400 leading-tight line-clamp-1">{p.producto_detalle}</span>
+                            )}
                           </span>
                           <span className="text-xs text-zinc-400 shrink-0 font-mono">Bs. {parseFloat(p.precio_publico ?? 0).toFixed(2)}</span>
                         </button>
@@ -703,6 +720,14 @@ export default function Combos() {
                           <p className="text-xs text-zinc-400 font-mono">
                             {d.codigo_interno} · Bs. {parseFloat(d.precio_publico ?? 0).toFixed(2)}
                           </p>
+                          {(d.marca || d.modelo || d.color || d.capacidad) && (
+                            <p className="text-[10px] text-zinc-400 leading-tight">
+                              {[d.marca, d.modelo, d.color, d.capacidad].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                          {d.producto_detalle && (
+                            <p className="text-[10px] text-zinc-400 leading-tight truncate">{d.producto_detalle}</p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <label className="text-xs text-zinc-400">Cant.</label>

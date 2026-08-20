@@ -59,9 +59,11 @@ const getCombo = async (req, res) => {
     if (!combo) return res.status(404).json({ error: 'Combo no encontrado' });
 
     const [detalle] = await db.promise().query(
-      `SELECT cd.*, p.producto AS producto_nombre, p.codigo_interno, p.precio_publico
+      `SELECT cd.*, p.producto AS producto_nombre, p.codigo_interno, p.precio_publico,
+              m.nombre AS marca, p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad
        FROM combo_detalle cd
        JOIN productos p ON p.id_producto = cd.id_producto
+       LEFT JOIN marcas m ON m.id_marca = p.id_marca
        WHERE cd.id_combo = ?
        ORDER BY p.producto ASC`,
       [id]
@@ -165,9 +167,11 @@ const deleteCombo = async (req, res) => {
 const getComboDetalle = async (req, res) => {
   try {
     const [rows] = await db.promise().query(
-      `SELECT cd.*, p.producto AS producto_nombre, p.codigo_interno, p.precio_publico
+      `SELECT cd.*, p.producto AS producto_nombre, p.codigo_interno, p.precio_publico,
+              m.nombre AS marca, p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad
        FROM combo_detalle cd
        JOIN productos p ON p.id_producto = cd.id_producto
+       LEFT JOIN marcas m ON m.id_marca = p.id_marca
        WHERE cd.id_combo = ?
        ORDER BY p.producto ASC`,
       [req.params.id]
@@ -196,9 +200,11 @@ const upsertComboDetalle = async (req, res) => {
     await auditLog(req.user.id_usuario, 'combo_detalle', id, 'UPDATE', getIp(req));
 
     const [rows] = await db.promise().query(
-      `SELECT cd.*, p.producto AS producto_nombre, p.codigo_interno, p.precio_publico
+      `SELECT cd.*, p.producto AS producto_nombre, p.codigo_interno, p.precio_publico,
+              m.nombre AS marca, p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad
        FROM combo_detalle cd
        JOIN productos p ON p.id_producto = cd.id_producto
+       LEFT JOIN marcas m ON m.id_marca = p.id_marca
        WHERE cd.id_combo = ?
        ORDER BY p.producto ASC`,
       [id]
@@ -490,10 +496,16 @@ const exportarCombos = async (req, res) => {
                cd.cantidad,
                p.codigo_interno AS prod_codigo,
                p.producto        AS prod_nombre,
-               p.precio_publico  AS prod_precio
+               p.precio_publico  AS prod_precio,
+               m.nombre          AS prod_marca,
+               p.modelo          AS prod_modelo,
+               p.color           AS prod_color,
+               p.detalle         AS prod_detalle,
+               p.capacidad       AS prod_capacidad
         FROM combos c
         LEFT JOIN combo_detalle cd ON cd.id_combo = c.id_combo
         LEFT JOIN productos p ON p.id_producto = cd.id_producto
+        LEFT JOIN marcas m ON m.id_marca = p.id_marca
         ${comboWhere}
         ORDER BY c.nombre ASC, p.producto ASC
       `),
@@ -516,6 +528,11 @@ const exportarCombos = async (req, res) => {
           nombre:    r.prod_nombre,
           cantidad:  parseFloat(r.cantidad) || 1,
           precio:    parseFloat(r.prod_precio) || 0,
+          marca:     r.prod_marca    || '—',
+          modelo:    r.prod_modelo   || '—',
+          color:     r.prod_color    || '—',
+          detalle:   r.prod_detalle  || '—',
+          capacidad: r.prod_capacidad || '—',
         });
       }
     }
@@ -622,11 +639,16 @@ const exportarCombos = async (req, res) => {
     ];
     // Columnas sub-detalle de productos
     const pCols = [
-      { label: 'Código',        w: 90,  align: 'left'   },
-      { label: 'Producto',      w: 295, align: 'left'   },
-      { label: 'Cantidad',      w: 60,  align: 'center' },
-      { label: 'Precio Unit.',  w: 85,  align: 'right'  },
-      { label: 'Precio Línea',  w: 80,  align: 'right'  },
+      { label: 'Código',        w: 55,  align: 'left'   },
+      { label: 'Producto',      w: 140, align: 'left'   },
+      { label: 'Marca',         w: 55,  align: 'left'   },
+      { label: 'Modelo',        w: 55,  align: 'left'   },
+      { label: 'Color',         w: 45,  align: 'left'   },
+      { label: 'Capacidad',     w: 50,  align: 'left'   },
+      { label: 'Detalle',       w: 120, align: 'left'   },
+      { label: 'Cant.',         w: 35,  align: 'center' },
+      { label: 'Precio Unit.',  w: 68,  align: 'right'  },
+      { label: 'Precio Línea',  w: 68,  align: 'right'  },
     ];
     const INDENT = 20;
 
@@ -691,6 +713,11 @@ const exportarCombos = async (req, res) => {
           const pVals = [
             prod.codigo,
             prod.nombre,
+            prod.marca,
+            prod.modelo,
+            prod.color,
+            prod.capacidad,
+            prod.detalle,
             String(parseInt(prod.cantidad) === prod.cantidad ? prod.cantidad : prod.cantidad.toFixed(2)),
             `Bs. ${fmtN(prod.precio)}`,
             `Bs. ${fmtN(linea)}`,
@@ -698,7 +725,7 @@ const exportarCombos = async (req, res) => {
           let rx = startX + INDENT;
           pVals.forEach((val, ci) => {
             const col = pCols[ci];
-            doc.font('Helvetica').fontSize(7.5).fillColor(DARK)
+            doc.font('Helvetica').fontSize(6.5).fillColor(DARK)
                .text(String(val), rx + 3, y + 5, { width: col.w - 6, align: col.align, lineBreak: false });
             rx += col.w;
           });
@@ -767,14 +794,16 @@ const getProductosParaCombo = async (req, res) => {
     const { q } = req.query;
     let sql = `
       SELECT p.id_producto, p.codigo_interno, p.producto AS nombre,
-             p.precio_publico
+             p.precio_publico, m.nombre AS marca, p.modelo, p.color,
+             p.detalle AS producto_detalle, p.capacidad
       FROM productos p
+      LEFT JOIN marcas m ON m.id_marca = p.id_marca
       WHERE p.activo = 1
     `;
     const params = [];
     if (q) {
-      sql += ` AND (p.producto LIKE ? OR p.codigo_interno LIKE ?)`;
-      params.push(`%${q}%`, `%${q}%`);
+      sql += ` AND (p.producto LIKE ? OR p.codigo_interno LIKE ? OR m.nombre LIKE ? OR p.modelo LIKE ?)`;
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
     sql += ` ORDER BY p.producto ASC LIMIT 300`;
     const [rows] = await db.promise().query(sql, params);

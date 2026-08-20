@@ -76,6 +76,19 @@ const S = StyleSheet.create({
   cRec:   { width: 75, textAlign: 'right' },
   cPend:  { width: 75, textAlign: 'right' },
   pNom:   { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#111827' },
+  pDet:   { fontSize: 7, color: '#555555', marginTop: 1 },
+  pSpec:  { fontSize: 7, color: '#6b7280', marginTop: 1 },
+
+  // Totales
+  totWrap:  { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10, marginBottom: 12 },
+  totBox:   { minWidth: 160 },
+  totRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2, paddingHorizontal: 8 },
+  totLbl:   { fontSize: 8, color: '#6b7280' },
+  totVal:   { fontSize: 8, color: '#111827' },
+  totRowB:  { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, paddingHorizontal: 8,
+              borderTopWidth: 1.5, borderTopColor: '#1a1a1a' },
+  totLblB:  { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#111827' },
+  totValB:  { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#111827' },
 
   // Obs
   obsBox:   { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 3,
@@ -99,6 +112,9 @@ const S = StyleSheet.create({
 function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl }) {
   const est = ESTADO_COLOR[t.estado] ?? ESTADO_COLOR.ANULADA;
   const nombreCompleto = (n, a) => [n, a].filter(Boolean).join(' ') || '—';
+  const specLinea = d => [d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
+  const totalEnviado  = detalle.reduce((s, d) => s + Number(d.cantidad_enviada  ?? 0), 0);
+  const totalRecibido = detalle.reduce((s, d) => s + Number(d.cantidad_recibida ?? 0), 0);
 
   return (
     <Document>
@@ -178,12 +194,15 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
         </View>
         {detalle.map((d, i) => {
           const pendiente = Number(d.cantidad_enviada ?? 0) - Number(d.cantidad_recibida ?? 0);
+          const spec = specLinea(d);
           return (
             <View key={d.id_detalle} style={i % 2 === 0 ? S.tRow : S.tRowAlt}>
               <Text style={[S.td, S.cN, { color: '#9ca3af' }]}>{i + 1}</Text>
               <Text style={[S.td, S.cCod, S.mono, { fontSize: 7 }]}>{d.codigo_interno}</Text>
               <View style={[S.cProd, { paddingVertical: 5, paddingHorizontal: 5 }]}>
                 <Text style={S.pNom}>{d.producto_nombre}</Text>
+                {d.producto_detalle && <Text style={S.pDet}>{d.producto_detalle}</Text>}
+                {spec && <Text style={S.pSpec}>{spec}</Text>}
               </View>
               <Text style={[S.td, S.cUm, { fontSize: 7, color: '#9ca3af' }]}>{d.unidad_nombre}</Text>
               <Text style={[S.td, S.cEnv, S.right, S.mono]}>{fmtN(d.cantidad_enviada)}</Text>
@@ -194,6 +213,20 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
             </View>
           );
         })}
+
+        {/* ── Totales enviado / recibido ── */}
+        <View style={S.totWrap}>
+          <View style={S.totBox}>
+            <View style={S.totRow}>
+              <Text style={S.totLbl}>Total enviado:</Text>
+              <Text style={S.totVal}>{fmtN(totalEnviado)}</Text>
+            </View>
+            <View style={S.totRowB}>
+              <Text style={S.totLblB}>TOTAL RECIBIDO:</Text>
+              <Text style={S.totValB}>{fmtN(totalRecibido)}</Text>
+            </View>
+          </View>
+        </View>
 
         {/* ── Observaciones ── */}
         {t.observaciones && (

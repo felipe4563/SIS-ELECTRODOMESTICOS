@@ -169,6 +169,7 @@ const getCompra = async (req, res) => {
     const [detalle] = await db.promise().query(
       `SELECT cd.*,
               p.codigo_interno, p.codigo_barras, p.producto, p.detalle AS producto_detalle,
+              p.modelo, p.color, p.capacidad,
               m.nombre AS marca_nombre,
               u.nombre AS unidad_nombre, u.codigo AS unidad_codigo
        FROM compra_detalle cd

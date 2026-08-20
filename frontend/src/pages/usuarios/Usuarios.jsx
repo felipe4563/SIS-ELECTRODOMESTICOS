@@ -12,7 +12,7 @@ import { isValidEmail, validatePassword } from '../../utils/validation';
 
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
-const EMPTY    = { username: '', password: '', nombres: '', apellidos: '', documento: '', email: '', telefono: '', id_rol: '', id_sucursal_default: '', activo: true, porcentaje_comision: 0 };
+const EMPTY    = { username: '', password: '', nombres: '', apellidos: '', documento: '', email: '', telefono: '', celular: '', direccion: '', celular_emergencia: '', id_rol: '', id_sucursal_default: '', activo: true, porcentaje_comision: 0 };
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ nombres, apellidos }) {
@@ -236,12 +236,6 @@ function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCer
 
       {/* Detalles */}
       <div className="space-y-1.5">
-        {u.email && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
-            <span className="truncate">{u.email}</span>
-          </div>
-        )}
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
           <span className="truncate">{u.rol_nombre}</span>
@@ -250,6 +244,42 @@ function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCer
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
             <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
             <span className="truncate">{u.sucursal_nombre}</span>
+          </div>
+        )}
+        {u.email && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+            <span className="truncate">{u.email}</span>
+          </div>
+        )}
+        {u.documento && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+            <span className="truncate">CI: {u.documento}</span>
+          </div>
+        )}
+        {(u.telefono || u.celular) && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+            <span className="truncate">{[u.telefono, u.celular].filter(Boolean).join(' / ')}</span>
+          </div>
+        )}
+        {u.celular_emergencia && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-300 dark:bg-red-500/60 shrink-0" />
+            <span className="truncate">Emergencia: {u.celular_emergencia}</span>
+          </div>
+        )}
+        {u.direccion && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+            <span className="truncate">{u.direccion}</span>
+          </div>
+        )}
+        {Number(u.porcentaje_comision) > 0 && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+            <span className="truncate">Comisión: {Number(u.porcentaje_comision)}%</span>
           </div>
         )}
         {!!u.debe_cambiar_pass && (
@@ -469,9 +499,21 @@ export default function Usuarios() {
               <label className={labelCls}>Teléfono</label>
               <input name="telefono" value={form.telefono ?? ''} onChange={handleChange} className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>Celular</label>
+              <input name="celular" value={form.celular ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Celular de emergencia</label>
+              <input name="celular_emergencia" value={form.celular_emergencia ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
             <div className="sm:col-span-2">
               <label className={labelCls}>Email</label>
               <input name="email" type="email" value={form.email ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Dirección</label>
+              <input name="direccion" value={form.direccion ?? ''} onChange={handleChange} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Rol *</label>

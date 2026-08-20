@@ -93,7 +93,7 @@ const authMiddleware = async (req, res, next) => {
 
 // ── Middleware de rol ─────────────────────────────────────────────────────
 // Uso: router.get('/ruta', authMiddleware, requireRole([1]), handler)
-// id_rol 1 = ADMINISTRADOR, 2 = VENDEDOR, 3 = ALMACENERO
+// id_rol 1 = ADMINISTRADOR, 2 = VENTAS, 3 = JEFE DE ALMACEN, 4 = CAJA-VENTAS, 5 = ENCARGADO DE ALMACEN
 const requireRole = (rolesPermitidos) => {
   return (req, res, next) => {
     if (!req.user) {
