@@ -86,15 +86,7 @@ function Ticket80({ t, detalle, empresa: e, logoUrl }) {
       <Divisor />
       <TotalesEnvRec detalle={detalle} />
 
-      {t.observaciones && (
-        <>
-          <Divisor />
-          <div style={{ fontSize: '10px' }}>
-            <div style={{ fontWeight: 'bold' }}>OBSERVACIONES:</div>
-            <div>{t.observaciones}</div>
-          </div>
-        </>
-      )}
+      <ObservacionesTicket t={t} fontSize="10px" />
 
       <Divisor />
       <Pie />
@@ -201,15 +193,7 @@ function Ticket110({ t, detalle, empresa: e, logoUrl }) {
       <Divisor />
       <TotalesEnvRec detalle={detalle} fontSize="9px" />
 
-      {t.observaciones && (
-        <>
-          <Divisor />
-          <div style={{ fontSize: '9px' }}>
-            <div style={{ fontWeight: 'bold' }}>OBSERVACIONES:</div>
-            <div>{t.observaciones}</div>
-          </div>
-        </>
-      )}
+      <ObservacionesTicket t={t} fontSize="9px" />
 
       <Divisor />
       <Pie fontSize="9px" />
@@ -347,12 +331,7 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'start', marginBottom: '12px' }}>
 
         <div style={{ fontSize: '10px' }}>
-          {t.observaciones && (
-            <>
-              <div style={{ fontWeight: 'bold' }}>OBSERVACIONES</div>
-              <div style={{ color: '#374151' }}>{t.observaciones}</div>
-            </>
-          )}
+          <ObservacionesTicket t={t} tituloSolo />
         </div>
 
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
@@ -425,6 +404,28 @@ const TotalesEnvRec = ({ detalle, fontSize = '10px' }) => {
       <Row label="Total enviado:" value={fmtN(totales.enviada)} />
       <Row label="TOTAL RECIBIDO:" value={fmtN(totales.recibida)} bold />
     </div>
+  );
+};
+
+const ObservacionesTicket = ({ t, fontSize = '10px', tituloSolo = false }) => {
+  const items = [
+    ['Observaciones (solicitud)',  t.observaciones],
+    ['Observaciones (envío)',      t.observaciones_envio],
+    ['Observaciones (recepción)',  t.observaciones_recepcion],
+  ].filter(([, v]) => v);
+  if (!items.length) return null;
+  return (
+    <>
+      {!tituloSolo && <Divisor />}
+      <div style={{ fontSize }}>
+        {items.map(([label, val], i) => (
+          <div key={label} style={{ marginTop: i > 0 ? '4px' : 0 }}>
+            <div style={{ fontWeight: 'bold' }}>{label.toUpperCase()}:</div>
+            <div>{val}</div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 };
 

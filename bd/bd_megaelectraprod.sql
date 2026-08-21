@@ -1585,7 +1585,9 @@ CREATE TABLE `transferencias` (
   `id_usuario_solicita` int(11) DEFAULT NULL,
   `id_usuario_envia` int(11) DEFAULT NULL,
   `id_usuario_recibe` int(11) DEFAULT NULL,
-  `observaciones` text DEFAULT NULL
+  `observaciones` text DEFAULT NULL,
+  `observaciones_envio` text DEFAULT NULL COMMENT 'Observación registrada al confirmar el envío',
+  `observaciones_recepcion` text DEFAULT NULL COMMENT 'Observación registrada al recibir la mercadería'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -1682,7 +1684,6 @@ CREATE TABLE `ventas` (
   `id_moneda` int(11) NOT NULL,
   `tipo_cambio` decimal(18,6) DEFAULT 1.000000,
   `condicion_pago` enum('CONTADO','CREDITO') NOT NULL DEFAULT 'CONTADO',
-  `metodo_pago` enum('EFECTIVO','QR','TRANSFERENCIA') DEFAULT NULL COMMENT 'Forma de pago con la que se registró la venta',
   `dias_credito` int(11) DEFAULT 0,
   `fecha_vencimiento` date DEFAULT NULL,
   `subtotal` decimal(14,2) NOT NULL DEFAULT 0.00,

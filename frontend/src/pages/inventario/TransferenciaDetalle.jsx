@@ -173,10 +173,26 @@ export default function TransferenciaDetalle() {
         ))}
       </div>
 
-      {trf.observaciones && (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-3">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-0.5">Observaciones</p>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{trf.observaciones}</p>
+      {(trf.observaciones || trf.observaciones_envio || trf.observaciones_recepcion) && (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-3 space-y-2.5">
+          {trf.observaciones && (
+            <div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-0.5">Observaciones (solicitud)</p>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">{trf.observaciones}</p>
+            </div>
+          )}
+          {trf.observaciones_envio && (
+            <div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-0.5">Observaciones (envío)</p>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">{trf.observaciones_envio}</p>
+            </div>
+          )}
+          {trf.observaciones_recepcion && (
+            <div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-0.5">Observaciones (recepción)</p>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">{trf.observaciones_recepcion}</p>
+            </div>
+          )}
         </div>
       )}
 

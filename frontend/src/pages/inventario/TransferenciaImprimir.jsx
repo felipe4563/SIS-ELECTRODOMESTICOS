@@ -229,13 +229,33 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
         </View>
 
         {/* ── Observaciones ── */}
-        {t.observaciones && (
+        {(t.observaciones || t.observaciones_envio || t.observaciones_recepcion) && (
           <>
             <View style={[S.divider, { marginTop: 14 }]} />
-            <Text style={S.secTitle}>Observaciones</Text>
-            <View style={S.obsBox}>
-              <Text style={S.obsText}>{t.observaciones}</Text>
-            </View>
+            {t.observaciones && (
+              <>
+                <Text style={S.secTitle}>Observaciones (solicitud)</Text>
+                <View style={S.obsBox}>
+                  <Text style={S.obsText}>{t.observaciones}</Text>
+                </View>
+              </>
+            )}
+            {t.observaciones_envio && (
+              <>
+                <Text style={S.secTitle}>Observaciones (envío)</Text>
+                <View style={S.obsBox}>
+                  <Text style={S.obsText}>{t.observaciones_envio}</Text>
+                </View>
+              </>
+            )}
+            {t.observaciones_recepcion && (
+              <>
+                <Text style={S.secTitle}>Observaciones (recepción)</Text>
+                <View style={S.obsBox}>
+                  <Text style={S.obsText}>{t.observaciones_recepcion}</Text>
+                </View>
+              </>
+            )}
           </>
         )}
 

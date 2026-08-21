@@ -208,9 +208,9 @@ const enviarTransferencia = async (req, res) => {
 
     await db.promise().query(
       `UPDATE transferencias
-       SET estado = 'EN_TRANSITO', fecha_envio = NOW(), id_usuario_envia = ?
+       SET estado = 'EN_TRANSITO', fecha_envio = NOW(), id_usuario_envia = ?, observaciones_envio = ?
        WHERE id_transferencia = ?`,
-      [userId, id]
+      [userId, observaciones ?? null, id]
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
@@ -316,9 +316,11 @@ const recibirTransferencia = async (req, res) => {
     const nuevoEstado    = todosRecibidos ? 'RECIBIDA' : 'PARCIAL';
 
     await db.promise().query(
-      `UPDATE transferencias SET estado = ?, fecha_recepcion = NOW(), id_usuario_recibe = ?
+      `UPDATE transferencias
+       SET estado = ?, fecha_recepcion = NOW(), id_usuario_recibe = ?,
+           observaciones_recepcion = COALESCE(?, observaciones_recepcion)
        WHERE id_transferencia = ?`,
-      [nuevoEstado, userId, id]
+      [nuevoEstado, userId, observaciones ?? null, id]
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));

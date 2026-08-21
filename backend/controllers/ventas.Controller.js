@@ -282,7 +282,7 @@ const createVenta = async (req, res) => {
   try {
     const {
       tipo_venta = 'MENOR', id_sucursal, id_deposito, id_cliente, id_moneda = 1,
-      tipo_cambio = 1, condicion_pago = 'CONTADO', metodo_pago = null, dias_credito = 0,
+      tipo_cambio = 1, condicion_pago = 'CONTADO', dias_credito = 0,
       descuento_porc = 0, impuesto = 0, requiere_entrega = 0,
       direccion_entrega, fecha_entrega, observaciones, items: itemsRaw = [],
       id_vendedor,
@@ -361,15 +361,15 @@ const createVenta = async (req, res) => {
     const [ins] = await db.promise().query(
       `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
         id_usuario_registro,
-        id_moneda, tipo_cambio, condicion_pago, metodo_pago, dias_credito, fecha_vencimiento,
+        id_moneda, tipo_cambio, condicion_pago, dias_credito, fecha_vencimiento,
         subtotal, descuento_porc, descuento_monto, impuesto, total, saldo_pendiente,
         estado, requiere_entrega, direccion_entrega, fecha_entrega, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
       [
         numero, tipo_venta, id_sucursal, id_deposito, id_cliente,
         id_vendedor || req.user.id_usuario,
         req.user.id_usuario,
-        id_moneda, tipo_cambio, condicion_pago, metodo_pago || null, dias_credito,
+        id_moneda, tipo_cambio, condicion_pago, dias_credito,
         condicion_pago === 'CREDITO' && dias_credito > 0
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,
@@ -439,7 +439,7 @@ const updateVenta = async (req, res) => {
     if (venta.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede editar una venta en borrador' });
 
     const {
-      id_cliente, id_moneda, tipo_cambio, condicion_pago, metodo_pago = null, dias_credito,
+      id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito,
       descuento_porc = 0, impuesto = 0, requiere_entrega, direccion_entrega,
       fecha_entrega, observaciones, items: itemsRaw = [], id_vendedor,
     } = req.body;
@@ -477,13 +477,13 @@ const updateVenta = async (req, res) => {
     const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
 
     await db.promise().query(
-      `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, metodo_pago=?, dias_credito=?,
+      `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, dias_credito=?,
         fecha_vencimiento=?, subtotal=?, descuento_porc=?, descuento_monto=?, impuesto=?, total=?,
         requiere_entrega=?, direccion_entrega=?, fecha_entrega=?, observaciones=?,
         id_vendedor=COALESCE(?,id_vendedor)
        WHERE id_venta = ?`,
       [
-        id_cliente, id_moneda, tipo_cambio, condicion_pago, metodo_pago || null, dias_credito,
+        id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito,
         condicion_pago === 'CREDITO' && dias_credito > 0
           ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
           : null,

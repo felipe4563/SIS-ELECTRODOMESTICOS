@@ -379,7 +379,7 @@ export default function VentaForm() {
 
   const [form, setForm] = useState({
     tipo_venta: 'MENOR', id_sucursal: '', id_deposito: '', id_cliente: '',
-    id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', metodo_pago: 'EFECTIVO', dias_credito: 0,
+    id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0,
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
     id_vendedor: '',
@@ -407,6 +407,8 @@ export default function VentaForm() {
   const [rcForm, setRcForm]   = useState(RC_FORM_VACIO);
   const [rcError, setRcError] = useState('');
   const [rcGuardando, setRcGuardando] = useState(false);
+
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
     if (!esEdicion) {
@@ -468,7 +470,7 @@ export default function VentaForm() {
             tipo_venta: v.tipo_venta, id_sucursal: String(v.id_sucursal),
             id_deposito: String(v.id_deposito), id_cliente: String(v.id_cliente),
             id_moneda: String(v.id_moneda), tipo_cambio: v.tipo_cambio,
-            condicion_pago: v.condicion_pago, metodo_pago: v.metodo_pago ?? 'EFECTIVO', dias_credito: v.dias_credito,
+            condicion_pago: v.condicion_pago, dias_credito: v.dias_credito,
             descuento_porc: v.descuento_porc ?? 0, impuesto: v.impuesto ?? 0,
             requiere_entrega: Boolean(v.requiere_entrega),
             direccion_entrega: v.direccion_entrega ?? '',
@@ -529,8 +531,6 @@ export default function VentaForm() {
     }
   }, [form.id_cliente, clientes]); // eslint-disable-line
 
-  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
   useEffect(() => {
     if (!form.id_moneda || monedas.length === 0) return;
     const selected = monedas.find(m => String(m.id_moneda) === String(form.id_moneda));
@@ -546,7 +546,7 @@ export default function VentaForm() {
         })
         .catch(() => setF('tipo_cambio', 6.96));
     }
-  }, [form.id_moneda, monedas]); // eslint-disable-line
+  }, [form.id_moneda, monedas]);
 
   // ── Carrito ────────────────────────────────────────────────────────────────
   const agregarAlCarrito = useCallback((prod) => {
@@ -899,22 +899,14 @@ export default function VentaForm() {
           </div>
         </div>
 
-        <div className="mt-2.5 flex flex-wrap gap-2.5">
-          <div className="w-40">
-            <FieldLabel>Forma de pago</FieldLabel>
-            <select value={form.metodo_pago} onChange={e => setF('metodo_pago', e.target.value)} className={compactCls}>
-              <option value="EFECTIVO">Efectivo</option>
-              <option value="QR">QR</option>
-              <option value="TRANSFERENCIA">Transferencia</option>
-            </select>
-          </div>
-          {form.condicion_pago === 'CREDITO' && (
+        {form.condicion_pago === 'CREDITO' && (
+          <div className="mt-2.5 flex flex-wrap gap-2.5">
             <div className="w-40">
               <FieldLabel>Días de crédito</FieldLabel>
               <input type="number" min={0} value={form.dias_credito} onChange={e => setF('dias_credito', e.target.value)} className={compactCls} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="border-t border-zinc-100 dark:border-zinc-800 mt-3 pt-3">
           <FieldLabel>Cliente *</FieldLabel>

@@ -139,9 +139,6 @@ function VentaDoc({ data: d, logoUrl }) {
           <View style={S.col}>
             <Text style={S.lbl}>Condición</Text>
             <Text style={S.val}>{d.condicion_pago === 'CREDITO' ? `Crédito (${d.dias_credito} días)` : 'Contado'}</Text>
-            {d.metodo_pago && (
-              <Text style={S.sub}>Forma de pago: {METODO_PAGO_LABEL[d.metodo_pago] ?? d.metodo_pago}</Text>
-            )}
           </View>
         </View>
 
@@ -195,12 +192,7 @@ function VentaDoc({ data: d, logoUrl }) {
                   <Text>Bs {fmt(p.monto)}</Text>
                 </View>
               ))
-            ) : d.metodo_pago && (
-              <View style={S.payRow}>
-                <Text>Forma de pago:</Text>
-                <Text>{METODO_PAGO_LABEL[d.metodo_pago] ?? d.metodo_pago}</Text>
-              </View>
-            )}
+            ) : null}
             {Number(d.saldo_pendiente ?? 0) <= 0 ? (
               <View style={S.payRowB}>
                 <Text>PAGO TOTAL:</Text>

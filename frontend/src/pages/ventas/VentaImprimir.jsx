@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { useEmpresa } from '../../contexts/EmpresaContext';
@@ -155,9 +155,6 @@ function Ticket110({ data, logoUrl }) {
         <div style={{ borderLeft: '1px dashed #999', paddingLeft: '8px' }}>
           <div style={{ fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>CONDICIÓN</div>
           <div style={{ fontSize: '10px' }}>{data.condicion_pago === 'CREDITO' ? `Crédito (${data.dias_credito} días)` : 'Contado'}</div>
-          {data.metodo_pago && (
-            <div style={{ fontSize: '9px' }}>Forma de pago: {METODO_PAGO_LABEL[data.metodo_pago] ?? data.metodo_pago}</div>
-          )}
         </div>
       </div>
 
@@ -322,15 +319,12 @@ function TicketA4({ data, logoUrl }) {
           {(data.cliente_telefono || data.cliente_celular) && (
             <div style={{ color: '#444' }}>Tel: {[data.cliente_telefono, data.cliente_celular].filter(Boolean).join(' / ')}</div>
           )}
-          {data.cliente_direccion && (
-            <div style={{ fontWeight: 'bold' }}>Dir: {data.cliente_direccion}{data.cliente_ciudad ? `, ${data.cliente_ciudad}` : ''}</div>
-          )}
         </div>
         <div>
           <div style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', color: '#777', marginBottom: '3px' }}>Condición de pago</div>
           <div>{data.condicion_pago === 'CREDITO' ? `Crédito — ${data.dias_credito} días` : 'Contado'}</div>
-          {data.metodo_pago && (
-            <div style={{ color: '#444' }}>Forma de pago: {METODO_PAGO_LABEL[data.metodo_pago] ?? data.metodo_pago}</div>
+          {data.cliente_direccion && (
+            <div style={{ fontWeight: 'bold', marginTop: '4px' }}>Dir: {data.cliente_direccion}{data.cliente_ciudad ? `, ${data.cliente_ciudad}` : ''}</div>
           )}
         </div>
       </div>
@@ -485,16 +479,18 @@ const PagoResumen = ({ data, fontSize = '10px' }) => {
       {pagos.length > 0 ? (
         <div style={{ marginBottom: '2px' }}>
           {pagos.map(p => (
-            <Row
-              key={p.id_pago}
-              label={`${fmtFechaCorta(p.fecha)} · ${METODO_PAGO_LABEL[p.metodo_pago] ?? p.metodo_pago}:`}
-              value={`Bs ${fmtMonto(p.monto)}`}
-            />
+            <div key={p.id_pago}>
+              <Row
+                label={`${fmtFechaCorta(p.fecha)} · ${METODO_PAGO_LABEL[p.metodo_pago] ?? p.metodo_pago}:`}
+                value={`Bs ${fmtMonto(p.monto)}`}
+              />
+              {p.numero_referencia && (
+                <div style={{ fontSize: '0.85em', opacity: 0.75, textAlign: 'right' }}>N° Ref.: {p.numero_referencia}</div>
+              )}
+            </div>
           ))}
         </div>
-      ) : data.metodo_pago && (
-        <Row label="Forma de pago:" value={METODO_PAGO_LABEL[data.metodo_pago] ?? data.metodo_pago} />
-      )}
+      ) : null}
 
       {esPagoTotal ? (
         <Row label="PAGO TOTAL:" value={`Bs ${fmtMonto(data.total)}`} bold />
@@ -617,8 +613,6 @@ export default function VentaImprimir() {
 
   if (cargando) return <div className="flex items-center justify-center py-32 text-zinc-400">Cargando…</div>;
   if (!data)    return null;
-
-  const isA4 = formato === 'A4';
 
   return (
     <>
