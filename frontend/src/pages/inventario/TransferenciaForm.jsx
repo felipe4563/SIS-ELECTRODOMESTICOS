@@ -11,11 +11,14 @@ const qtyBtnCls = 'w-7 h-7 shrink-0 flex items-center justify-center rounded-lg 
 function FilaItem({ fila, productos, stockOrigen, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
-  const filtrados = productos.filter(p =>
-    !busqueda ||
-    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const filtrados = productos.filter(p => {
+    if (!busqueda) return true;
+    const q = busqueda.toLowerCase();
+    return p.producto.toLowerCase().includes(q) ||
+      p.codigo_interno.toLowerCase().includes(q) ||
+      p.marca?.toLowerCase().includes(q) ||
+      p.modelo?.toLowerCase().includes(q);
+  });
 
   // Aseguramos que el producto ya seleccionado en la fila siempre tenga su <option>,
   // aunque no esté entre los primeros 60 ni coincida con la búsqueda actual.
@@ -118,11 +121,14 @@ function FilaItem({ fila, productos, stockOrigen, onChange, onQtyDelta, onRemove
 function FilaItemCard({ fila, productos, stockOrigen, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
-  const filtrados = productos.filter(p =>
-    !busqueda ||
-    p.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.codigo_interno.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const filtrados = productos.filter(p => {
+    if (!busqueda) return true;
+    const q = busqueda.toLowerCase();
+    return p.producto.toLowerCase().includes(q) ||
+      p.codigo_interno.toLowerCase().includes(q) ||
+      p.marca?.toLowerCase().includes(q) ||
+      p.modelo?.toLowerCase().includes(q);
+  });
 
   const opciones = filtrados.slice(0, 60);
   if (fila.id_producto && !opciones.some(p => String(p.id_producto) === String(fila.id_producto))) {
@@ -329,11 +335,14 @@ export default function TransferenciaForm() {
       disponible: disp,
     }))
     .filter(p => p.id_producto)
-    .filter(p =>
-      !busquedaStock ||
-      p.producto.toLowerCase().includes(busquedaStock.toLowerCase()) ||
-      p.codigo_interno.toLowerCase().includes(busquedaStock.toLowerCase())
-    )
+    .filter(p => {
+      if (!busquedaStock) return true;
+      const q = busquedaStock.toLowerCase();
+      return p.producto.toLowerCase().includes(q) ||
+        p.codigo_interno.toLowerCase().includes(q) ||
+        p.marca?.toLowerCase().includes(q) ||
+        p.modelo?.toLowerCase().includes(q);
+    })
     .sort((a, b) => b.disponible - a.disponible);
 
   const cantidadesSeleccionadas = items.reduce((acc, it) => {
@@ -462,7 +471,7 @@ export default function TransferenciaForm() {
                 type="text"
                 value={busquedaStock}
                 onChange={e => setBusquedaStock(e.target.value)}
-                placeholder="Buscar producto por nombre o código…"
+                placeholder="Buscar por nombre, código, marca o modelo…"
                 className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
             </div>
