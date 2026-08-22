@@ -67,3 +67,8 @@ backend/backups/
 #   SQL (dump y migraciones) — solo local
 # ===============================
 *.sql
+
+# ===============================
+#   Planillas de prueba — solo local
+# ===============================
+*.xlsx
