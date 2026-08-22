@@ -222,6 +222,9 @@ export default function TransferenciaForm() {
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState('');
   const [busquedaStock, setBusquedaStock] = useState('');
+  const [filtroMarca,    setFiltroMarca]    = useState('');
+  const [filtroProducto, setFiltroProducto] = useState('');
+  const [filtroModelo,   setFiltroModelo]   = useState('');
 
   // Cargar catálogos
   useEffect(() => {
@@ -238,6 +241,9 @@ export default function TransferenciaForm() {
     setForm(p => ({ ...p, id_deposito_origen: id, id_deposito_destino: p.id_deposito_destino === id ? '' : p.id_deposito_destino }));
     setStockOrigen({});
     setBusquedaStock('');
+    setFiltroMarca('');
+    setFiltroProducto('');
+    setFiltroModelo('');
     if (!id) return;
     setCargandoStock(true);
     try {
@@ -250,6 +256,16 @@ export default function TransferenciaForm() {
   };
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const cambiarFiltroMarca = (v) => {
+    setFiltroMarca(v);
+    setFiltroProducto('');
+    setFiltroModelo('');
+  };
+  const cambiarFiltroProducto = (v) => {
+    setFiltroProducto(v);
+    setFiltroModelo('');
+  };
 
   const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1 }]);
   const removeItem = i  => setItems(p => p.filter((_, idx) => idx !== i));
@@ -327,14 +343,38 @@ export default function TransferenciaForm() {
   const depositoOrigen  = depositos.find(d => String(d.id_deposito) === String(form.id_deposito_origen));
   const depositoDestino = depositos.find(d => String(d.id_deposito) === String(form.id_deposito_destino));
 
-  // Productos con stock > 0 en origen (para resumen)
-  const productosConStock = Object.entries(stockOrigen)
+  // Productos con stock > 0 en origen (base, antes de aplicar filtros)
+  const productosConStockBase = Object.entries(stockOrigen)
     .filter(([, disp]) => disp > 0)
     .map(([id, disp]) => ({
       ...productos.find(p => String(p.id_producto) === id),
       disponible: disp,
     }))
-    .filter(p => p.id_producto)
+    .filter(p => p.id_producto);
+
+  // Opciones de los selects en cascada: Marca → Producto → Modelo
+  const marcasDisponibles = [...new Set(
+    productosConStockBase.map(p => p.marca).filter(Boolean)
+  )].sort();
+
+  const productosDisponibles = [...new Set(
+    productosConStockBase
+      .filter(p => !filtroMarca || p.marca === filtroMarca)
+      .map(p => p.producto)
+      .filter(Boolean)
+  )].sort();
+
+  const modelosDisponibles = [...new Set(
+    productosConStockBase
+      .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto))
+      .map(p => p.modelo)
+      .filter(Boolean)
+  )].sort();
+
+  const productosConStock = productosConStockBase
+    .filter(p => !filtroMarca    || p.marca    === filtroMarca)
+    .filter(p => !filtroProducto || p.producto === filtroProducto)
+    .filter(p => !filtroModelo   || p.modelo   === filtroModelo)
     .filter(p => {
       if (!busquedaStock) return true;
       const q = busquedaStock.toLowerCase();
@@ -466,7 +506,7 @@ export default function TransferenciaForm() {
           </div>
 
           {!cargandoStock && (
-            <div className="px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="px-5 py-3 border-b border-zinc-100 dark:border-zinc-800 space-y-2.5">
               <input
                 type="text"
                 value={busquedaStock}
@@ -474,6 +514,32 @@ export default function TransferenciaForm() {
                 placeholder="Buscar por nombre, código, marca o modelo…"
                 className="w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
               />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={filtroMarca}
+                  onChange={e => cambiarFiltroMarca(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todas las marcas</option>
+                  {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select
+                  value={filtroProducto}
+                  onChange={e => cambiarFiltroProducto(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todos los productos</option>
+                  {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select
+                  value={filtroModelo}
+                  onChange={e => setFiltroModelo(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todos los modelos</option>
+                  {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
             </div>
           )}
 
