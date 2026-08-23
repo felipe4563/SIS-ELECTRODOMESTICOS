@@ -28,16 +28,38 @@ function ProductoPicker({ value, productos, onChange, isMobile }) {
   const btnRef          = useRef(null);
   const dropRef         = useRef(null);
 
+  const [filtroMarca,    setFiltroMarca]    = useState('');
+  const [filtroProducto, setFiltroProducto] = useState('');
+  const [filtroModelo,   setFiltroModelo]   = useState('');
+  const cambiarFiltroMarca    = v => { setFiltroMarca(v); setFiltroProducto(''); setFiltroModelo(''); };
+  const cambiarFiltroProducto = v => { setFiltroProducto(v); setFiltroModelo(''); };
+
   const productoSel = productos.find(p => String(p.id_producto) === String(value));
 
-  const filtrados = busq.trim()
-    ? productos
-        .filter(p =>
-          p.producto.toLowerCase().includes(busq.toLowerCase()) ||
-          (p.codigo_interno ?? '').toLowerCase().includes(busq.toLowerCase())
-        )
-        .slice(0, 50)
-    : productos.slice(0, 50);
+  const marcasDisponibles = [...new Set(productos.map(p => p.marca).filter(Boolean))].sort();
+  const productosDisponibles = [...new Set(
+    productos.filter(p => !filtroMarca || p.marca === filtroMarca).map(p => p.producto).filter(Boolean)
+  )].sort();
+  const modelosDisponibles = [...new Set(
+    productos
+      .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto))
+      .map(p => p.modelo)
+      .filter(Boolean)
+  )].sort();
+
+  const filtrados = productos
+    .filter(p => !filtroMarca    || p.marca    === filtroMarca)
+    .filter(p => !filtroProducto || p.producto === filtroProducto)
+    .filter(p => !filtroModelo   || p.modelo   === filtroModelo)
+    .filter(p => {
+      if (!busq.trim()) return true;
+      const q = busq.toLowerCase();
+      return p.producto.toLowerCase().includes(q) ||
+        (p.codigo_interno ?? '').toLowerCase().includes(q) ||
+        p.marca?.toLowerCase().includes(q) ||
+        p.modelo?.toLowerCase().includes(q);
+    })
+    .slice(0, 50);
 
   /* Posición del dropdown desktop (fixed, calculada desde el botón para no quedar
      recortado por el overflow-x-auto de la tabla) */
@@ -77,8 +99,9 @@ function ProductoPicker({ value, productos, onChange, isMobile }) {
   }, [open, isMobile]);
 
   const toggle = () => setOpen(o => !o);
-  const closeSheet = () => { setOpen(false); setBusq(''); };
-  const pick = prod => { onChange(prod); setBusq(''); setOpen(false); };
+  const resetFiltros = () => { setBusq(''); setFiltroMarca(''); setFiltroProducto(''); setFiltroModelo(''); };
+  const closeSheet = () => { setOpen(false); resetFiltros(); };
+  const pick = prod => { onChange(prod); resetFiltros(); setOpen(false); };
 
   return (
     <div className="relative">
@@ -139,15 +162,41 @@ function ProductoPicker({ value, productos, onChange, isMobile }) {
             )}
 
             {/* Búsqueda */}
-            <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 space-y-1.5">
               <input
                 autoFocus
                 type="text"
-                placeholder="Buscar por nombre o código..."
+                placeholder="Buscar por nombre, código, marca o modelo..."
                 value={busq}
                 onChange={e => setBusq(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
               />
+              <div className="grid grid-cols-3 gap-1.5">
+                <select
+                  value={filtroMarca}
+                  onChange={e => cambiarFiltroMarca(e.target.value)}
+                  className="px-1.5 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Marca</option>
+                  {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select
+                  value={filtroProducto}
+                  onChange={e => cambiarFiltroProducto(e.target.value)}
+                  className="px-1.5 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Producto</option>
+                  {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select
+                  value={filtroModelo}
+                  onChange={e => setFiltroModelo(e.target.value)}
+                  className="px-1.5 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Modelo</option>
+                  {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
             </div>
 
             {/* Lista */}

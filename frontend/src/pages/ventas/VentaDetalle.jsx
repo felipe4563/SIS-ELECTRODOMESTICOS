@@ -806,12 +806,23 @@ export default function VentaDetalle() {
             {(venta.cuotas ?? []).length > 0 && (
               <div>
                 <label className={labelCls}>Aplicar a cuota</label>
-                <select value={cobro.id_cuota} onChange={e => setCobro(p => ({ ...p, id_cuota: e.target.value }))}
+                <select
+                  value={cobro.id_cuota}
+                  onChange={e => {
+                    const idCuota = e.target.value;
+                    const cuota = venta.cuotas.find(c => String(c.id_cuota) === idCuota);
+                    const pendiente = cuota ? +(Number(cuota.monto) - Number(cuota.monto_pagado)).toFixed(2) : null;
+                    setCobro(p => ({
+                      ...p,
+                      id_cuota: idCuota,
+                      monto: pendiente != null ? String(pendiente) : String(venta.saldo_pendiente),
+                    }));
+                  }}
                   className={inputCls}>
                   <option value="">— ninguna —</option>
                   {venta.cuotas.filter(c => c.estado !== 'PAGADA').map(c => (
                     <option key={c.id_cuota} value={c.id_cuota}>
-                      Cuota {c.numero_cuota} — Bs {fmtMonto(c.monto)} (vence {fmtFechaS(c.fecha_vencimiento)})
+                      Cuota {c.numero_cuota} — Bs {fmtMonto(c.monto - c.monto_pagado)} pendiente (vence {fmtFechaS(c.fecha_vencimiento)})
                     </option>
                   ))}
                 </select>

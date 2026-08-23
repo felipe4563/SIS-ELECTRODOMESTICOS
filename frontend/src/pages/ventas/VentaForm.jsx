@@ -379,7 +379,7 @@ export default function VentaForm() {
 
   const [form, setForm] = useState({
     tipo_venta: 'MENOR', id_sucursal: '', id_deposito: '', id_cliente: '',
-    id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0,
+    id_moneda: '', tipo_cambio: 1, condicion_pago: 'CONTADO', dias_credito: 0, num_cuotas: 1,
     descuento_porc: 0, impuesto: 0, requiere_entrega: false,
     direccion_entrega: '', fecha_entrega: '', observaciones: '',
     id_vendedor: '',
@@ -402,6 +402,9 @@ export default function VentaForm() {
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('');
+  const [filtroMarca,    setFiltroMarca]    = useState('');
+  const [filtroProducto, setFiltroProducto] = useState('');
+  const [filtroModelo,   setFiltroModelo]   = useState('');
   const [mostrarMasOpciones, setMostrarMasOpciones] = useState(false);
 
   const [rcForm, setRcForm]   = useState(RC_FORM_VACIO);
@@ -470,7 +473,7 @@ export default function VentaForm() {
             tipo_venta: v.tipo_venta, id_sucursal: String(v.id_sucursal),
             id_deposito: String(v.id_deposito), id_cliente: String(v.id_cliente),
             id_moneda: String(v.id_moneda), tipo_cambio: v.tipo_cambio,
-            condicion_pago: v.condicion_pago, dias_credito: v.dias_credito,
+            condicion_pago: v.condicion_pago, dias_credito: v.dias_credito, num_cuotas: v.num_cuotas ?? 1,
             descuento_porc: v.descuento_porc ?? 0, impuesto: v.impuesto ?? 0,
             requiere_entrega: Boolean(v.requiere_entrega),
             direccion_entrega: v.direccion_entrega ?? '',
@@ -756,14 +759,44 @@ export default function VentaForm() {
     }
   }, [clientesFiltrados]); // eslint-disable-line
 
-  const productosVisibles = productos
-    .filter(p => (stockMap[p.id_producto] ?? 0) >= 1)
+  const cambiarFiltroMarca = (v) => {
+    setFiltroMarca(v);
+    setFiltroProducto('');
+    setFiltroModelo('');
+  };
+  const cambiarFiltroProducto = (v) => {
+    setFiltroProducto(v);
+    setFiltroModelo('');
+  };
+
+  const productosConStockBase = productos.filter(p => (stockMap[p.id_producto] ?? 0) >= 1);
+
+  const marcasDisponibles = [...new Set(productosConStockBase.map(p => p.marca).filter(Boolean))].sort();
+  const productosDisponibles = [...new Set(
+    productosConStockBase
+      .filter(p => !filtroMarca || p.marca === filtroMarca)
+      .map(p => p.producto)
+      .filter(Boolean)
+  )].sort();
+  const modelosDisponibles = [...new Set(
+    productosConStockBase
+      .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto))
+      .map(p => p.modelo)
+      .filter(Boolean)
+  )].sort();
+
+  const productosVisibles = productosConStockBase
+    .filter(p => !filtroMarca    || p.marca    === filtroMarca)
+    .filter(p => !filtroProducto || p.producto === filtroProducto)
+    .filter(p => !filtroModelo   || p.modelo   === filtroModelo)
     .filter(p => {
       if (busquedaProducto.trim()) {
         const q = busquedaProducto.toLowerCase();
         return p.producto.toLowerCase().includes(q) ||
           p.codigo_interno.toLowerCase().includes(q) ||
-          (p.codigo_barras || '').includes(busquedaProducto);
+          (p.codigo_barras || '').includes(busquedaProducto) ||
+          p.marca?.toLowerCase().includes(q) ||
+          p.modelo?.toLowerCase().includes(q);
       }
       return !categoriaSel || String(p.id_categoria) === String(categoriaSel);
     })
@@ -904,6 +937,10 @@ export default function VentaForm() {
             <div className="w-40">
               <FieldLabel>Días de crédito</FieldLabel>
               <input type="number" min={0} value={form.dias_credito} onChange={e => setF('dias_credito', e.target.value)} className={compactCls} />
+            </div>
+            <div className="w-40">
+              <FieldLabel>N° de cuotas</FieldLabel>
+              <input type="number" min={1} value={form.num_cuotas} onChange={e => setF('num_cuotas', e.target.value)} className={compactCls} />
             </div>
           </div>
         )}
@@ -1126,9 +1163,36 @@ export default function VentaForm() {
                 <Ic id="search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                 <input
                   type="text" value={busquedaProducto} onChange={e => setBusquedaProducto(e.target.value)}
-                  placeholder="Buscar producto por nombre o código…"
+                  placeholder="Buscar producto por nombre, código, marca o modelo…"
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={filtroMarca}
+                  onChange={e => cambiarFiltroMarca(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todas las marcas</option>
+                  {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select
+                  value={filtroProducto}
+                  onChange={e => cambiarFiltroProducto(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todos los productos</option>
+                  {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select
+                  value={filtroModelo}
+                  onChange={e => setFiltroModelo(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todos los modelos</option>
+                  {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
               </div>
 
               {/* Grilla de productos */}

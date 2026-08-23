@@ -74,8 +74,13 @@ const getFormData = async (req, res) => {
       `),
       db.promise().query(`SELECT id_moneda, nombre, codigo, simbolo, es_moneda_base, activo FROM monedas WHERE activo = 1 ORDER BY nombre`),
       db.promise().query(`SELECT id_proveedor, codigo, razon_social, activo FROM proveedores WHERE activo = 1 ORDER BY razon_social`),
-      db.promise().query(`SELECT id_producto, codigo_interno, codigo_barras, producto, precio_real,
-                                 id_impuesto_default, id_proveedor_default FROM productos WHERE activo = 1 ORDER BY producto`),
+      db.promise().query(`
+        SELECT p.id_producto, p.codigo_interno, p.codigo_barras, p.producto, p.precio_real,
+               p.id_impuesto_default, p.id_proveedor_default, p.modelo, m.nombre AS marca
+        FROM productos p
+        LEFT JOIN marcas m ON m.id_marca = p.id_marca
+        WHERE p.activo = 1 ORDER BY p.producto
+      `),
       db.promise().query(`SELECT id_impuesto, codigo, nombre, porcentaje, tipo, es_default, activo
                           FROM impuestos WHERE activo = 1 ORDER BY porcentaje`),
     ]);

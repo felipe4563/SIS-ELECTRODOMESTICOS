@@ -99,7 +99,7 @@ const getStockConsolidado = async (req, res) => {
 
 const getKardex = async (req, res) => {
   try {
-    const { id_producto, id_deposito, fecha_desde, fecha_hasta, documento_tipo } = req.query;
+    const { id_producto, id_deposito, fecha_desde, fecha_hasta, documento_tipo, marca, producto, modelo } = req.query;
 
     const where  = [];
     const params = [];
@@ -109,6 +109,9 @@ const getKardex = async (req, res) => {
     if (fecha_desde)   { where.push('k.fecha >= ?');          params.push(fecha_desde); }
     if (fecha_hasta)   { where.push('k.fecha <= ?');          params.push(fecha_hasta + ' 23:59:59'); }
     if (documento_tipo){ where.push('k.documento_tipo = ?');  params.push(documento_tipo); }
+    if (marca)          { where.push('m.nombre = ?');          params.push(marca); }
+    if (producto)       { where.push('p.producto = ?');        params.push(producto); }
+    if (modelo)          { where.push('p.modelo = ?');          params.push(modelo); }
 
     const sql = `
       SELECT
@@ -121,6 +124,7 @@ const getKardex = async (req, res) => {
         u.nombres AS usuario_nombres, u.apellidos AS usuario_apellidos
       FROM kardex k
       JOIN productos p         ON p.id_producto         = k.id_producto
+      LEFT JOIN marcas m       ON m.id_marca            = p.id_marca
       JOIN depositos d         ON d.id_deposito         = k.id_deposito
       JOIN tipos_movimiento tm ON tm.id_tipo_movimiento = k.id_tipo_movimiento
       LEFT JOIN usuarios u     ON u.id_usuario          = k.id_usuario

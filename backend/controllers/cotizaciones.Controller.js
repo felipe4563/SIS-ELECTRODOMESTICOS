@@ -526,9 +526,10 @@ const getFormData = async (req, res) => {
     );
     const [productos] = await db.promise().query(
       `SELECT p.id_producto, p.codigo_interno, p.producto, p.precio_publico, p.precio_mayor,
-              p.bono, um.nombre AS unidad_nombre, p.imagen_url
+              p.bono, um.nombre AS unidad_nombre, p.imagen_url, p.modelo, m.nombre AS marca
        FROM productos p
        JOIN unidades_medida um ON um.id_unidad = p.id_unidad
+       LEFT JOIN marcas m ON m.id_marca = p.id_marca
        WHERE p.activo = 1 ORDER BY p.producto`
     );
     res.json({ sucursales, clientes, monedas, depositos, productos });

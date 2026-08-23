@@ -23,7 +23,8 @@ function resumenFiltros(filtros) {
   const partes = [];
   if (filtros.busqueda) partes.push(`Búsqueda: "${filtros.busqueda}"`);
   if (filtros.marca)    partes.push(`Marca: ${filtros.marca}`);
-  if (filtros.categoria) partes.push(`Categoría: ${filtros.categoria}`);
+  if (filtros.producto) partes.push(`Producto: ${filtros.producto}`);
+  if (filtros.modelo)   partes.push(`Modelo: ${filtros.modelo}`);
   if (filtros.estado)   partes.push(`Estado: ${{ ok: 'Stock OK', bajo: 'Bajo mínimo', sin: 'Sin stock' }[filtros.estado]}`);
   return partes.length ? partes.join('  ·  ') : 'Sin filtros aplicados';
 }

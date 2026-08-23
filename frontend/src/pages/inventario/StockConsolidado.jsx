@@ -95,7 +95,8 @@ export default function StockConsolidado() {
   const [error,     setError]     = useState(null);
   const [busqueda,  setBusqueda]  = useState('');
   const [filMarca,  setFilMarca]  = useState('');
-  const [filCat,    setFilCat]    = useState('');
+  const [filProducto, setFilProducto] = useState('');
+  const [filModelo,   setFilModelo]   = useState('');
   const [filEstado, setFilEstado] = useState('');
   const [descargando, setDescargando] = useState(false);
 
@@ -123,17 +124,38 @@ export default function StockConsolidado() {
 
   useEffect(() => { cargar(); }, []);
 
-  const marcas     = useMemo(() => [...new Set(data.productos.map(p => p.marca_nombre))].sort(),      [data.productos]);
-  const categorias = useMemo(() => [...new Set(data.productos.map(p => p.categoria_nombre))].sort(), [data.productos]);
+  const marcas = useMemo(() => [...new Set(data.productos.map(p => p.marca_nombre))].sort(), [data.productos]);
+
+  const cambiarFilMarca    = v => { setFilMarca(v); setFilProducto(''); setFilModelo(''); };
+  const cambiarFilProducto = v => { setFilProducto(v); setFilModelo(''); };
+
+  const productosDisponibles = useMemo(
+    () => [...new Set(
+      data.productos.filter(p => !filMarca || p.marca_nombre === filMarca).map(p => p.producto).filter(Boolean)
+    )].sort(),
+    [data.productos, filMarca]
+  );
+  const modelosDisponibles = useMemo(
+    () => [...new Set(
+      data.productos
+        .filter(p => (!filMarca || p.marca_nombre === filMarca) && (!filProducto || p.producto === filProducto))
+        .map(p => p.modelo)
+        .filter(Boolean)
+    )].sort(),
+    [data.productos, filMarca, filProducto]
+  );
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.toLowerCase();
     return data.productos.filter(p => {
       if (q && !p.producto.toLowerCase().includes(q) &&
                !p.codigo_interno.toLowerCase().includes(q) &&
-               !(p.codigo_barras ?? '').toLowerCase().includes(q)) return false;
-      if (filMarca && p.marca_nombre !== filMarca)    return false;
-      if (filCat   && p.categoria_nombre !== filCat)  return false;
+               !(p.codigo_barras ?? '').toLowerCase().includes(q) &&
+               !(p.marca_nombre ?? '').toLowerCase().includes(q) &&
+               !(p.modelo ?? '').toLowerCase().includes(q)) return false;
+      if (filMarca    && p.marca_nombre !== filMarca)    return false;
+      if (filProducto && p.producto     !== filProducto) return false;
+      if (filModelo   && p.modelo       !== filModelo)   return false;
       if (filEstado) {
         const total = data.depositos.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
         if (filEstado === 'sin'  && total !== 0)                                     return false;
@@ -142,7 +164,7 @@ export default function StockConsolidado() {
       }
       return true;
     });
-  }, [data, busqueda, filMarca, filCat, filEstado]);
+  }, [data, busqueda, filMarca, filProducto, filModelo, filEstado]);
 
   const { depositos } = data;
 
@@ -157,8 +179,8 @@ export default function StockConsolidado() {
     return { total: data.productos.length, sinStock, bajoMin, ok };
   }, [data, depositos]);
 
-  const hayFiltros = busqueda || filMarca || filCat || filEstado;
-  const limpiar    = () => { setBusqueda(''); setFilMarca(''); setFilCat(''); setFilEstado(''); };
+  const hayFiltros = busqueda || filMarca || filProducto || filModelo || filEstado;
+  const limpiar    = () => { setBusqueda(''); setFilMarca(''); setFilProducto(''); setFilModelo(''); setFilEstado(''); };
 
   // ── Estado de carga/error/vacío compartido ────────────────────────────────
   const innerContent = () => {
@@ -223,7 +245,7 @@ export default function StockConsolidado() {
                 depositos={depositos}
                 empresa={empresa}
                 logoUrl={logoUrl}
-                filtros={{ busqueda, marca: filMarca, categoria: filCat, estado: filEstado }}
+                filtros={{ busqueda, marca: filMarca, producto: filProducto, modelo: filModelo, estado: filEstado }}
               />
               <button
                 disabled={descargando}
@@ -259,55 +281,63 @@ export default function StockConsolidado() {
       </div>
 
       {/* ── Filtros ── */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3 flex flex-col sm:flex-row flex-wrap gap-2">
-        {/* búsqueda — ancho completo en móvil */}
-        <div className="relative w-full sm:flex-1 sm:min-w-[160px]">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+        {/* búsqueda — ancho completo en móvil, ancho fijo y compacto en desktop */}
+        <div className="relative w-full sm:w-56 shrink-0">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm pointer-events-none select-none">⌕</span>
           <input
             type="text"
-            placeholder="Buscar código o producto…"
+            placeholder="Buscar código, producto, marca o modelo…"
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             className="w-full pl-8 pr-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
         </div>
-        {/* selects — 2 en una fila en móvil */}
-        <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-2">
+        {/* selects — 2 en una fila en móvil, se acomodan con el espacio libre en desktop */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-1 sm:flex-wrap gap-2">
           <select
             value={filMarca}
-            onChange={e => setFilMarca(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full"
+            onChange={e => cambiarFilMarca(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
           >
             <option value="">Todas las marcas</option>
             {marcas.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
           <select
-            value={filCat}
-            onChange={e => setFilCat(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full"
+            value={filProducto}
+            onChange={e => cambiarFilProducto(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
           >
-            <option value="">Todas las categorías</option>
-            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            <option value="">Todos los productos</option>
+            {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select
+            value={filModelo}
+            onChange={e => setFilModelo(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
+          >
+            <option value="">Todos los modelos</option>
+            {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
           <select
             value={filEstado}
             onChange={e => setFilEstado(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full col-span-2 sm:col-span-1"
+            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
           >
             <option value="">Todos los estados</option>
             <option value="ok">Stock OK</option>
             <option value="bajo">Bajo mínimo</option>
             <option value="sin">Sin stock</option>
           </select>
-          {hayFiltros && (
-            <button
-              onClick={limpiar}
-              className="col-span-2 sm:col-span-1 px-3 py-2 text-sm text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors text-center"
-            >
-              ✕ Limpiar
-            </button>
-          )}
         </div>
+        {hayFiltros && (
+          <button
+            onClick={limpiar}
+            className="w-full sm:w-auto shrink-0 px-3 py-2 rounded-xl sm:rounded-none border sm:border-0 border-zinc-200 dark:border-zinc-700 text-sm text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors text-center"
+          >
+            ✕ Limpiar
+          </button>
+        )}
       </div>
 
       {/* ── Error ── */}

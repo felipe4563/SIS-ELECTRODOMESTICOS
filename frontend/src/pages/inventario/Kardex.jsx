@@ -40,6 +40,9 @@ export default function Kardex() {
   // Buscador de producto (autocompletar)
   const [buscProd,   setBuscProd]   = useState('');
   const [prodAbierto, setProdAbierto] = useState(false);
+  const [filtroMarca,    setFiltroMarca]    = useState('');
+  const [filtroProducto, setFiltroProducto] = useState('');
+  const [filtroModelo,   setFiltroModelo]   = useState('');
 
   useEffect(() => {
     inventarioService.getFormData()
@@ -55,7 +58,12 @@ export default function Kardex() {
     try {
       // Solo enviar params no vacíos
       const params = Object.fromEntries(
-        Object.entries(filtros).filter(([, v]) => v !== '')
+        Object.entries({
+          ...filtros,
+          marca: filtroMarca,
+          producto: filtroProducto,
+          modelo: filtroModelo,
+        }).filter(([, v]) => v !== '')
       );
       const res = await inventarioService.getKardex(params);
       setFilas(res.data);
@@ -68,22 +76,49 @@ export default function Kardex() {
   useEffect(() => {
     const t = setTimeout(() => { buscar(); }, 400);
     return () => clearTimeout(t);
-  }, [filtros]); // eslint-disable-line
+  }, [filtros, filtroMarca, filtroProducto, filtroModelo]); // eslint-disable-line
 
   const set = (k, v) => setFiltros(prev => ({ ...prev, [k]: v }));
 
   const productoSeleccionado = productos.find(p => String(p.id_producto) === String(filtros.id_producto));
 
+  const cambiarFiltroMarca    = v => { setFiltroMarca(v); setFiltroProducto(''); setFiltroModelo(''); };
+  const cambiarFiltroProducto = v => { setFiltroProducto(v); setFiltroModelo(''); };
+
+  const marcasDisponibles = useMemo(
+    () => [...new Set(productos.map(p => p.marca).filter(Boolean))].sort(),
+    [productos]
+  );
+  const productosDisponibles = useMemo(
+    () => [...new Set(productos.filter(p => !filtroMarca || p.marca === filtroMarca).map(p => p.producto).filter(Boolean))].sort(),
+    [productos, filtroMarca]
+  );
+  const modelosDisponibles = useMemo(
+    () => [...new Set(
+      productos
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto))
+        .map(p => p.modelo)
+        .filter(Boolean)
+    )].sort(),
+    [productos, filtroMarca, filtroProducto]
+  );
+
   const productosFiltrados = useMemo(() => {
+    let lista = productos
+      .filter(p => !filtroMarca    || p.marca    === filtroMarca)
+      .filter(p => !filtroProducto || p.producto === filtroProducto)
+      .filter(p => !filtroModelo   || p.modelo   === filtroModelo);
     const q = buscProd.trim().toLowerCase();
-    if (!q) return productos;
-    return productos.filter(p =>
-      p.producto.toLowerCase().includes(q) ||
-      p.codigo_interno.toLowerCase().includes(q) ||
-      (p.marca ?? '').toLowerCase().includes(q) ||
-      (p.modelo ?? '').toLowerCase().includes(q)
-    );
-  }, [productos, buscProd]);
+    if (q) {
+      lista = lista.filter(p =>
+        p.producto.toLowerCase().includes(q) ||
+        p.codigo_interno.toLowerCase().includes(q) ||
+        (p.marca ?? '').toLowerCase().includes(q) ||
+        (p.modelo ?? '').toLowerCase().includes(q)
+      );
+    }
+    return lista;
+  }, [productos, buscProd, filtroMarca, filtroProducto, filtroModelo]);
 
   const seleccionarProducto = p => {
     set('id_producto', p.id_producto);
@@ -173,6 +208,45 @@ export default function Kardex() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* Marca */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Marca</label>
+            <select
+              value={filtroMarca}
+              onChange={e => cambiarFiltroMarca(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="">Todas las marcas</option>
+              {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          {/* Producto (nombre) */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Producto (nombre)</label>
+            <select
+              value={filtroProducto}
+              onChange={e => cambiarFiltroProducto(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="">Todos los productos</option>
+              {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+
+          {/* Modelo */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Modelo</label>
+            <select
+              value={filtroModelo}
+              onChange={e => setFiltroModelo(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="">Todos los modelos</option>
+              {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
           </div>
 
           {/* Depósito */}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { comprasService }     from '../../services/compras.service';
 import { tiposCambioService } from '../../services/configuracion.service';
@@ -22,6 +22,11 @@ function calcSubtotal(it) {
 function ItemProducto({ fila, productos, impuestos, idProveedor, onChange, onRemove, esUnico }) {
   const [busqueda, setBusqueda] = useState('');
   const [verTodos, setVerTodos] = useState(false);
+  const [filtroMarca,    setFiltroMarca]    = useState('');
+  const [filtroProducto, setFiltroProducto] = useState('');
+  const [filtroModelo,   setFiltroModelo]   = useState('');
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef(null);
 
   const productosDelProveedor = useMemo(
     () => idProveedor ? productos.filter(p => String(p.id_proveedor_default) === String(idProveedor)) : productos,
@@ -30,14 +35,67 @@ function ItemProducto({ fila, productos, impuestos, idProveedor, onChange, onRem
   const hayFiltroProveedor = Boolean(idProveedor) && productosDelProveedor.length !== productos.length;
   const base = (verTodos || !hayFiltroProveedor) ? productos : productosDelProveedor;
 
+  const cambiarFiltroMarca = (v) => { setFiltroMarca(v); setFiltroProducto(''); setFiltroModelo(''); };
+  const cambiarFiltroProducto = (v) => { setFiltroProducto(v); setFiltroModelo(''); };
+
+  const marcasDisponibles = useMemo(
+    () => [...new Set(base.map(p => p.marca).filter(Boolean))].sort(),
+    [base]
+  );
+  const productosDisponibles = useMemo(
+    () => [...new Set(base.filter(p => !filtroMarca || p.marca === filtroMarca).map(p => p.producto).filter(Boolean))].sort(),
+    [base, filtroMarca]
+  );
+  const modelosDisponibles = useMemo(
+    () => [...new Set(
+      base
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto))
+        .map(p => p.modelo)
+        .filter(Boolean)
+    )].sort(),
+    [base, filtroMarca, filtroProducto]
+  );
+
   const opciones = useMemo(() => {
-    if (!busqueda) return base.slice(0, 60);
-    const q = busqueda.toLowerCase();
-    return base.filter(p =>
-      p.producto.toLowerCase().includes(q) ||
-      p.codigo_interno.toLowerCase().includes(q)
-    ).slice(0, 60);
-  }, [base, busqueda]);
+    let lista = base
+      .filter(p => !filtroMarca    || p.marca    === filtroMarca)
+      .filter(p => !filtroProducto || p.producto === filtroProducto)
+      .filter(p => !filtroModelo   || p.modelo   === filtroModelo);
+    if (busqueda) {
+      const q = busqueda.toLowerCase();
+      lista = lista.filter(p =>
+        p.producto.toLowerCase().includes(q) ||
+        p.codigo_interno.toLowerCase().includes(q) ||
+        p.marca?.toLowerCase().includes(q) ||
+        p.modelo?.toLowerCase().includes(q)
+      );
+    }
+    return lista.slice(0, 60);
+  }, [base, busqueda, filtroMarca, filtroProducto, filtroModelo]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = e => { if (!pickerRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const productoSel = productos.find(p => String(p.id_producto) === String(fila.id_producto));
+
+  const seleccionarProducto = prod => {
+    const impDef = prod?.id_impuesto_default
+      ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
+      : impuestos.find(i => i.es_default);
+    onChange({
+      id_producto:     String(prod.id_producto),
+      precio_unitario: String(prod.precio_real),
+      id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
+      impuesto_porc:   impDef ? String(impDef.porcentaje) : '0',
+    });
+    setBusqueda('');
+    setFiltroMarca(''); setFiltroProducto(''); setFiltroModelo('');
+    setOpen(false);
+  };
 
   const sub = calcSubtotal(fila);
 
@@ -45,48 +103,103 @@ function ItemProducto({ fila, productos, impuestos, idProveedor, onChange, onRem
     <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
       {/* Selector de producto */}
       <div className="flex gap-2 mb-3">
-        <div className="flex-1 space-y-1.5">
-          <input
-            type="text"
-            placeholder="Buscar por nombre o código…"
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            className={inputCls + ' text-xs'}
-          />
-          {hayFiltroProveedor && (
-            <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 cursor-pointer select-none w-fit">
-              <input
-                type="checkbox" checked={verTodos}
-                onChange={e => setVerTodos(e.target.checked)}
-                className="w-3.5 h-3.5 rounded accent-yellow-400"
-              />
-              Ver todos los productos (no solo los de este proveedor)
-            </label>
-          )}
-          <select
-            value={fila.id_producto}
-            onChange={e => {
-              const id   = e.target.value;
-              const prod = productos.find(p => String(p.id_producto) === String(id));
-              const impDef = prod?.id_impuesto_default
-                ? impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
-                : impuestos.find(i => i.es_default);
-              onChange({
-                id_producto:     id,
-                precio_unitario: prod ? String(prod.precio_real) : '0',
-                id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
-                impuesto_porc:   impDef ? String(impDef.porcentaje) : '0',
-              });
-            }}
-            className={inputCls + ' text-xs'}
+        <div className="flex-1 space-y-1.5 relative" ref={pickerRef}>
+          {/* Trigger — muestra el producto seleccionado o el placeholder */}
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            className={inputCls + ' text-xs text-left flex items-center justify-between gap-2'}
           >
-            <option value="">— Seleccionar producto —</option>
-            {opciones.map(p => (
-              <option key={p.id_producto} value={p.id_producto}>
-                {p.codigo_interno} — {p.producto}
-              </option>
-            ))}
-          </select>
+            <span className={`truncate ${productoSel ? 'text-zinc-900 dark:text-white' : 'text-zinc-400 dark:text-zinc-500'}`}>
+              {productoSel
+                ? `${productoSel.codigo_interno} — ${productoSel.producto}${productoSel.modelo ? ` (${productoSel.modelo})` : ''}`
+                : '— Seleccionar producto —'}
+            </span>
+            <svg
+              className={`w-3.5 h-3.5 text-zinc-400 flex-shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {open && (
+            <div className="absolute z-20 mt-1 w-full flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
+              <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 space-y-1.5">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Buscar por nombre, código, marca o modelo…"
+                  value={busqueda}
+                  onChange={e => setBusqueda(e.target.value)}
+                  className={inputCls + ' text-xs'}
+                />
+                <div className="grid grid-cols-3 gap-1.5">
+                  <select
+                    value={filtroMarca}
+                    onChange={e => cambiarFiltroMarca(e.target.value)}
+                    className={inputCls + ' text-xs px-1.5 py-1'}
+                  >
+                    <option value="">Marca</option>
+                    {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select
+                    value={filtroProducto}
+                    onChange={e => cambiarFiltroProducto(e.target.value)}
+                    className={inputCls + ' text-xs px-1.5 py-1'}
+                  >
+                    <option value="">Producto</option>
+                    {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <select
+                    value={filtroModelo}
+                    onChange={e => setFiltroModelo(e.target.value)}
+                    className={inputCls + ' text-xs px-1.5 py-1'}
+                  >
+                    <option value="">Modelo</option>
+                    {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                {hayFiltroProveedor && (
+                  <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 cursor-pointer select-none w-fit">
+                    <input
+                      type="checkbox" checked={verTodos}
+                      onChange={e => setVerTodos(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded accent-yellow-400"
+                    />
+                    Ver todos los productos (no solo los de este proveedor)
+                  </label>
+                )}
+              </div>
+
+              <ul className="overflow-y-auto max-h-64">
+                {opciones.length === 0 ? (
+                  <li className="px-3 py-6 text-xs text-zinc-400 text-center">Sin resultados</li>
+                ) : (
+                  opciones.map(p => (
+                    <li key={p.id_producto}>
+                      <button
+                        type="button"
+                        onClick={() => seleccionarProducto(p)}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors ${
+                          String(p.id_producto) === String(fila.id_producto) ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''
+                        }`}
+                      >
+                        <p className="font-medium text-zinc-900 dark:text-white truncate">
+                          <span className="font-mono text-zinc-400 mr-1.5">[{p.codigo_interno}]</span>{p.producto}
+                        </p>
+                        {(p.marca || p.modelo) && (
+                          <p className="text-[10px] text-zinc-400 font-mono">
+                            {p.marca}{p.marca && p.modelo ? ' · ' : ''}{p.modelo}
+                          </p>
+                        )}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          )}
         </div>
         <button
           onClick={onRemove}
