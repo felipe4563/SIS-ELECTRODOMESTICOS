@@ -4,6 +4,7 @@ const { authMiddleware, checkPermission } = require('../middlewares/authMiddlewa
 const ctrl = require('../controllers/cotizaciones.Controller');
 
 router.get('/form-data',  authMiddleware, checkPermission('ver', 'cotizaciones'), ctrl.getFormData);
+router.get('/stock-sucursal/:id_sucursal', authMiddleware, checkPermission('ver', 'cotizaciones'), ctrl.getStockSucursal);
 
 router.get('/',    authMiddleware, checkPermission('ver', 'cotizaciones'), ctrl.getCotizaciones);
 router.post('/',   authMiddleware, checkPermission('crear', 'cotizaciones'), ctrl.createCotizacion);

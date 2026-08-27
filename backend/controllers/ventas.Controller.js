@@ -552,6 +552,23 @@ const updateVenta = async (req, res) => {
 
 // ── Emitir venta ──────────────────────────────────────────────────────────────
 
+// Genera las cuotas de una venta a crédito (usado al emitir y al convertir cotizaciones)
+async function generarCuotasVenta(id_venta, total, dias_credito, num_cuotas) {
+  if (!(dias_credito > 0)) return;
+  const numCuotas  = Math.max(1, Number(num_cuotas) || 1);
+  const montoBase  = Math.floor((Number(total) / numCuotas) * 100) / 100;
+  for (let n = 1; n <= numCuotas; n++) {
+    const monto = n < numCuotas
+      ? montoBase
+      : +(Number(total) - montoBase * (numCuotas - 1)).toFixed(2);
+    const fechaVenc = new Date(Date.now() + dias_credito * n * 864e5).toISOString().slice(0, 10);
+    await db.promise().query(
+      `INSERT INTO venta_cuotas (id_venta, numero_cuota, fecha_vencimiento, monto) VALUES (?,?,?,?)`,
+      [id_venta, n, fechaVenc, monto]
+    );
+  }
+}
+
 const emitirVenta = async (req, res) => {
   try {
     const { id } = req.params;
@@ -651,21 +668,7 @@ const emitirVenta = async (req, res) => {
     }
 
     // Generate cuotas if CREDITO
-    if (venta.condicion_pago === 'CREDITO' && venta.dias_credito > 0) {
-      const diasCuota = venta.dias_credito;
-      const numCuotas = Math.max(1, Number(venta.num_cuotas) || 1);
-      const montoBase = Math.floor((Number(venta.total) / numCuotas) * 100) / 100;
-      for (let n = 1; n <= numCuotas; n++) {
-        const monto = n < numCuotas
-          ? montoBase
-          : +(Number(venta.total) - montoBase * (numCuotas - 1)).toFixed(2);
-        const fechaVenc = new Date(Date.now() + diasCuota * n * 864e5).toISOString().slice(0, 10);
-        await db.promise().query(
-          `INSERT INTO venta_cuotas (id_venta, numero_cuota, fecha_vencimiento, monto) VALUES (?,?,?,?)`,
-          [id, n, fechaVenc, monto]
-        );
-      }
-    }
+    await generarCuotasVenta(id, venta.total, venta.dias_credito, venta.num_cuotas);
 
     // Update venta estado
     await db.promise().query(
@@ -1425,4 +1428,5 @@ module.exports = {
   agregarProductoRapido,
   getTicket,
   subirImagenSerie,
+  generarCuotasVenta,
 };

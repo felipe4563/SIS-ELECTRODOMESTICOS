@@ -40,9 +40,11 @@ export default function Kardex() {
   // Buscador de producto (autocompletar)
   const [buscProd,   setBuscProd]   = useState('');
   const [prodAbierto, setProdAbierto] = useState(false);
-  const [filtroMarca,    setFiltroMarca]    = useState('');
-  const [filtroProducto, setFiltroProducto] = useState('');
-  const [filtroModelo,   setFiltroModelo]   = useState('');
+  const [filtroMarca,     setFiltroMarca]     = useState('');
+  const [filtroProducto,  setFiltroProducto]  = useState('');
+  const [filtroModelo,    setFiltroModelo]    = useState('');
+  const [filtroColor,     setFiltroColor]     = useState('');
+  const [filtroCapacidad, setFiltroCapacidad] = useState('');
 
   useEffect(() => {
     inventarioService.getFormData()
@@ -63,6 +65,8 @@ export default function Kardex() {
           marca: filtroMarca,
           producto: filtroProducto,
           modelo: filtroModelo,
+          color: filtroColor,
+          capacidad: filtroCapacidad,
         }).filter(([, v]) => v !== '')
       );
       const res = await inventarioService.getKardex(params);
@@ -76,14 +80,16 @@ export default function Kardex() {
   useEffect(() => {
     const t = setTimeout(() => { buscar(); }, 400);
     return () => clearTimeout(t);
-  }, [filtros, filtroMarca, filtroProducto, filtroModelo]); // eslint-disable-line
+  }, [filtros, filtroMarca, filtroProducto, filtroModelo, filtroColor, filtroCapacidad]); // eslint-disable-line
 
   const set = (k, v) => setFiltros(prev => ({ ...prev, [k]: v }));
 
   const productoSeleccionado = productos.find(p => String(p.id_producto) === String(filtros.id_producto));
 
-  const cambiarFiltroMarca    = v => { setFiltroMarca(v); setFiltroProducto(''); setFiltroModelo(''); };
-  const cambiarFiltroProducto = v => { setFiltroProducto(v); setFiltroModelo(''); };
+  const cambiarFiltroMarca    = v => { setFiltroMarca(v); setFiltroProducto(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad(''); };
+  const cambiarFiltroProducto = v => { setFiltroProducto(v); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad(''); };
+  const cambiarFiltroModelo   = v => { setFiltroModelo(v); setFiltroColor(''); setFiltroCapacidad(''); };
+  const cambiarFiltroColor    = v => { setFiltroColor(v); setFiltroCapacidad(''); };
 
   const marcasDisponibles = useMemo(
     () => [...new Set(productos.map(p => p.marca).filter(Boolean))].sort(),
@@ -102,12 +108,32 @@ export default function Kardex() {
     )].sort(),
     [productos, filtroMarca, filtroProducto]
   );
+  const coloresDisponibles = useMemo(
+    () => [...new Set(
+      productos
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto) && (!filtroModelo || p.modelo === filtroModelo))
+        .map(p => p.color)
+        .filter(Boolean)
+    )].sort(),
+    [productos, filtroMarca, filtroProducto, filtroModelo]
+  );
+  const capacidadesDisponibles = useMemo(
+    () => [...new Set(
+      productos
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto) && (!filtroModelo || p.modelo === filtroModelo) && (!filtroColor || p.color === filtroColor))
+        .map(p => p.capacidad)
+        .filter(Boolean)
+    )].sort(),
+    [productos, filtroMarca, filtroProducto, filtroModelo, filtroColor]
+  );
 
   const productosFiltrados = useMemo(() => {
     let lista = productos
-      .filter(p => !filtroMarca    || p.marca    === filtroMarca)
-      .filter(p => !filtroProducto || p.producto === filtroProducto)
-      .filter(p => !filtroModelo   || p.modelo   === filtroModelo);
+      .filter(p => !filtroMarca     || p.marca     === filtroMarca)
+      .filter(p => !filtroProducto  || p.producto  === filtroProducto)
+      .filter(p => !filtroModelo    || p.modelo    === filtroModelo)
+      .filter(p => !filtroColor     || p.color     === filtroColor)
+      .filter(p => !filtroCapacidad || p.capacidad === filtroCapacidad);
     const q = buscProd.trim().toLowerCase();
     if (q) {
       lista = lista.filter(p =>
@@ -118,7 +144,7 @@ export default function Kardex() {
       );
     }
     return lista;
-  }, [productos, buscProd, filtroMarca, filtroProducto, filtroModelo]);
+  }, [productos, buscProd, filtroMarca, filtroProducto, filtroModelo, filtroColor, filtroCapacidad]);
 
   const seleccionarProducto = p => {
     set('id_producto', p.id_producto);
@@ -241,11 +267,37 @@ export default function Kardex() {
             <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Modelo</label>
             <select
               value={filtroModelo}
-              onChange={e => setFiltroModelo(e.target.value)}
+              onChange={e => cambiarFiltroModelo(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
             >
               <option value="">Todos los modelos</option>
               {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          {/* Color */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Color</label>
+            <select
+              value={filtroColor}
+              onChange={e => cambiarFiltroColor(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="">Todos los colores</option>
+              {coloresDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Capacidad */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Capacidad</label>
+            <select
+              value={filtroCapacidad}
+              onChange={e => setFiltroCapacidad(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="">Todas las capacidades</option>
+              {capacidadesDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 

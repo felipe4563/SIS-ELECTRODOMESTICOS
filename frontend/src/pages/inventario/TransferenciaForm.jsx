@@ -8,40 +8,63 @@ const fmtNum = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigi
 
 const qtyBtnCls = 'w-7 h-7 shrink-0 flex items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm font-bold leading-none';
 
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const buildImgUrl = (url) =>
+  !url ? null : url.startsWith('http') ? url : `${API_BASE.replace('/api', '')}${url}`;
+
+function IcPackage({ size = 28, className = '' }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M16.5 9.4l-9-5.21" /><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+    </svg>
+  );
+}
+
 // ── Tarjeta de producto del catálogo (estilo POS) ────────────────────────────
 function ProductoCard({ p, enCarrito, onAdd, onQuitar }) {
+  const [errImg, setErrImg] = useState(false);
   const sinDisponible = enCarrito >= p.disponible;
+  const img = buildImgUrl(p.imagen_url);
   return (
     <div
-      className={`relative rounded-xl border p-3 flex flex-col gap-1.5 transition-colors cursor-pointer ${
+      className={`relative flex flex-col text-left bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden cursor-pointer transition-colors ${
         enCarrito > 0
           ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/10'
-          : 'border-zinc-200 dark:border-zinc-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+          : 'border-zinc-200 dark:border-zinc-700 hover:border-yellow-300 dark:hover:border-yellow-600'
       }`}
       onClick={() => !sinDisponible && onAdd(p)}
     >
       {enCarrito > 0 && (
-        <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center shadow-sm">
+        <span className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center shadow">
           {enCarrito}
         </span>
       )}
-      <p className="text-sm font-medium text-zinc-900 dark:text-white leading-tight line-clamp-2">{p.producto}</p>
-      <p className="text-[11px] font-mono text-zinc-400">{p.codigo_interno}</p>
-      {(p.marca || p.modelo || p.color || p.capacidad) && (
-        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
-          {[p.marca, p.modelo, p.color, p.capacidad].filter(Boolean).join(' · ')}
-        </p>
-      )}
-      <div className="flex items-center justify-between mt-auto pt-1">
-        <span className="font-mono font-semibold text-xs text-green-600 dark:text-green-400">{fmtNum(p.disponible)} disp.</span>
-        {enCarrito > 0 ? (
-          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-            <button type="button" onClick={() => onQuitar(p)} className={qtyBtnCls}>−</button>
-            <button type="button" onClick={() => onAdd(p)} disabled={sinDisponible} className={qtyBtnCls}>+</button>
-          </div>
+      <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
+        {img && !errImg ? (
+          <img src={img} alt={p.producto} className="w-full h-full object-cover" onError={() => setErrImg(true)} />
         ) : (
-          <span className="text-xs text-yellow-600 dark:text-yellow-400 font-semibold">+ Agregar</span>
+          <IcPackage size={28} className="text-zinc-300 dark:text-zinc-600" />
         )}
+      </div>
+      <div className="px-2.5 py-2 flex flex-col gap-1 flex-1">
+        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-tight line-clamp-2 min-h-[2.2em]">{p.producto}</p>
+        <p className="text-[10px] font-mono text-zinc-400">{p.codigo_interno}</p>
+        {(p.marca || p.modelo || p.color || p.capacidad) && (
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-tight line-clamp-1">
+            {[p.marca, p.modelo, p.color, p.capacidad].filter(Boolean).join(' · ')}
+          </p>
+        )}
+        <div className="flex items-center justify-between mt-auto pt-1">
+          <span className="font-mono font-semibold text-xs text-green-600 dark:text-green-400">{fmtNum(p.disponible)} disp.</span>
+          {enCarrito > 0 ? (
+            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <button type="button" onClick={() => onQuitar(p)} className={qtyBtnCls}>−</button>
+              <button type="button" onClick={() => onAdd(p)} disabled={sinDisponible} className={qtyBtnCls}>+</button>
+            </div>
+          ) : (
+            <span className="text-xs text-yellow-600 dark:text-yellow-400 font-semibold">+ Agregar</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -59,7 +82,7 @@ function CartItemRow({ fila, productos, stockOrigen, onChange, onQtyDelta, onRem
       p.marca?.toLowerCase().includes(q) ||
       p.modelo?.toLowerCase().includes(q);
   });
-  const opciones = filtrados.slice(0, 60);
+  const opciones = filtrados;
 
   const productoSel = fila.id_producto ? productos.find(p => String(p.id_producto) === String(fila.id_producto)) : null;
   const disponible  = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;

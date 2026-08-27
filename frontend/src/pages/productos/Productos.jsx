@@ -30,6 +30,11 @@ export default function Productos() {
   const [busqueda,   setBusqueda]   = useState('');
   const [filtroMarca, setFiltroMarca] = useState('');
   const [filtroCateg, setFiltroCateg] = useState('');
+  const [filtroProducto, setFiltroProducto] = useState('');
+  const [filtroDetalle, setFiltroDetalle] = useState('');
+  const [filtroModelo, setFiltroModelo] = useState('');
+  const [filtroColor, setFiltroColor] = useState('');
+  const [filtroCapacidad, setFiltroCapacidad] = useState('');
 
   const [modal,      setModal]      = useState(false);
   const [confirm,    setConfirm]    = useState(null);
@@ -90,6 +95,39 @@ export default function Productos() {
   const marcasUnicas     = [...new Set(lista.map(p => p.marca_nombre))].filter(Boolean).sort();
   const categoriasUnicas = [...new Set(lista.map(p => p.categoria_nombre))].filter(Boolean).sort();
 
+  const listaPorMarcaCateg = lista.filter(p =>
+    (!filtroMarca || p.marca_nombre === filtroMarca) &&
+    (!filtroCateg || p.categoria_nombre === filtroCateg)
+  );
+  const productosUnicos   = [...new Set(listaPorMarcaCateg.map(p => p.producto))].filter(Boolean).sort();
+  const listaPorProducto  = listaPorMarcaCateg.filter(p => !filtroProducto || p.producto === filtroProducto);
+  const detallesUnicos    = [...new Set(listaPorProducto.map(p => p.detalle))].filter(Boolean).sort();
+  const listaPorDetalle   = listaPorProducto.filter(p => !filtroDetalle || p.detalle === filtroDetalle);
+  const modelosUnicos     = [...new Set(listaPorDetalle.map(p => p.modelo))].filter(Boolean).sort();
+  const listaPorModelo    = listaPorDetalle.filter(p => !filtroModelo || p.modelo === filtroModelo);
+  const coloresUnicos     = [...new Set(listaPorModelo.map(p => p.color))].filter(Boolean).sort();
+  const listaPorColor     = listaPorModelo.filter(p => !filtroColor || p.color === filtroColor);
+  const capacidadesUnicas = [...new Set(listaPorColor.map(p => p.capacidad))].filter(Boolean).sort();
+
+  const cambiarFiltroMarca = (v) => {
+    setFiltroMarca(v); setFiltroProducto(''); setFiltroDetalle(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroCateg = (v) => {
+    setFiltroCateg(v); setFiltroProducto(''); setFiltroDetalle(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroProducto = (v) => {
+    setFiltroProducto(v); setFiltroDetalle(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroDetalle = (v) => {
+    setFiltroDetalle(v); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroModelo = (v) => {
+    setFiltroModelo(v); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroColor = (v) => {
+    setFiltroColor(v); setFiltroCapacidad('');
+  };
+
   const visibles = lista.filter(p => {
     const q = busqueda.toLowerCase();
     const coincide = !q ||
@@ -98,9 +136,14 @@ export default function Productos() {
       (p.modelo || '').toLowerCase().includes(q) ||
       (p.detalle || '').toLowerCase().includes(q) ||
       p.marca_nombre.toLowerCase().includes(q);
-    const marcaOk = !filtroMarca || p.marca_nombre === filtroMarca;
-    const categOk = !filtroCateg || p.categoria_nombre === filtroCateg;
-    return coincide && marcaOk && categOk;
+    const marcaOk     = !filtroMarca || p.marca_nombre === filtroMarca;
+    const categOk     = !filtroCateg || p.categoria_nombre === filtroCateg;
+    const productoOk  = !filtroProducto || p.producto === filtroProducto;
+    const detalleOk   = !filtroDetalle || p.detalle === filtroDetalle;
+    const modeloOk    = !filtroModelo || p.modelo === filtroModelo;
+    const colorOk      = !filtroColor || p.color === filtroColor;
+    const capacidadOk  = !filtroCapacidad || p.capacidad === filtroCapacidad;
+    return coincide && marcaOk && categOk && productoOk && detalleOk && modeloOk && colorOk && capacidadOk;
   });
 
   const abrirCrear  = () => { setForm(EMPTY); setError(null); setModal(true); };
@@ -173,21 +216,43 @@ export default function Productos() {
       )}
 
       {/* Filtros */}
-      <div className="mb-4 flex flex-col sm:flex-row gap-2">
+      <div className="mb-4 space-y-2">
         <input
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           placeholder="Buscar por código, nombre, modelo o marca..."
-          className={inputCls + ' flex-1'}
+          className={inputCls + ' w-full'}
         />
-        <select value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)} className={selectCls + ' sm:w-40'}>
-          <option value="">Todas las marcas</option>
-          {marcasUnicas.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select value={filtroCateg} onChange={e => setFiltroCateg(e.target.value)} className={selectCls + ' sm:w-40'}>
-          <option value="">Todas las categorías</option>
-          {categoriasUnicas.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
+          <select value={filtroMarca} onChange={e => cambiarFiltroMarca(e.target.value)} className={selectCls}>
+            <option value="">Todas las marcas</option>
+            {marcasUnicas.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={filtroCateg} onChange={e => cambiarFiltroCateg(e.target.value)} className={selectCls}>
+            <option value="">Todas las categorías</option>
+            {categoriasUnicas.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filtroProducto} onChange={e => cambiarFiltroProducto(e.target.value)} className={selectCls}>
+            <option value="">Todos los productos</option>
+            {productosUnicos.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select value={filtroDetalle} onChange={e => cambiarFiltroDetalle(e.target.value)} className={selectCls}>
+            <option value="">Todos los detalles</option>
+            {detallesUnicos.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select value={filtroModelo} onChange={e => cambiarFiltroModelo(e.target.value)} className={selectCls}>
+            <option value="">Todos los modelos</option>
+            {modelosUnicos.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={filtroColor} onChange={e => cambiarFiltroColor(e.target.value)} className={selectCls}>
+            <option value="">Todos los colores</option>
+            {coloresUnicos.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={filtroCapacidad} onChange={e => setFiltroCapacidad(e.target.value)} className={selectCls}>
+            <option value="">Todas las capacidades</option>
+            {capacidadesUnicas.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
       </div>
 
       {cargando ? (
@@ -197,7 +262,7 @@ export default function Productos() {
       ) : visibles.length === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-zinc-500 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl">
           <HiArchiveBox className="h-10 w-10 mx-auto mb-3 opacity-25" />
-          <p className="text-sm">{busqueda || filtroMarca || filtroCateg ? 'Sin resultados para los filtros aplicados' : 'No hay productos registrados'}</p>
+          <p className="text-sm">{busqueda || filtroMarca || filtroCateg || filtroProducto || filtroDetalle || filtroModelo || filtroColor || filtroCapacidad ? 'Sin resultados para los filtros aplicados' : 'No hay productos registrados'}</p>
         </div>
       ) : (
         <>

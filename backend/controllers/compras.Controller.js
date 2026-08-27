@@ -76,7 +76,8 @@ const getFormData = async (req, res) => {
       db.promise().query(`SELECT id_proveedor, codigo, razon_social, activo FROM proveedores WHERE activo = 1 ORDER BY razon_social`),
       db.promise().query(`
         SELECT p.id_producto, p.codigo_interno, p.codigo_barras, p.producto, p.precio_real,
-               p.id_impuesto_default, p.id_proveedor_default, p.modelo, m.nombre AS marca
+               p.id_impuesto_default, p.id_proveedor_default, p.modelo, p.color, p.capacidad,
+               p.detalle AS producto_detalle, p.imagen_url, m.nombre AS marca
         FROM productos p
         LEFT JOIN marcas m ON m.id_marca = p.id_marca
         WHERE p.activo = 1 ORDER BY p.producto

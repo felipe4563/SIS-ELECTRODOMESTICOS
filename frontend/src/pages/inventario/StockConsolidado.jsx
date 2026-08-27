@@ -97,6 +97,8 @@ export default function StockConsolidado() {
   const [filMarca,  setFilMarca]  = useState('');
   const [filProducto, setFilProducto] = useState('');
   const [filModelo,   setFilModelo]   = useState('');
+  const [filColor,     setFilColor]     = useState('');
+  const [filCapacidad, setFilCapacidad] = useState('');
   const [filEstado, setFilEstado] = useState('');
   const [descargando, setDescargando] = useState(false);
 
@@ -126,8 +128,10 @@ export default function StockConsolidado() {
 
   const marcas = useMemo(() => [...new Set(data.productos.map(p => p.marca_nombre))].sort(), [data.productos]);
 
-  const cambiarFilMarca    = v => { setFilMarca(v); setFilProducto(''); setFilModelo(''); };
-  const cambiarFilProducto = v => { setFilProducto(v); setFilModelo(''); };
+  const cambiarFilMarca    = v => { setFilMarca(v); setFilProducto(''); setFilModelo(''); setFilColor(''); setFilCapacidad(''); };
+  const cambiarFilProducto = v => { setFilProducto(v); setFilModelo(''); setFilColor(''); setFilCapacidad(''); };
+  const cambiarFilModelo   = v => { setFilModelo(v); setFilColor(''); setFilCapacidad(''); };
+  const cambiarFilColor    = v => { setFilColor(v); setFilCapacidad(''); };
 
   const productosDisponibles = useMemo(
     () => [...new Set(
@@ -144,6 +148,24 @@ export default function StockConsolidado() {
     )].sort(),
     [data.productos, filMarca, filProducto]
   );
+  const coloresDisponibles = useMemo(
+    () => [...new Set(
+      data.productos
+        .filter(p => (!filMarca || p.marca_nombre === filMarca) && (!filProducto || p.producto === filProducto) && (!filModelo || p.modelo === filModelo))
+        .map(p => p.color)
+        .filter(Boolean)
+    )].sort(),
+    [data.productos, filMarca, filProducto, filModelo]
+  );
+  const capacidadesDisponibles = useMemo(
+    () => [...new Set(
+      data.productos
+        .filter(p => (!filMarca || p.marca_nombre === filMarca) && (!filProducto || p.producto === filProducto) && (!filModelo || p.modelo === filModelo) && (!filColor || p.color === filColor))
+        .map(p => p.capacidad)
+        .filter(Boolean)
+    )].sort(),
+    [data.productos, filMarca, filProducto, filModelo, filColor]
+  );
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.toLowerCase();
@@ -156,6 +178,8 @@ export default function StockConsolidado() {
       if (filMarca    && p.marca_nombre !== filMarca)    return false;
       if (filProducto && p.producto     !== filProducto) return false;
       if (filModelo   && p.modelo       !== filModelo)   return false;
+      if (filColor     && p.color     !== filColor)     return false;
+      if (filCapacidad && p.capacidad !== filCapacidad) return false;
       if (filEstado) {
         const total = data.depositos.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
         if (filEstado === 'sin'  && total !== 0)                                     return false;
@@ -164,7 +188,7 @@ export default function StockConsolidado() {
       }
       return true;
     });
-  }, [data, busqueda, filMarca, filProducto, filModelo, filEstado]);
+  }, [data, busqueda, filMarca, filProducto, filModelo, filColor, filCapacidad, filEstado]);
 
   const { depositos } = data;
 
@@ -180,8 +204,8 @@ export default function StockConsolidado() {
     return { total: data.productos.length, unidades, sinStock, bajoMin, ok };
   }, [data, depositos]);
 
-  const hayFiltros = busqueda || filMarca || filProducto || filModelo || filEstado;
-  const limpiar    = () => { setBusqueda(''); setFilMarca(''); setFilProducto(''); setFilModelo(''); setFilEstado(''); };
+  const hayFiltros = busqueda || filMarca || filProducto || filModelo || filColor || filCapacidad || filEstado;
+  const limpiar    = () => { setBusqueda(''); setFilMarca(''); setFilProducto(''); setFilModelo(''); setFilColor(''); setFilCapacidad(''); setFilEstado(''); };
 
   // ── Estado de carga/error/vacío compartido ────────────────────────────────
   const innerContent = () => {
@@ -315,11 +339,27 @@ export default function StockConsolidado() {
           </select>
           <select
             value={filModelo}
-            onChange={e => setFilModelo(e.target.value)}
+            onChange={e => cambiarFilModelo(e.target.value)}
             className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
           >
             <option value="">Todos los modelos</option>
             {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select
+            value={filColor}
+            onChange={e => cambiarFilColor(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
+          >
+            <option value="">Todos los colores</option>
+            {coloresDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select
+            value={filCapacidad}
+            onChange={e => setFilCapacidad(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 w-full sm:w-auto sm:min-w-[140px]"
+          >
+            <option value="">Todas las capacidades</option>
+            {capacidadesDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select
             value={filEstado}

@@ -99,7 +99,7 @@ const getStockConsolidado = async (req, res) => {
 
 const getKardex = async (req, res) => {
   try {
-    const { id_producto, id_deposito, fecha_desde, fecha_hasta, documento_tipo, marca, producto, modelo } = req.query;
+    const { id_producto, id_deposito, fecha_desde, fecha_hasta, documento_tipo, marca, producto, modelo, color, capacidad } = req.query;
 
     const where  = [];
     const params = [];
@@ -112,6 +112,8 @@ const getKardex = async (req, res) => {
     if (marca)          { where.push('m.nombre = ?');          params.push(marca); }
     if (producto)       { where.push('p.producto = ?');        params.push(producto); }
     if (modelo)          { where.push('p.modelo = ?');          params.push(modelo); }
+    if (color)           { where.push('p.color = ?');           params.push(color); }
+    if (capacidad)       { where.push('p.capacidad = ?');       params.push(capacidad); }
 
     const sql = `
       SELECT
@@ -274,7 +276,7 @@ const getKardexFormData = async (req, res) => {
     );
 
     const [productos] = await db.promise().query(
-      `SELECT p.id_producto, p.codigo_interno, p.producto,
+      `SELECT p.id_producto, p.codigo_interno, p.producto, p.imagen_url,
               p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca
        FROM productos p
        JOIN marcas m ON m.id_marca = p.id_marca

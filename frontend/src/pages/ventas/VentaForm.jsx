@@ -402,9 +402,11 @@ export default function VentaForm() {
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [categoriaSel, setCategoriaSel] = useState('');
-  const [filtroMarca,    setFiltroMarca]    = useState('');
-  const [filtroProducto, setFiltroProducto] = useState('');
-  const [filtroModelo,   setFiltroModelo]   = useState('');
+  const [filtroMarca,     setFiltroMarca]     = useState('');
+  const [filtroProducto,  setFiltroProducto]  = useState('');
+  const [filtroModelo,    setFiltroModelo]    = useState('');
+  const [filtroColor,     setFiltroColor]     = useState('');
+  const [filtroCapacidad, setFiltroCapacidad] = useState('');
   const [mostrarMasOpciones, setMostrarMasOpciones] = useState(false);
 
   const [rcForm, setRcForm]   = useState(RC_FORM_VACIO);
@@ -763,10 +765,23 @@ export default function VentaForm() {
     setFiltroMarca(v);
     setFiltroProducto('');
     setFiltroModelo('');
+    setFiltroColor('');
+    setFiltroCapacidad('');
   };
   const cambiarFiltroProducto = (v) => {
     setFiltroProducto(v);
     setFiltroModelo('');
+    setFiltroColor('');
+    setFiltroCapacidad('');
+  };
+  const cambiarFiltroModelo = (v) => {
+    setFiltroModelo(v);
+    setFiltroColor('');
+    setFiltroCapacidad('');
+  };
+  const cambiarFiltroColor = (v) => {
+    setFiltroColor(v);
+    setFiltroCapacidad('');
   };
 
   const productosConStockBase = productos.filter(p => (stockMap[p.id_producto] ?? 0) >= 1);
@@ -784,11 +799,25 @@ export default function VentaForm() {
       .map(p => p.modelo)
       .filter(Boolean)
   )].sort();
+  const coloresDisponibles = [...new Set(
+    productosConStockBase
+      .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto) && (!filtroModelo || p.modelo === filtroModelo))
+      .map(p => p.color)
+      .filter(Boolean)
+  )].sort();
+  const capacidadesDisponibles = [...new Set(
+    productosConStockBase
+      .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.producto === filtroProducto) && (!filtroModelo || p.modelo === filtroModelo) && (!filtroColor || p.color === filtroColor))
+      .map(p => p.capacidad)
+      .filter(Boolean)
+  )].sort();
 
   const productosVisibles = productosConStockBase
-    .filter(p => !filtroMarca    || p.marca    === filtroMarca)
-    .filter(p => !filtroProducto || p.producto === filtroProducto)
-    .filter(p => !filtroModelo   || p.modelo   === filtroModelo)
+    .filter(p => !filtroMarca     || p.marca     === filtroMarca)
+    .filter(p => !filtroProducto  || p.producto  === filtroProducto)
+    .filter(p => !filtroModelo    || p.modelo    === filtroModelo)
+    .filter(p => !filtroColor     || p.color     === filtroColor)
+    .filter(p => !filtroCapacidad || p.capacidad === filtroCapacidad)
     .filter(p => {
       if (busquedaProducto.trim()) {
         const q = busquedaProducto.toLowerCase();
@@ -799,8 +828,7 @@ export default function VentaForm() {
           p.modelo?.toLowerCase().includes(q);
       }
       return !categoriaSel || String(p.id_categoria) === String(categoriaSel);
-    })
-    .slice(0, 60);
+    });
 
   const combosVisibles = combos.filter(c =>
     !busquedaProducto.trim() || c.nombre.toLowerCase().includes(busquedaProducto.toLowerCase())
@@ -1168,7 +1196,7 @@ export default function VentaForm() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 <select
                   value={filtroMarca}
                   onChange={e => cambiarFiltroMarca(e.target.value)}
@@ -1187,11 +1215,27 @@ export default function VentaForm() {
                 </select>
                 <select
                   value={filtroModelo}
-                  onChange={e => setFiltroModelo(e.target.value)}
+                  onChange={e => cambiarFiltroModelo(e.target.value)}
                   className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
                 >
                   <option value="">Todos los modelos</option>
                   {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select
+                  value={filtroColor}
+                  onChange={e => cambiarFiltroColor(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todos los colores</option>
+                  {coloresDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select
+                  value={filtroCapacidad}
+                  onChange={e => setFiltroCapacidad(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                >
+                  <option value="">Todas las capacidades</option>
+                  {capacidadesDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 

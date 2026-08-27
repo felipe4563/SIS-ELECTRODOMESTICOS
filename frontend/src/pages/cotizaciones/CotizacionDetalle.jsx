@@ -50,7 +50,7 @@ export default function CotizacionDetalle() {
 
   // Modal convertir
   const [showConvertir,  setShowConvertir] = useState(false);
-  const [convertForm,    setConvertForm]   = useState({ id_deposito: '', tipo_venta: 'MENOR', condicion_pago: 'CONTADO' });
+  const [convertForm,    setConvertForm]   = useState({ id_deposito: '', tipo_venta: 'MENOR', condicion_pago: 'CONTADO', dias_credito: 30, num_cuotas: 1 });
 
   // Flujo anular
   const [showAnular,   setShowAnular]   = useState(false);
@@ -509,6 +509,26 @@ export default function CotizacionDetalle() {
                   ))}
                 </div>
               </div>
+              {convertForm.condicion_pago === 'CREDITO' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">Días de crédito</label>
+                    <input
+                      type="number" min={1} value={convertForm.dias_credito}
+                      onChange={e => setConvertForm(p => ({ ...p, dias_credito: e.target.value }))}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">N° de cuotas</label>
+                    <input
+                      type="number" min={1} value={convertForm.num_cuotas}
+                      onChange={e => setConvertForm(p => ({ ...p, num_cuotas: e.target.value }))}
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              )}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <div className="flex gap-3 pt-1">
                 <button

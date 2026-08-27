@@ -12,4 +12,5 @@ export const cotizacionesService = {
   convertir: (id, data)   => api.post(`/cotizaciones/${id}/convertir-venta`, data),
   getPDF:    (id)         => api.get(`/cotizaciones/${id}/pdf`),
   getFormData: ()         => api.get('/cotizaciones/form-data'),
+  getStockSucursal: (id_sucursal) => api.get(`/cotizaciones/stock-sucursal/${id_sucursal}`),
 };

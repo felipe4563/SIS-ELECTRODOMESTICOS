@@ -1,6 +1,7 @@
 const db    = require('../config/db');
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
 const { isValidDate } = require('../utils/validators');
+const { generarCuotasVenta } = require('./ventas.Controller');
 
 const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
@@ -326,19 +327,41 @@ const rechazarCotizacion = async (req, res) => {
 const convertirVenta = async (req, res) => {
   try {
     const { id } = req.params;
-    const { id_deposito, tipo_venta = 'MENOR', condicion_pago = 'CONTADO', dias_credito = 0 } = req.body;
+    const {
+      id_deposito, tipo_venta = 'MENOR', condicion_pago = 'CONTADO',
+      dias_credito = 0, num_cuotas = 1,
+    } = req.body;
 
     if (!id_deposito)
       return res.status(400).json({ mensaje: 'Debe seleccionar el depósito para descargar stock' });
 
     const [[cot]] = await db.promise().query(
-      `SELECT * FROM cotizaciones WHERE id_cotizacion = ?`, [id]
+      `SELECT co.*, c.saldo_actual AS cliente_saldo, c.permite_credito, c.limite_credito
+       FROM cotizaciones co JOIN clientes c ON c.id_cliente = co.id_cliente
+       WHERE co.id_cotizacion = ?`, [id]
     );
     if (!cot) return res.status(404).json({ mensaje: 'Cotización no encontrada' });
     if (cot.estado !== 'APROBADA')
       return res.status(400).json({ mensaje: 'Solo se puede convertir una cotización aprobada' });
     if (cot.id_venta_generada)
       return res.status(400).json({ mensaje: 'Esta cotización ya fue convertida en venta' });
+
+    // Validación de crédito (misma lógica que emitirVenta)
+    if (condicion_pago === 'CREDITO') {
+      const puedeVenderCredito  = req.ability.can('vender_credito',  'ventas');
+      const puedeAprobarCredito = req.ability.can('aprobar_credito', 'ventas');
+      if (!puedeVenderCredito && !puedeAprobarCredito) {
+        return res.status(403).json({ mensaje: 'No tenés permiso para vender a crédito' });
+      }
+      if (!cot.permite_credito) return res.status(400).json({ mensaje: 'El cliente no tiene crédito habilitado' });
+      const nuevoSaldo = Number(cot.cliente_saldo) + Number(cot.total);
+      if (nuevoSaldo > Number(cot.limite_credito) && !puedeAprobarCredito) {
+        return res.status(403).json({
+          mensaje: `Excede el límite de crédito del cliente (Límite: ${cot.limite_credito}, Saldo: ${cot.cliente_saldo}, Venta: ${cot.total}). Requiere aprobación de crédito`,
+          requiere_aprobacion: true,
+        });
+      }
+    }
 
     const [detalle] = await db.promise().query(
       `SELECT cd.*, p.bono, p.producto
@@ -368,14 +391,16 @@ const convertirVenta = async (req, res) => {
 
     const numeroVenta = await generarNumero('VEN', 'ventas');
 
+    const numCuotasFinal = Math.max(1, Number(num_cuotas) || 1);
+
     const [insVenta] = await db.promise().query(
       `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
-         id_moneda, tipo_cambio, condicion_pago, dias_credito,
+         id_moneda, tipo_cambio, condicion_pago, dias_credito, num_cuotas,
          subtotal, descuento_porc, descuento_monto, impuesto, total, saldo_pendiente,
          estado, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'EMITIDA',?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'EMITIDA',?)`,
       [numeroVenta, tipo_venta, cot.id_sucursal, id_deposito, cot.id_cliente, req.user.id_usuario,
-       cot.id_moneda, cot.tipo_cambio, condicion_pago, dias_credito,
+       cot.id_moneda, cot.tipo_cambio, condicion_pago, dias_credito, numCuotasFinal,
        cot.subtotal, cot.descuento_porc, cot.descuento_monto, cot.impuesto, cot.total,
        condicion_pago === 'CREDITO' ? cot.total : 0,
        cot.observaciones ?? null]
@@ -419,6 +444,15 @@ const convertirVenta = async (req, res) => {
          -Number(it.cantidad), costo_unitario,
          Number(saldoRow?.saldo ?? 0), Number(saldoRow?.saldo ?? 0) * costo_unitario,
          id_venta, numeroVenta, req.user.id_usuario]
+      );
+    }
+
+    // Generar cuotas y actualizar saldo del cliente si es a crédito
+    if (condicion_pago === 'CREDITO') {
+      await generarCuotasVenta(id_venta, cot.total, dias_credito, numCuotasFinal);
+      await db.promise().query(
+        `UPDATE clientes SET saldo_actual = saldo_actual + ? WHERE id_cliente = ?`,
+        [cot.total, cot.id_cliente]
       );
     }
 
@@ -526,7 +560,8 @@ const getFormData = async (req, res) => {
     );
     const [productos] = await db.promise().query(
       `SELECT p.id_producto, p.codigo_interno, p.producto, p.precio_publico, p.precio_mayor,
-              p.bono, um.nombre AS unidad_nombre, p.imagen_url, p.modelo, m.nombre AS marca
+              p.bono, um.nombre AS unidad_nombre, p.imagen_url, p.modelo, p.color, p.capacidad,
+              p.detalle AS producto_detalle, m.nombre AS marca
        FROM productos p
        JOIN unidades_medida um ON um.id_unidad = p.id_unidad
        LEFT JOIN marcas m ON m.id_marca = p.id_marca
@@ -539,8 +574,30 @@ const getFormData = async (req, res) => {
   }
 };
 
+// ── Stock agregado por sucursal (suma de todos sus depósitos) ────────────────
+
+const getStockSucursal = async (req, res) => {
+  try {
+    const { id_sucursal } = req.params;
+    const [rows] = await db.promise().query(
+      `SELECT s.id_producto, SUM(s.cantidad_disponible) AS disponible
+       FROM stock s
+       JOIN depositos d ON d.id_deposito = s.id_deposito
+       WHERE d.id_sucursal = ? AND d.activo = 1
+       GROUP BY s.id_producto`,
+      [id_sucursal]
+    );
+    const stockMap = {};
+    for (const r of rows) stockMap[r.id_producto] = Number(r.disponible);
+    res.json({ stockMap });
+  } catch (err) {
+    console.error('[getStockSucursal]', err);
+    res.status(500).json({ error: 'Error al obtener stock de la sucursal' });
+  }
+};
+
 module.exports = {
   getCotizaciones, getCotizacion, createCotizacion, updateCotizacion,
   emitirCotizacion, aprobarCotizacion, rechazarCotizacion, convertirVenta,
-  anularCotizacion, getPDF, getFormData,
+  anularCotizacion, getPDF, getFormData, getStockSucursal,
 };

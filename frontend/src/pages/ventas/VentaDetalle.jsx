@@ -231,7 +231,7 @@ export default function VentaDetalle() {
 
   const puedeEditar      = puede('editar_borrador',  'ventas') && venta.estado === 'BORRADOR';
   const puedeEmitir      = puede('emitir',           'ventas') && venta.estado === 'BORRADOR';
-  const puedeCobrar      = puede('cobrar',           'ventas') && ['EMITIDA', 'PARCIAL'].includes(venta.estado);
+  const puedeCobrar      = puede('cobrar',           'ventas') && ['EMITIDA', 'PARCIAL'].includes(venta.estado) && Number(venta.saldo_pendiente) > 0;
   const puedeAnular      = puede('anular',           'ventas') && !['ANULADA', 'DEVUELTA'].includes(venta.estado);
   const puedeDevolver    = puede('devolucion_crear', 'ventas') && ['EMITIDA', 'PARCIAL', 'PAGADA'].includes(venta.estado);
   const puedeImprimir    = puede('imprimir',         'ventas') && venta.estado !== 'BORRADOR';
