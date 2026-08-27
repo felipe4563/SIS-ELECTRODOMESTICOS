@@ -456,10 +456,12 @@ exports.importarProductos = async (req, res) => {
           continue;
         }
 
-        // codigo_interno = MODELO si está, si no genera uno
-        const codigoInterno = modelo ||
-          `${marcaNombre.replace(/[^A-Z0-9]/gi, '').slice(0, 5)}-${productoBase.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-${detalle.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-${i}`
-            .toUpperCase();
+        // codigo_interno: cada fila del Excel es un producto propio (incluye el N° de fila),
+        // así nunca se fusionan variantes del mismo MODELO aunque solo difieran en columnas no usadas para el código.
+        const codigoInterno = modelo
+          ? `${modelo}-F${fila}`.toUpperCase()
+          : `${marcaNombre.replace(/[^A-Z0-9]/gi, '').slice(0, 5)}-${productoBase.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-${detalle.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-F${fila}`
+              .toUpperCase();
 
         // Nombre del producto: PRODUCTO + " " + DETALLE
         const nombreProducto = detalle ? `${productoBase} ${detalle}` : productoBase;
@@ -503,7 +505,7 @@ exports.importarProductos = async (req, res) => {
             precio_publico:  precioPublico,
             bono:            bono,
             precio_mayor:    precioMayor,  // columna MCM del Excel = precio mayorista
-            stock_minimo:        5,
+            stock_minimo:        1,
             stock_maximo:        100,
             id_proveedor_default: idProveedorDefault,
             estado:              'NUEVO',

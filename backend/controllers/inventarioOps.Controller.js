@@ -142,6 +142,67 @@ const createTransferencia = async (req, res) => {
   }
 };
 
+const updateTransferencia = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { id_deposito_origen, id_deposito_destino, observaciones, items } = req.body;
+
+    const [[t]] = await db.promise().query(`SELECT estado FROM transferencias WHERE id_transferencia = ?`, [id]);
+    if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
+    if (t.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede editar una transferencia en borrador' });
+
+    if (!id_deposito_origen || !id_deposito_destino || !items?.length) {
+      return res.status(400).json({ mensaje: 'Faltan datos requeridos' });
+    }
+    if (String(id_deposito_origen) === String(id_deposito_destino)) {
+      return res.status(400).json({ mensaje: 'Origen y destino no pueden ser iguales' });
+    }
+
+    await db.promise().query(
+      `UPDATE transferencias SET id_deposito_origen = ?, id_deposito_destino = ?, observaciones = ?
+       WHERE id_transferencia = ?`,
+      [id_deposito_origen, id_deposito_destino, observaciones ?? null, id]
+    );
+
+    await db.promise().query(`DELETE FROM transferencia_detalle WHERE id_transferencia = ?`, [id]);
+    for (const item of items) {
+      if (!item.id_producto || Number(item.cantidad) <= 0) continue;
+      await db.promise().query(
+        `INSERT INTO transferencia_detalle (id_transferencia, id_producto, cantidad_enviada, observacion)
+         VALUES (?, ?, ?, ?)`,
+        [id, item.id_producto, item.cantidad, item.observacion ?? null]
+      );
+    }
+
+    await auditLog(req.user.id_usuario, 'transferencias', id, 'UPDATE', getIp(req));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensaje: 'Error al editar transferencia' });
+  }
+};
+
+const emitirTransferencia = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [[t]] = await db.promise().query(`SELECT estado FROM transferencias WHERE id_transferencia = ?`, [id]);
+    if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
+    if (t.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede emitir una transferencia en borrador' });
+
+    const [detalle] = await db.promise().query(
+      `SELECT id_detalle FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
+    );
+    if (!detalle.length) return res.status(400).json({ mensaje: 'La transferencia no tiene productos' });
+
+    await db.promise().query(`UPDATE transferencias SET estado = 'SOLICITADA' WHERE id_transferencia = ?`, [id]);
+    await auditLog(req.user.id_usuario, 'transferencias', id, 'UPDATE', getIp(req));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensaje: 'Error al emitir transferencia' });
+  }
+};
+
 const enviarTransferencia = async (req, res) => {
   try {
     const userId = req.user.id_usuario;
@@ -636,7 +697,7 @@ const anularAjuste = async (req, res) => {
 };
 
 module.exports = {
-  getTransferencias, getTransferencia, createTransferencia,
+  getTransferencias, getTransferencia, createTransferencia, updateTransferencia, emitirTransferencia,
   enviarTransferencia, recibirTransferencia, anularTransferencia,
   getAjustes, getAjuste, createAjuste, updateAjuste, aprobarAjuste, anularAjuste,
 };

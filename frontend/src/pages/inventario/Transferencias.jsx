@@ -7,6 +7,7 @@ import { usePermission }          from '../../hooks/usePermission';
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 
 const ESTADO_BADGE = {
+  BORRADOR:    { label: 'Borrador',    cls: 'bg-zinc-100   text-zinc-600   dark:bg-zinc-800      dark:text-zinc-400' },
   SOLICITADA:  { label: 'Solicitada',  cls: 'bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-400' },
   EN_TRANSITO: { label: 'En tránsito', cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   RECIBIDA:    { label: 'Recibida',    cls: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400' },
@@ -46,7 +47,11 @@ export default function Transferencias() {
     finally { setCargando(false); }
   };
 
-  useEffect(() => { cargar(); }, []); // eslint-disable-line
+  // Búsqueda automática: al entrar y cada vez que cambian los filtros (con debounce)
+  useEffect(() => {
+    const t = setTimeout(() => { cargar(); }, 400);
+    return () => clearTimeout(t);
+  }, [filtros]); // eslint-disable-line
 
   const setF = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 

@@ -333,6 +333,9 @@ export default function App() {
               <Route path="/inventario/transferencias/nueva" element={
                 <PageRoute action="transferir_solicitar" subject="inventario"><TransferenciaForm /></PageRoute>
               } />
+              <Route path="/inventario/transferencias/:id/editar" element={
+                <PageRoute action="transferir_solicitar" subject="inventario"><TransferenciaForm /></PageRoute>
+              } />
               <Route path="/inventario/transferencias/:id" element={
                 <PageRoute action="ver" subject="inventario"><TransferenciaDetalle /></PageRoute>
               } />

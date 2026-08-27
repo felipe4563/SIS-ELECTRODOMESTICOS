@@ -27,6 +27,13 @@ const sumarTotales = (detalle = []) => detalle.reduce((acc, d) => ({
   recibida: acc.recibida + Number(d.cantidad_recibida ?? 0),
 }), { enviada: 0, recibida: 0 });
 
+const PRODUCTOS_POR_HOJA_A4 = 3;
+const chunkArray = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out.length ? out : [[]];
+};
+
 /* ─── Ticket 80mm (portrait) ──────────────────────────────────────────────── */
 function Ticket80({ t, detalle, empresa: e, logoUrl }) {
   return (
@@ -201,12 +208,15 @@ function Ticket110({ t, detalle, empresa: e, logoUrl }) {
   );
 }
 
-/* ─── Ticket A4 (formal, 2 copias por hoja — mismo diseño que VentaImprimir) ── */
+/* ─── Ticket A4 (formal, 2 copias por hoja — mismo diseño que VentaImprimir) ──
+   Si hay muchos productos, se pagina en hojas de PRODUCTOS_POR_HOJA_A4 ítems,
+   cada hoja repite la cabecera completa (mismo número de transferencia) y
+   muestra los totales de esa hoja — no crea transferencias nuevas. */
 function TicketA4({ t, detalle, empresa: e, logoUrl }) {
   const est     = ESTADO_COLOR[t.estado] ?? ESTADO_COLOR.ANULADA;
-  const totales = sumarTotales(detalle);
+  const paginas = chunkArray(detalle, PRODUCTOS_POR_HOJA_A4);
 
-  const renderCopia = () => (
+  const renderCopia = (detalleHoja, pagina, totalPaginas) => (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', lineHeight: '1.45', color: '#111' }}>
 
       {/* Franja superior */}
@@ -237,6 +247,12 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
                 <td style={{ color: '#555', paddingRight: '10px', whiteSpace: 'nowrap' }}>N°:</td>
                 <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{t.numero}</td>
               </tr>
+              {totalPaginas > 1 && (
+                <tr>
+                  <td style={{ color: '#555', paddingRight: '10px' }}>Página:</td>
+                  <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{pagina} de {totalPaginas}</td>
+                </tr>
+              )}
               <tr>
                 <td style={{ color: '#555', paddingRight: '10px' }}>Estado:</td>
                 <td style={{ textAlign: 'right' }}>
@@ -302,7 +318,7 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
           </tr>
         </thead>
         <tbody>
-          {detalle.map((d) => {
+          {detalleHoja.map((d) => {
             const pendiente = Number(d.cantidad_enviada ?? 0) - Number(d.cantidad_recibida ?? 0);
             const spec = specLinea(d);
             return (
@@ -337,13 +353,20 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
           <tbody>
             <tr>
-              <td style={{ padding: '2px 8px', color: '#555' }}>Total enviado:</td>
-              <td style={{ padding: '2px 8px', textAlign: 'right' }}>{fmtN(totales.enviada)}</td>
+              <td style={{ padding: '2px 8px', color: '#555' }}>Total enviado{totalPaginas > 1 ? ' (esta hoja)' : ''}:</td>
+              <td style={{ padding: '2px 8px', textAlign: 'right' }}>{fmtN(sumarTotales(detalleHoja).enviada)}</td>
             </tr>
             <tr style={{ borderTop: '1.5px solid #1a1a1a' }}>
-              <td style={{ padding: '5px 8px', fontWeight: 'bold', fontSize: '12px' }}>TOTAL RECIBIDO:</td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>{fmtN(totales.recibida)}</td>
+              <td style={{ padding: '5px 8px', fontWeight: 'bold', fontSize: '12px' }}>TOTAL RECIBIDO{totalPaginas > 1 ? ' (ESTA HOJA)' : ''}:</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>{fmtN(sumarTotales(detalleHoja).recibida)}</td>
             </tr>
+            {totalPaginas > 1 && (
+              <tr>
+                <td style={{ padding: '4px 8px 0', color: '#777', fontSize: '8px' }} colSpan={2}>
+                  Total general enviado: {fmtN(sumarTotales(detalle).enviada)} · recibido: {fmtN(sumarTotales(detalle).recibida)}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -373,16 +396,20 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
 
   return (
     <div id="ticket" style={{ width: '190mm', background: 'white' }}>
-      {renderCopia()}
+      {paginas.map((detalleHoja, i) => (
+        <div key={i} className="tf-hoja" style={{ pageBreakAfter: i < paginas.length - 1 ? 'always' : 'auto' }}>
+          {renderCopia(detalleHoja, i + 1, paginas.length)}
 
-      {/* Línea de corte */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
-        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-        <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
-        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-      </div>
+          {/* Línea de corte */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
+            <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
+            <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
+            <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
+          </div>
 
-      {renderCopia()}
+          {renderCopia(detalleHoja, i + 1, paginas.length)}
+        </div>
+      ))}
     </div>
   );
 }

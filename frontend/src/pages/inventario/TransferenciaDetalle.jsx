@@ -10,6 +10,7 @@ const fmtCant  = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDi
 const specLinea = d => [d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
 const ESTADO_BADGE = {
+  BORRADOR:    { label: 'Borrador',    cls: 'bg-zinc-100   text-zinc-600   dark:bg-zinc-800      dark:text-zinc-400' },
   SOLICITADA:  { label: 'Solicitada',  cls: 'bg-blue-100   text-blue-700   dark:bg-blue-900/30   dark:text-blue-400' },
   EN_TRANSITO: { label: 'En tránsito', cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   RECIBIDA:    { label: 'Recibida',    cls: 'bg-green-100  text-green-700  dark:bg-green-900/30  dark:text-green-400' },
@@ -92,10 +93,24 @@ export default function TransferenciaDetalle() {
     }
   };
 
+  const emitir = async () => {
+    setError('');
+    setProcesando(true);
+    try {
+      await transferenciasService.emitir(id);
+      await cargar();
+    } catch (err) {
+      setError(err.response?.data?.mensaje ?? 'Error al emitir la transferencia');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   if (cargando) return <div className="flex items-center justify-center py-32 text-zinc-400">Cargando…</div>;
   if (!trf)     return null;
 
   const badge = ESTADO_BADGE[trf.estado] ?? { label: trf.estado, cls: 'bg-zinc-100 text-zinc-600' };
+  const puedeEditar  = puede('transferir_solicitar', 'inventario');
   const puedeEnviar  = puede('transferir_enviar', 'inventario');
   const puedeRecibir = puede('transferir_recibir', 'inventario');
   const puedeAnular  = puede('transferir_anular', 'inventario');
@@ -135,6 +150,18 @@ export default function TransferenciaDetalle() {
           >
             {descargando ? 'Generando…' : 'Comprobante PDF'}
           </button>
+          {trf.estado === 'BORRADOR' && puedeEditar && (
+            <button onClick={() => navigate(`/inventario/transferencias/${id}/editar`)}
+              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-sm transition-colors">
+              Editar
+            </button>
+          )}
+          {trf.estado === 'BORRADOR' && puedeEditar && (
+            <button onClick={emitir} disabled={procesando}
+              className="px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
+              {procesando ? 'Emitiendo…' : 'Emitir'}
+            </button>
+          )}
           {trf.estado === 'SOLICITADA' && puedeEnviar && (
             <button onClick={() => setModal('enviar')}
               className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">
@@ -155,6 +182,12 @@ export default function TransferenciaDetalle() {
           )}
         </div>
       </div>
+
+      {error && !modal && (
+        <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

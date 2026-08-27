@@ -94,11 +94,16 @@ export default function Ventas() {
   };
 
   useEffect(() => {
-    cargar();
     cajaService.getArqueoActual()
       .then(r => setArqueoActual(r.data.arqueo ?? null))
       .catch(() => setArqueoActual(null));
-  }, []); // eslint-disable-line
+  }, []);
+
+  // Búsqueda automática: al entrar y cada vez que cambian los filtros (con debounce)
+  useEffect(() => {
+    const t = setTimeout(() => { cargar(); }, 400);
+    return () => clearTimeout(t);
+  }, [filtros]); // eslint-disable-line
 
   const sinCaja = arqueoActual === null;
 

@@ -169,14 +169,15 @@ export default function StockConsolidado() {
   const { depositos } = data;
 
   const resumen = useMemo(() => {
-    let sinStock = 0, bajoMin = 0, ok = 0;
+    let sinStock = 0, bajoMin = 0, ok = 0, unidades = 0;
     for (const p of data.productos) {
       const total = depositos.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
+      unidades += total;
       if (total === 0)                          sinStock++;
       else if (total <= Number(p.stock_minimo)) bajoMin++;
       else                                      ok++;
     }
-    return { total: data.productos.length, sinStock, bajoMin, ok };
+    return { total: data.productos.length, unidades, sinStock, bajoMin, ok };
   }, [data, depositos]);
 
   const hayFiltros = busqueda || filMarca || filProducto || filModelo || filEstado;
@@ -272,9 +273,10 @@ export default function StockConsolidado() {
         </div>
       </div>
 
-      {/* ── Stat cards — 2×2 en móvil, 4 en línea en desktop ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total productos" value={resumen.total}    colorCls="text-zinc-900 dark:text-white"        isTotal />
+      {/* ── Stat cards — 2×3 en móvil, 5 en línea en desktop ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+        <StatCard label="Total productos" value={resumen.total}           colorCls="text-zinc-900 dark:text-white"        isTotal />
+        <StatCard label="Unidades en stock" value={fmtNum(resumen.unidades)} colorCls="text-zinc-900 dark:text-white"        isTotal />
         <StatCard label="Sin stock"       value={resumen.sinStock} colorCls="text-red-600 dark:text-red-400"       active={filEstado === 'sin'}  onClick={() => setFilEstado(f => f === 'sin'  ? '' : 'sin')} />
         <StatCard label="Bajo mínimo"     value={resumen.bajoMin}  colorCls="text-orange-500 dark:text-orange-400" active={filEstado === 'bajo'} onClick={() => setFilEstado(f => f === 'bajo' ? '' : 'bajo')} />
         <StatCard label="Stock OK"        value={resumen.ok}       colorCls="text-green-600 dark:text-green-400"   active={filEstado === 'ok'}   onClick={() => setFilEstado(f => f === 'ok'   ? '' : 'ok')} />

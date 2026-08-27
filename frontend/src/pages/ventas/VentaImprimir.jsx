@@ -243,12 +243,27 @@ function Ticket110({ data, logoUrl }) {
   );
 }
 
+const PRODUCTOS_POR_HOJA_A4 = 3;
+const chunkArray = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out.length ? out : [[]];
+};
+
+const sumarSubtotales = detalle => (detalle ?? []).reduce((s, d) => {
+  const base = Number(d.cantidad) * Number(d.precio_unitario);
+  const desc = base * (Number(d.descuento_porc ?? 0) / 100);
+  return s + (base - desc);
+}, 0);
+
 /* ─── Ticket A4 (formal, 2 copias por hoja) ───────────────────────────────── */
 function TicketA4({ data, logoUrl }) {
   const clienteNombre = data.cliente_razon || `${data.cliente_nombres ?? ''} ${data.cliente_apellidos ?? ''}`.trim();
   const empresa = data.empresa_comercial || data.empresa_razon || 'MEGAELECTRA';
 
-  const renderCopia = () => (
+  const paginas = chunkArray(data.detalle ?? [], PRODUCTOS_POR_HOJA_A4);
+
+  const renderCopia = (detalleHoja, pagina, totalPaginas) => (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', lineHeight: '1.45', color: '#111' }}>
 
       {/* Franja superior */}
@@ -303,6 +318,12 @@ function TicketA4({ data, logoUrl }) {
                 <td style={{ color: '#555', paddingRight: '10px' }}>Vendedor:</td>
                 <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{data.vendedor_nombre}</td>
               </tr>
+              {totalPaginas > 1 && (
+                <tr>
+                  <td style={{ color: '#555', paddingRight: '10px' }}>Página:</td>
+                  <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{pagina} de {totalPaginas}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -343,7 +364,7 @@ function TicketA4({ data, logoUrl }) {
           </tr>
         </thead>
         <tbody>
-          {(data.detalle ?? []).map((d, i) => {
+          {detalleHoja.map((d, i) => {
             const base = Number(d.cantidad) * Number(d.precio_unitario);
             const desc = base * (Number(d.descuento_porc ?? 0) / 100);
             const sub  = base - desc;
@@ -382,8 +403,14 @@ function TicketA4({ data, logoUrl }) {
 
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
           <tbody>
+            {totalPaginas > 1 && (
+              <tr>
+                <td style={{ padding: '2px 8px', color: '#555' }}>Subtotal (esta hoja):</td>
+                <td style={{ padding: '2px 8px', textAlign: 'right' }}>Bs {fmtMonto(sumarSubtotales(detalleHoja))}</td>
+              </tr>
+            )}
             <tr>
-              <td style={{ padding: '2px 8px', color: '#555' }}>Subtotal:</td>
+              <td style={{ padding: '2px 8px', color: '#555' }}>{totalPaginas > 1 ? 'Subtotal (total venta):' : 'Subtotal:'}</td>
               <td style={{ padding: '2px 8px', textAlign: 'right' }}>Bs {fmtMonto(data.subtotal)}</td>
             </tr>
             {Number(data.descuento_monto) > 0 && (
@@ -432,16 +459,20 @@ function TicketA4({ data, logoUrl }) {
 
   return (
     <div id="ticket" style={{ width: '190mm', background: 'white' }}>
-      {renderCopia()}
+      {paginas.map((detalleHoja, i) => (
+        <div key={i} className="tf-hoja" style={{ pageBreakAfter: i < paginas.length - 1 ? 'always' : 'auto' }}>
+          {renderCopia(detalleHoja, i + 1, paginas.length)}
 
-      {/* Línea de corte */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
-        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-        <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
-        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-      </div>
+          {/* Línea de corte */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
+            <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
+            <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
+            <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
+          </div>
 
-      {renderCopia()}
+          {renderCopia(detalleHoja, i + 1, paginas.length)}
+        </div>
+      ))}
     </div>
   );
 }

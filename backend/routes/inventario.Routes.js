@@ -70,6 +70,10 @@ router.post('/transferencias',
   authMiddleware, checkPermission('transferir_solicitar', 'inventario'), opsCtrl.createTransferencia);
 router.get('/transferencias/:id',
   authMiddleware, puedeVerTransferencias, opsCtrl.getTransferencia);
+router.put('/transferencias/:id',
+  authMiddleware, checkPermission('transferir_solicitar', 'inventario'), opsCtrl.updateTransferencia);
+router.post('/transferencias/:id/emitir',
+  authMiddleware, checkPermission('transferir_solicitar', 'inventario'), opsCtrl.emitirTransferencia);
 router.post('/transferencias/:id/enviar',
   authMiddleware, checkPermission('transferir_enviar', 'inventario'), opsCtrl.enviarTransferencia);
 router.post('/transferencias/:id/recibir',
