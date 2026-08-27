@@ -101,6 +101,7 @@ export default function StockConsolidado() {
   const [filCapacidad, setFilCapacidad] = useState('');
   const [filEstado, setFilEstado] = useState('');
   const [descargando, setDescargando] = useState(false);
+  const [depositosVisibles, setDepositosVisibles] = useState(null); // null = aún no inicializado (todos)
 
   const cargar = async () => {
     setCargando(true);
@@ -108,6 +109,7 @@ export default function StockConsolidado() {
     try {
       const res = await inventarioService.getStockConsolidado();
       setData(res.data);
+      setDepositosVisibles(new Set((res.data.depositos ?? []).map(d => d.id_deposito)));
     } catch (err) {
       const msg = err?.response?.data?.mensaje || err?.response?.data?.error || 'Error al cargar el inventario';
       setError(msg);
@@ -167,6 +169,19 @@ export default function StockConsolidado() {
     [data.productos, filMarca, filProducto, filModelo, filColor]
   );
 
+  const { depositos } = data;
+  const depositosMostrados = useMemo(
+    () => depositos.filter(d => !depositosVisibles || depositosVisibles.has(d.id_deposito)),
+    [depositos, depositosVisibles]
+  );
+  const toggleDeposito = (id_deposito) => setDepositosVisibles(prev => {
+    const next = new Set(prev ?? depositos.map(d => d.id_deposito));
+    next.has(id_deposito) ? next.delete(id_deposito) : next.add(id_deposito);
+    return next;
+  });
+  const mostrarTodosDepositos  = () => setDepositosVisibles(new Set(depositos.map(d => d.id_deposito)));
+  const mostrarNingunDeposito  = () => setDepositosVisibles(new Set());
+
   const productosFiltrados = useMemo(() => {
     const q = busqueda.toLowerCase();
     return data.productos.filter(p => {
@@ -181,28 +196,26 @@ export default function StockConsolidado() {
       if (filColor     && p.color     !== filColor)     return false;
       if (filCapacidad && p.capacidad !== filCapacidad) return false;
       if (filEstado) {
-        const total = data.depositos.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
+        const total = depositosMostrados.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
         if (filEstado === 'sin'  && total !== 0)                                     return false;
         if (filEstado === 'bajo' && !(total > 0 && total <= Number(p.stock_minimo))) return false;
         if (filEstado === 'ok'   && !(total > Number(p.stock_minimo)))               return false;
       }
       return true;
     });
-  }, [data, busqueda, filMarca, filProducto, filModelo, filColor, filCapacidad, filEstado]);
-
-  const { depositos } = data;
+  }, [data, busqueda, filMarca, filProducto, filModelo, filColor, filCapacidad, filEstado, depositosMostrados]);
 
   const resumen = useMemo(() => {
     let sinStock = 0, bajoMin = 0, ok = 0, unidades = 0;
     for (const p of data.productos) {
-      const total = depositos.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
+      const total = depositosMostrados.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
       unidades += total;
       if (total === 0)                          sinStock++;
       else if (total <= Number(p.stock_minimo)) bajoMin++;
       else                                      ok++;
     }
     return { total: data.productos.length, unidades, sinStock, bajoMin, ok };
-  }, [data, depositos]);
+  }, [data, depositosMostrados]);
 
   const hayFiltros = busqueda || filMarca || filProducto || filModelo || filColor || filCapacidad || filEstado;
   const limpiar    = () => { setBusqueda(''); setFilMarca(''); setFilProducto(''); setFilModelo(''); setFilColor(''); setFilCapacidad(''); setFilEstado(''); };
@@ -241,16 +254,43 @@ export default function StockConsolidado() {
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white leading-none">
             {verTodos ? 'Stock Consolidado' : 'Mi Inventario'}
           </h1>
-          {/* Depósitos visibles — chips con nombre */}
+          {/* Depósitos — chips para elegir cuáles columnas mostrar en la tabla */}
           {!cargando && data.depositos.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {data.depositos.map(d => (
-                <span key={d.id_deposito}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400 shrink-0" />
-                  {d.nombre}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {data.depositos.map(d => {
+                const visible = depositosVisibles?.has(d.id_deposito) ?? true;
+                return (
+                  <button
+                    key={d.id_deposito}
+                    type="button"
+                    role="switch"
+                    aria-checked={visible}
+                    onClick={() => toggleDeposito(d.id_deposito)}
+                    title={visible ? 'Ocultar columna en la tabla' : 'Mostrar columna en la tabla'}
+                    className={`inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                      visible
+                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-200 dark:border-zinc-700'
+                    }`}
+                  >
+                    <span className={`relative inline-flex items-center w-6 h-3.5 rounded-full shrink-0 transition-colors ${
+                      visible ? 'bg-amber-500 dark:bg-amber-400' : 'bg-zinc-300 dark:bg-zinc-600'
+                    }`}>
+                      <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${
+                        visible ? 'translate-x-[13px]' : 'translate-x-0.5'
+                      }`} />
+                    </span>
+                    {d.nombre}
+                  </button>
+                );
+              })}
+              {data.depositos.length > 1 && (
+                <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 ml-1">
+                  <button type="button" onClick={mostrarTodosDepositos} className="hover:underline hover:text-zinc-600 dark:hover:text-zinc-300">Todos</button>
+                  ·
+                  <button type="button" onClick={mostrarNingunDeposito} className="hover:underline hover:text-zinc-600 dark:hover:text-zinc-300">Ninguno</button>
                 </span>
-              ))}
+              )}
             </div>
           )}
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5">
@@ -406,7 +446,7 @@ export default function StockConsolidado() {
               </div>
             ) : (
               productosFiltrados.map(p => {
-                const totalDisp = depositos.reduce(
+                const totalDisp = depositosMostrados.reduce(
                   (s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0
                 );
                 const est = estadoStock(totalDisp, p.stock_minimo);
@@ -440,9 +480,9 @@ export default function StockConsolidado() {
                       )}
 
                       {/* Depósitos */}
-                      {depositos.length > 0 && (
+                      {depositosMostrados.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {depositos.map(d => {
+                          {depositosMostrados.map(d => {
                             const disp = toNum(p.stock[d.id_deposito]?.cantidad_disponible);
                             return (
                               <div key={d.id_deposito}
@@ -494,11 +534,9 @@ export default function StockConsolidado() {
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">
                       <th className="sticky left-0 z-10 w-1 p-0 bg-zinc-50 dark:bg-zinc-800/60" aria-hidden />
-                      <th className="sticky left-1 z-10 text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[220px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">Producto</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Marca</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Unidad</th>
+                      <th className="sticky left-1 z-10 text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[260px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">Producto</th>
                       <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Stock Mín.</th>
-                      {depositos.map(d => (
+                      {depositosMostrados.map(d => (
                         <th key={d.id_deposito} colSpan={2}
                           className="text-center px-4 py-2 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700">
                           <span className="block text-[10px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-400">{d.codigo}</span>
@@ -510,9 +548,9 @@ export default function StockConsolidado() {
                     </tr>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
                       <td className="sticky left-0 z-10 w-1 p-0 bg-zinc-50/50 dark:bg-zinc-800/30" aria-hidden />
-                      <td className="sticky left-1 z-10 w-[220px] bg-zinc-50/50 dark:bg-zinc-800/30" />
-                      <td colSpan={3} />
-                      {depositos.map(d => (
+                      <td className="sticky left-1 z-10 w-[260px] bg-zinc-50/50 dark:bg-zinc-800/30" />
+                      <td />
+                      {depositosMostrados.map(d => (
                         <Fragment key={d.id_deposito}>
                           <td className="text-right px-3 py-1.5 border-l border-zinc-200 dark:border-zinc-700">Disp.</td>
                           <td className="text-right px-3 py-1.5">Res.</td>
@@ -524,7 +562,7 @@ export default function StockConsolidado() {
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {productosFiltrados.map(p => {
-                      const totalDisp = depositos.reduce(
+                      const totalDisp = depositosMostrados.reduce(
                         (s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0
                       );
                       const est = estadoStock(totalDisp, p.stock_minimo);
@@ -534,10 +572,13 @@ export default function StockConsolidado() {
                           <td className="sticky left-0 z-10 w-1 p-0 bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40">
                             <div className={`w-[3px] h-full min-h-[44px] ${est.bar}`} />
                           </td>
-                          <td className="sticky left-1 z-10 px-4 py-2.5 w-[220px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                          <td className="sticky left-1 z-10 px-4 py-2.5 w-[260px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                             <p className="font-medium text-zinc-900 dark:text-white leading-tight truncate" title={p.producto}>{p.producto}</p>
                             <p className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
                               {p.codigo_interno}{p.codigo_barras ? ` · ${p.codigo_barras}` : ''}
+                            </p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                              {p.marca_nombre}{p.unidad_nombre ? ` · ${p.unidad_nombre} (${p.unidad_codigo})` : ''}
                             </p>
                             {p.detalle && (
                               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{p.detalle}</p>
@@ -545,10 +586,6 @@ export default function StockConsolidado() {
                             {specLinea(p) && (
                               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">{specLinea(p)}</p>
                             )}
-                          </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-400">{p.marca_nombre}</td>
-                          <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-500 dark:text-zinc-500">
-                            {p.unidad_nombre} <span className="text-zinc-400 dark:text-zinc-600">({p.unidad_codigo})</span>
                           </td>
                           <td className="px-4 py-2.5 whitespace-nowrap text-right text-zinc-700 dark:text-zinc-300">
                             <StockMinCell
@@ -558,7 +595,7 @@ export default function StockConsolidado() {
                               onSave={handleStockMinimo}
                             />
                           </td>
-                          {depositos.map(d => {
+                          {depositosMostrados.map(d => {
                             const s    = p.stock[d.id_deposito];
                             const disp = toNum(s?.cantidad_disponible);
                             const res  = toNum(s?.cantidad_reservada);
