@@ -22,9 +22,18 @@ const ESTADO_LABEL = {
 };
 
 const specLinea = d => [d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
+const pendienteDe = d => +(Number(d.cantidad) - Number(d.cantidad_recibida ?? 0)).toFixed(4);
+const sumarPendiente = (detalle = []) => detalle.reduce((s, d) => s + pendienteDe(d), 0);
+
+const PRODUCTOS_POR_HOJA_A4 = 8;
+const chunkArray = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out.length ? out : [[]];
+};
 
 /* ─── Ticket 80mm (portrait) ──────────────────────────────────────────────── */
-function Ticket80({ c, detalle, empresa: e, logoUrl, fmtM }) {
+function Ticket80({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
   return (
     <div
       id="ticket"
@@ -74,6 +83,7 @@ function Ticket80({ c, detalle, empresa: e, logoUrl, fmtM }) {
 
       <Divisor />
       <Totales c={c} fmtM={fmtM} />
+      <PagosProveedor c={c} pagos={pagos} fmtM={fmtM} />
 
       {c.observaciones && (
         <>
@@ -92,7 +102,7 @@ function Ticket80({ c, detalle, empresa: e, logoUrl, fmtM }) {
 }
 
 /* ─── Ticket 110mm (horizontal / ancho) ───────────────────────────────────── */
-function Ticket110({ c, detalle, empresa: e, logoUrl, fmtM }) {
+function Ticket110({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
   return (
     <div
       id="ticket"
@@ -146,38 +156,45 @@ function Ticket110({ c, detalle, empresa: e, logoUrl, fmtM }) {
       {/* ── Detalle de productos — tabla ancha ── */}
       <div style={{ marginBottom: '4px' }}>
         <div style={{ fontWeight: 'bold', fontSize: '10px', letterSpacing: '0.5px', marginBottom: '4px' }}>DETALLE DE PRODUCTOS</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '16mm 1fr 12mm 18mm 22mm', gap: '0 3px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '3px' }}>
-          {['Código', 'Descripción', 'Cant.', 'P.Unit', 'Subtotal'].map((h, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '14mm 1fr 10mm 10mm 16mm 20mm', gap: '0 3px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '3px' }}>
+          {['Código', 'Descripción', 'Cant.', 'Pend.', 'P.Unit', 'Subtotal'].map((h, i) => (
             <span key={i} style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: i >= 2 ? 'right' : 'left' }}>{h}</span>
           ))}
         </div>
         {detalle.map((d, i) => {
           const spec = specLinea(d);
+          const pend = pendienteDe(d);
           return (
             <div key={d.id_detalle} style={{ marginBottom: '3px', borderBottom: i < detalle.length - 1 ? '1px dotted #ccc' : 'none', paddingBottom: '3px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '16mm 1fr 12mm 18mm 22mm', gap: '0 3px', alignItems: 'start' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '14mm 1fr 10mm 10mm 16mm 20mm', gap: '0 3px', alignItems: 'start' }}>
                 <span style={{ fontSize: '7px', fontFamily: 'monospace', color: '#666' }}>{d.codigo_interno}</span>
                 <span style={{ fontSize: '9px', fontWeight: 'bold', wordBreak: 'break-word', lineHeight: '1.3' }}>{d.producto}</span>
                 <span style={{ fontSize: '9px', textAlign: 'right' }}>{fmtN(d.cantidad)}</span>
+                <span style={{ fontSize: '9px', textAlign: 'right', color: pend > 0 ? '#b45309' : '#15803d', fontWeight: 'bold' }}>{fmtN(pend)}</span>
                 <span style={{ fontSize: '9px', textAlign: 'right' }}>{fmtM(d.precio_unitario)}</span>
                 <span style={{ fontSize: '9px', fontWeight: 'bold', textAlign: 'right' }}>{fmtM(d.subtotal)}</span>
               </div>
               {d.marca_nombre && (
-                <div style={{ fontSize: '8px', color: '#555', paddingLeft: '18mm' }}>Marca: {d.marca_nombre}</div>
+                <div style={{ fontSize: '8px', color: '#555', paddingLeft: '14mm' }}>Marca: {d.marca_nombre}</div>
               )}
               {d.producto_detalle && (
-                <div style={{ fontSize: '8px', color: '#555', paddingLeft: '18mm' }}>{d.producto_detalle}</div>
+                <div style={{ fontSize: '8px', color: '#555', paddingLeft: '14mm' }}>{d.producto_detalle}</div>
               )}
               {spec && (
-                <div style={{ fontSize: '8px', color: '#666', paddingLeft: '18mm' }}>{spec}</div>
+                <div style={{ fontSize: '8px', color: '#666', paddingLeft: '14mm' }}>{spec}</div>
               )}
             </div>
           );
         })}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '3px', marginTop: '2px' }}>
+          <span>TOTAL PENDIENTE:</span>
+          <span>{fmtN(sumarPendiente(detalle))}</span>
+        </div>
       </div>
 
       <Divisor />
       <Totales c={c} fmtM={fmtM} fontSize="9px" />
+      <PagosProveedor c={c} pagos={pagos} fmtM={fmtM} fontSize="9px" />
 
       {c.observaciones && (
         <>
@@ -195,16 +212,16 @@ function Ticket110({ c, detalle, empresa: e, logoUrl, fmtM }) {
   );
 }
 
-/* ─── Ticket A4 (formal, 2 copias por hoja — mismo diseño que VentaImprimir) ── */
+/* ─── Ticket A4 (formal, 2 copias por hoja — mismo diseño que VentaImprimir) ──
+   Si hay muchos productos, se pagina en hojas de PRODUCTOS_POR_HOJA_A4 ítems,
+   cada hoja repite la cabecera completa (mismo número de compra) — no crea
+   compras nuevas, solo reparte el detalle de productos entre hojas. */
 function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
   const est = ESTADO_COLOR[c.estado] ?? ESTADO_COLOR.ANULADO;
-  const pagosActivos = (pagos ?? []).filter(p => p.estado !== 'ANULADO');
+  const paginas = chunkArray(detalle, PRODUCTOS_POR_HOJA_A4);
 
-  const renderCopia = () => (
+  const renderCopia = (detalleHoja, pagina, totalPaginas) => (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', lineHeight: '1.45', color: '#111' }}>
-
-      {/* Franja superior */}
-      <div style={{ height: '3px', background: '#1a1a1a', marginBottom: '10px' }} />
 
       {/* ── Cabecera: datos empresa | logo | caja documento ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center', marginBottom: '10px' }}>
@@ -231,6 +248,12 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
                 <td style={{ color: '#555', paddingRight: '10px', whiteSpace: 'nowrap' }}>N°:</td>
                 <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{c.numero}</td>
               </tr>
+              {totalPaginas > 1 && (
+                <tr>
+                  <td style={{ color: '#555', paddingRight: '10px' }}>Página:</td>
+                  <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{pagina} de {totalPaginas}</td>
+                </tr>
+              )}
               <tr>
                 <td style={{ color: '#555', paddingRight: '10px' }}>Estado:</td>
                 <td style={{ textAlign: 'right' }}>
@@ -291,14 +314,15 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '10px' }}>
         <thead>
           <tr style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1.5px solid #1a1a1a' }}>
-            {['Código', 'Producto', 'Cant.', 'U.M.', 'P. Unit.', 'Subtotal'].map((h, i) => (
+            {['Código', 'Producto', 'Cant.', 'U.M.', 'Pendiente', 'P. Unit.', 'Subtotal'].map((h, i) => (
               <th key={i} style={{ padding: '4px 6px', textAlign: i >= 2 ? 'right' : 'left', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {detalle.map((d) => {
+          {detalleHoja.map((d) => {
             const spec = specLinea(d);
+            const pend = pendienteDe(d);
             return (
               <tr key={d.id_detalle} style={{ borderBottom: '1px solid #ebebeb' }}>
                 <td style={{ padding: '4px 6px', verticalAlign: 'top', fontSize: '8px', fontFamily: 'Courier, monospace', color: '#666' }}>{d.codigo_interno}</td>
@@ -316,6 +340,7 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
                 </td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmtN(d.cantidad)}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'left', verticalAlign: 'top', fontSize: '8px', color: '#9ca3af' }}>{d.unidad_codigo}</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold', whiteSpace: 'nowrap', color: pend > 0 ? '#b45309' : '#15803d' }}>{fmtN(pend)}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmtM(d.precio_unitario)}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{fmtM(d.subtotal)}</td>
               </tr>
@@ -323,6 +348,32 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
           })}
         </tbody>
       </table>
+
+      {/* ── Resumen de recepción — solo cuando hay varias hojas, para no sumar
+           altura extra en compras de una sola página (evita que se desborde
+           a una segunda hoja casi en blanco). En una sola hoja, el pendiente
+           por producto ya se ve en la columna de la tabla. ── */}
+      {totalPaginas > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+          <table style={{ borderCollapse: 'collapse', minWidth: '60mm', fontSize: '9px' }}>
+            <tbody>
+              <tr>
+                <td style={{ padding: '2px 8px', color: '#555' }}>Total pedido (esta hoja):</td>
+                <td style={{ padding: '2px 8px', textAlign: 'right' }}>{fmtN(detalleHoja.reduce((s, d) => s + Number(d.cantidad), 0))}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '2px 8px', fontWeight: 'bold' }}>Total pendiente (esta hoja):</td>
+                <td style={{ padding: '2px 8px', textAlign: 'right', fontWeight: 'bold', color: sumarPendiente(detalleHoja) > 0 ? '#b45309' : '#15803d' }}>{fmtN(sumarPendiente(detalleHoja))}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '2px 8px', color: '#777', fontSize: '8px' }} colSpan={2}>
+                  Total general pendiente: {fmtN(sumarPendiente(detalle))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ── Observaciones / Cuotas (izquierda) + Totales (derecha), a la misma altura ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'start', marginBottom: '12px' }}>
@@ -344,16 +395,7 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
               ))}
             </div>
           )}
-          {pagosActivos.length > 0 && (
-            <div>
-              <div style={{ fontWeight: 'bold', fontSize: '10px' }}>PAGOS REGISTRADOS</div>
-              {pagosActivos.map(p => (
-                <Row key={p.id_pago}
-                  label={`${fechaCorta(p.fecha)} · ${p.metodo_pago}:`}
-                  value={fmtM(p.monto)} />
-              ))}
-            </div>
-          )}
+          <PagosProveedor c={c} pagos={pagos} fmtM={fmtM} fontSize="9px" />
         </div>
 
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
@@ -419,18 +461,15 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
     </div>
   );
 
+  // La orden de compra siempre imprime una sola copia por hoja (no doble copia
+  // con corte, como sí hacen ventas/transferencias).
   return (
     <div id="ticket" style={{ width: '190mm', background: 'white' }}>
-      {renderCopia()}
-
-      {/* Línea de corte */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
-        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-        <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
-        <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-      </div>
-
-      {renderCopia()}
+      {paginas.map((detalleHoja, i) => (
+        <div key={i} style={{ pageBreakAfter: i < paginas.length - 1 ? 'always' : 'auto' }}>
+          {renderCopia(detalleHoja, i + 1, paginas.length)}
+        </div>
+      ))}
     </div>
   );
 }
@@ -465,6 +504,33 @@ const Totales = ({ c, fmtM, fontSize = '10px' }) => (
   </div>
 );
 
+const PagosProveedor = ({ c, pagos, fmtM, fontSize = '10px' }) => {
+  const activos = (pagos ?? []).filter(p => p.estado !== 'ANULADO');
+  if (activos.length === 0 && Number(c.saldo_pendiente) === 0) return null;
+  const totalPagado = activos.reduce((s, p) => s + Number(p.monto), 0);
+  return (
+    <div style={{ fontSize, marginBottom: '2px' }}>
+      <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>PAGO A PROVEEDORES</div>
+      {activos.length > 0 ? (
+        activos.map(p => (
+          <div key={p.id_pago} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+            <span>
+              {fechaCorta(p.fecha)} · {p.metodo_pago}
+              {p.numero_referencia && <span style={{ color: '#666' }}> · Ref: {p.numero_referencia}</span>}
+              {p.observaciones && <span style={{ color: '#666' }}> — {p.observaciones}</span>}
+            </span>
+            <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>{fmtM(p.monto)}</span>
+          </div>
+        ))
+      ) : (
+        <div style={{ color: '#666' }}>Sin abonos registrados</div>
+      )}
+      {activos.length > 0 && <Row label="Total pagado:" value={fmtM(totalPagado)} bold />}
+      <Row label="Saldo actual:" value={fmtM(c.saldo_pendiente)} bold />
+    </div>
+  );
+};
+
 const Pie = ({ e, fontSize = '11px' }) => (
   <div style={{ textAlign: 'center', fontSize, marginTop: '4px' }}>
     <div style={{ fontWeight: 'bold' }}>Documento interno de control de compras</div>
@@ -482,6 +548,7 @@ const DetalleProductos = ({ detalle, fmtM }) => (
     </div>
     {detalle.map((d, i) => {
       const spec = specLinea(d);
+      const pend = pendienteDe(d);
       return (
         <div key={d.id_detalle} style={{ marginBottom: '5px', borderBottom: i < detalle.length - 1 ? '1px dotted #ccc' : 'none', paddingBottom: '3px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 16mm 20mm', gap: '0 2px', alignItems: 'start' }}>
@@ -491,6 +558,9 @@ const DetalleProductos = ({ detalle, fmtM }) => (
           </div>
           <div style={{ fontSize: '9px', color: '#444', paddingLeft: '2px' }}>
             Cod: {d.codigo_interno} · P.Unit: {fmtM(d.precio_unitario)}
+          </div>
+          <div style={{ fontSize: '9px', color: pend > 0 ? '#b45309' : '#15803d', fontWeight: 'bold', paddingLeft: '2px' }}>
+            Recibido: {fmtN(d.cantidad_recibida ?? 0)} · Pendiente: {fmtN(pend)}
           </div>
           {d.marca_nombre && (
             <div style={{ fontSize: '9px', color: '#333', paddingLeft: '2px' }}>Marca: {d.marca_nombre}</div>
@@ -504,6 +574,10 @@ const DetalleProductos = ({ detalle, fmtM }) => (
         </div>
       );
     })}
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: 'bold', borderTop: '1px solid #000', paddingTop: '3px', marginTop: '2px' }}>
+      <span>TOTAL PENDIENTE:</span>
+      <span>{fmtN(sumarPendiente(detalle))}</span>
+    </div>
   </div>
 );
 
@@ -571,8 +645,8 @@ export default function CompraImprimirDirecto() {
         {formato === 'A4'
           ? <TicketA4  c={compra} detalle={detalle} cuotas={cuotas} pagos={pagos} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
           : formato === '110mm'
-          ? <Ticket110 c={compra} detalle={detalle} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
-          : <Ticket80  c={compra} detalle={detalle} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
+          ? <Ticket110 c={compra} detalle={detalle} pagos={pagos} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
+          : <Ticket80  c={compra} detalle={detalle} pagos={pagos} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
         }
       </div>
 
@@ -582,6 +656,22 @@ export default function CompraImprimirDirecto() {
           .no-print { display: none !important; }
           body * { visibility: hidden !important; }
           #ticket, #ticket * { visibility: visible !important; }
+          /* El layout general de la app (App.jsx) fija html/body/main con altura de
+             pantalla y overflow oculto — eso recorta el contenido a 1 sola hoja al
+             imprimir. Hay que liberarlo para que el documento pueda paginar de verdad. */
+          html, body, #root {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .overflow-hidden, .overflow-y-auto {
+            overflow: visible !important;
+          }
+          .h-screen {
+            height: auto !important;
+          }
+          .min-h-screen {
+            min-height: auto !important;
+          }
           ${formato === 'A4' ? `
           #ticket {
             position: static !important;
@@ -589,10 +679,10 @@ export default function CompraImprimirDirecto() {
             padding: 0 !important;
             background: white !important;
             color: #000 !important;
-            width: 190mm !important;
+            width: 186mm !important;
             font-size: 11px !important;
           }
-          @page { size: auto; margin: 14mm; }
+          @page { size: auto; margin: 10mm; }
           ` : `
           #ticket {
             position: fixed !important;

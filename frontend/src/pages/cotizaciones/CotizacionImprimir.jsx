@@ -16,13 +16,41 @@ const ESTADO_COLOR = {
   BORRADOR:   { bg: '#f3f4f6', fg: '#6b7280' },
 };
 
-/* ─── Documento (mismo layout que CotizacionPDF.jsx, en HTML) ────────────── */
+const PRODUCTOS_POR_HOJA_A4 = 8;
+const chunkArray = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out.length ? out : [[]];
+};
+const sumarSubtotalesCot = detalle => (detalle ?? []).reduce((s, d) => s + Number(d.subtotal ?? 0), 0);
+
+/* ─── Documento (mismo layout que CotizacionPDF.jsx, en HTML) ────────────────
+   Si hay muchos productos, se pagina en hojas de PRODUCTOS_POR_HOJA_A4 ítems;
+   cada hoja repite la cabecera completa (mismo número de cotización) — una
+   sola copia por hoja, sin doble copia. */
 function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
   const clienteNombre = c.cliente_razon || `${c.cliente_nombres ?? ''} ${c.cliente_apellidos ?? ''}`.trim();
   const est = ESTADO_COLOR[c.estado] ?? ESTADO_COLOR.BORRADOR;
+  const paginas = chunkArray(c.detalle ?? [], PRODUCTOS_POR_HOJA_A4);
 
   return (
-    <div id="documento" style={{ width: '210mm', minHeight: '297mm', background: '#fff', color: '#111827', fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '10px', padding: '15mm', boxSizing: 'border-box' }}>
+    <div id="documento" style={{ width: '210mm', background: '#fff' }}>
+      {paginas.map((detalleHoja, i) => (
+        <div key={i} style={{ pageBreakAfter: i < paginas.length - 1 ? 'always' : 'auto' }}>
+          <CotizacionHoja
+            c={c} e={e} logoUrl={logoUrl}
+            clienteNombre={clienteNombre} est={est}
+            detalleHoja={detalleHoja} pagina={i + 1} totalPaginas={paginas.length}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CotizacionHoja({ c, e, logoUrl, clienteNombre, est, detalleHoja, pagina, totalPaginas }) {
+  return (
+    <div style={{ minHeight: '297mm', color: '#111827', fontFamily: 'Helvetica, Arial, sans-serif', fontSize: '10px', padding: '15mm', boxSizing: 'border-box' }}>
 
       {/* Encabezado */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #facc15', paddingBottom: '12px', marginBottom: '16px' }}>
@@ -43,6 +71,7 @@ function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
           </span>
           <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '4px', marginBottom: '2px' }}>{c.numero}</div>
           <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>Fecha: {fecha(c.fecha)}</div>
+          {totalPaginas > 1 && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>Página: {pagina} de {totalPaginas}</div>}
           {c.fecha_vencimiento && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>Válida hasta: {fecha(c.fecha_vencimiento)}</div>}
           <span style={{ fontSize: '8px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '3px', marginTop: '3px', backgroundColor: est.bg, color: est.fg }}>
             {c.estado}
@@ -82,9 +111,9 @@ function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
           </tr>
         </thead>
         <tbody>
-          {(c.detalle ?? []).map((d, i) => (
+          {detalleHoja.map((d, i) => (
             <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#fff' : '#f9fafb', borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
-              <td style={{ fontSize: '8px', color: '#9ca3af', padding: '5px 6px', verticalAlign: 'top' }}>{i + 1}</td>
+              <td style={{ fontSize: '8px', color: '#9ca3af', padding: '5px 6px', verticalAlign: 'top' }}>{(pagina - 1) * PRODUCTOS_POR_HOJA_A4 + i + 1}</td>
               <td style={{ padding: '5px 6px', verticalAlign: 'top' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '8px', color: '#111827' }}>{d.producto}</div>
                 {d.codigo_interno && <div style={{ fontSize: '7px', color: '#9ca3af', marginTop: '1px' }}>{d.codigo_interno}</div>}
@@ -109,8 +138,14 @@ function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
       {/* Totales */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px', marginBottom: '14px' }}>
         <div style={{ width: '200px' }}>
+          {totalPaginas > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+              <span style={{ fontSize: '8px', color: '#4b5563' }}>Subtotal (esta hoja):</span>
+              <span style={{ fontSize: '8px', color: '#374151' }}>Bs {fmt(sumarSubtotalesCot(detalleHoja))}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-            <span style={{ fontSize: '8px', color: '#4b5563' }}>Subtotal:</span>
+            <span style={{ fontSize: '8px', color: '#4b5563' }}>{totalPaginas > 1 ? 'Subtotal (total):' : 'Subtotal:'}</span>
             <span style={{ fontSize: '8px', color: '#374151' }}>Bs {fmt(c.subtotal)}</span>
           </div>
           {Number(c.descuento_porc) > 0 && (
@@ -202,6 +237,19 @@ export default function CotizacionImprimir() {
           .no-print { display: none !important; }
           body * { visibility: hidden !important; }
           #documento, #documento * { visibility: visible !important; }
+          html, body, #root {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .overflow-hidden, .overflow-y-auto {
+            overflow: visible !important;
+          }
+          .h-screen {
+            height: auto !important;
+          }
+          .min-h-screen {
+            min-height: auto !important;
+          }
           #documento {
             position: static !important;
             margin: 0 !important;

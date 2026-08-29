@@ -3,6 +3,9 @@ import {
 } from '@react-pdf/renderer';
 import { comprasService } from '../../services/compras.service';
 
+const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+const buildFileUrl = url => !url ? null : (url.startsWith('http') ? url : BACKEND + url);
+
 const fmt   = n  => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN  = n  => Number(n ?? 0).toLocaleString('es-BO', { maximumFractionDigits: 4 });
 const fecha = s  => s ? new Date(s.includes('T') ? s : s + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
@@ -96,6 +99,15 @@ const S = StyleSheet.create({
               padding: 8, marginBottom: 12 },
   obsText:  { fontSize: 8, color: '#374151', marginTop: 2 },
 
+  // Imagen de factura / comprobantes
+  facturaImg: { width: 170, height: 220, objectFit: 'contain', borderWidth: 1,
+                borderColor: '#e5e7eb', borderRadius: 3, marginTop: 4, alignSelf: 'center' },
+  compGrid:   { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 4 },
+  compCard:   { width: 100, alignItems: 'center' },
+  compImg:    { width: 90, height: 90, objectFit: 'cover', borderWidth: 1,
+                borderColor: '#e5e7eb', borderRadius: 3 },
+  compLbl:    { fontSize: 6.5, color: '#6b7280', marginTop: 2, textAlign: 'center' },
+
   // Tabla chica (cuotas/pagos)
   tSmHead:  { flexDirection: 'row', backgroundColor: '#f3f4f6',
               borderWidth: 1, borderColor: '#e5e7eb' },
@@ -116,7 +128,7 @@ const S = StyleSheet.create({
 });
 
 /* ─── Documento PDF ────────────────────────────────────────────────────── */
-function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: e, logoUrl }) {
+function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: e, logoUrl, facturaImagen }) {
   const sym  = c.moneda_simbolo ?? c.moneda_codigo ?? '';
   const fmtM = (n) => `${sym} ${fmt(n)}`;
   const est  = ESTADO_COLOR[c.estado] ?? ESTADO_COLOR.ANULADO;
@@ -127,8 +139,8 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
     <Document>
       <Page size="A4" style={S.page}>
 
-        {/* ── Encabezado ── */}
-        <View style={S.header}>
+        {/* ── Encabezado (fixed: se repite en cada hoja) ── */}
+        <View style={S.header} fixed>
           <View>
             {logoUrl && logoUrl !== '/logo.png' && (
               <Image src={logoUrl} style={S.logo} />
@@ -267,6 +279,15 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
           </>
         )}
 
+        {/* ── Factura / Nota de venta del proveedor ── */}
+        {facturaImagen && (
+          <>
+            <View style={S.divider} />
+            <Text style={S.secTitle}>Factura / Nota de Venta del Proveedor</Text>
+            <Image src={facturaImagen} style={S.facturaImg} />
+          </>
+        )}
+
         {/* ── Cuotas ── */}
         {cuotas.length > 0 && (
           <>
@@ -308,6 +329,20 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
                 <Text style={[S.td, { width: 100, textAlign: 'right', fontFamily: 'Courier' }]}>{fmtM(p.monto)}</Text>
               </View>
             ))}
+
+            {pagosActivos.some(p => p.comprobante_base64) && (
+              <View style={{ marginTop: 8 }}>
+                <Text style={S.secTitle}>Comprobantes de Pago</Text>
+                <View style={S.compGrid}>
+                  {pagosActivos.filter(p => p.comprobante_base64).map(p => (
+                    <View key={p.id_pago} style={S.compCard}>
+                      <Image src={p.comprobante_base64} style={S.compImg} />
+                      <Text style={S.compLbl}>{p.numero} · {fecha(p.fecha?.slice(0, 10))}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </>
         )}
 
@@ -367,16 +402,25 @@ export async function descargarCompraPDF(id, empresa, logoUrl) {
     comprasService.getOne(id),
     urlToBase64(logoUrl),
   ]);
-  const { compra, detalle, cuotas, pagos } = data;
+  const { compra, detalle, cuotas, pagos = [] } = data;
+
+  const [facturaBase64, pagosConImagen] = await Promise.all([
+    urlToBase64(buildFileUrl(compra.factura_imagen_url)),
+    Promise.all(pagos.map(async p => ({
+      ...p,
+      comprobante_base64: await urlToBase64(buildFileUrl(p.comprobante_url)),
+    }))),
+  ]);
 
   const blob = await pdf(
     <CompraDoc
       compra={compra}
       detalle={detalle}
       cuotas={cuotas}
-      pagos={pagos}
+      pagos={pagosConImagen}
       empresa={empresa}
       logoUrl={logoBase64}
+      facturaImagen={facturaBase64}
     />
   ).toBlob();
 

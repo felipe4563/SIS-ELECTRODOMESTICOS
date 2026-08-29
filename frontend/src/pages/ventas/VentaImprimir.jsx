@@ -243,7 +243,7 @@ function Ticket110({ data, logoUrl }) {
   );
 }
 
-const PRODUCTOS_POR_HOJA_A4 = 3;
+const PRODUCTOS_POR_HOJA_A4 = 2;
 const chunkArray = (arr, size) => {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -265,9 +265,6 @@ function TicketA4({ data, logoUrl }) {
 
   const renderCopia = (detalleHoja, pagina, totalPaginas) => (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', lineHeight: '1.45', color: '#111' }}>
-
-      {/* Franja superior */}
-      <div style={{ height: '3px', background: '#1a1a1a', marginBottom: '10px' }} />
 
       {/* ── Cabecera: datos empresa | logo | caja recibo ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center', marginBottom: '10px' }}>
@@ -464,7 +461,7 @@ function TicketA4({ data, logoUrl }) {
           {renderCopia(detalleHoja, i + 1, paginas.length)}
 
           {/* Línea de corte */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '4mm auto', width: '90mm', maxWidth: '100%' }}>
             <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
             <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
             <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
@@ -697,6 +694,19 @@ export default function VentaImprimir() {
           .no-print { display: none !important; }
           body * { visibility: hidden !important; }
           #ticket, #ticket * { visibility: visible !important; }
+          html, body, #root {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .overflow-hidden, .overflow-y-auto {
+            overflow: visible !important;
+          }
+          .h-screen {
+            height: auto !important;
+          }
+          .min-h-screen {
+            min-height: auto !important;
+          }
           ${formato === 'A4' ? `
           #ticket {
             position: static !important;
@@ -704,10 +714,10 @@ export default function VentaImprimir() {
             padding: 0 !important;
             background: white !important;
             color: #000 !important;
-            width: 190mm !important;
+            width: 186mm !important;
             font-size: 11px !important;
           }
-          @page { size: auto; margin: 14mm; }
+          @page { size: auto; margin: 10mm; }
           ` : `
           #ticket {
             position: fixed !important;

@@ -7,11 +7,26 @@ export const comprasService = {
   create:          (data)               => api.post('/compras', data),
   update:          (id, data)           => api.put(`/compras/${id}`, data),
   actualizarFactura: (id, numero_factura) => api.put(`/compras/${id}/factura`, { numero_factura }),
+  subirFacturaImagen: (id, file) => {
+    const form = new FormData();
+    form.append('imagen', file);
+    return api.post(`/compras/${id}/factura-imagen`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   aprobar:         (id)                 => api.post(`/compras/${id}/aprobar`),
   confirmar:       (id, data)           => api.post(`/compras/${id}/confirmar`, data),
   recibir:         (id, data)           => api.post(`/compras/${id}/recibir`, data),
   anular:          (id)                 => api.post(`/compras/${id}/anular`),
-  createPago:      (id, data)           => api.post(`/compras/${id}/pagos`, data),
+  createPago:      (id, data, comprobanteFile) => {
+    if (!comprobanteFile) return api.post(`/compras/${id}/pagos`, data);
+    const form = new FormData();
+    Object.entries(data).forEach(([k, v]) => { if (v !== undefined && v !== null) form.append(k, v); });
+    form.append('comprobante', comprobanteFile);
+    return api.post(`/compras/${id}/pagos`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   anularPago:      (id, idPago)         => api.delete(`/compras/${id}/pagos/${idPago}`),
   actualizarCuota: (id, idCuota, data)  => api.put(`/compras/${id}/cuotas/${idCuota}`, data),
 };

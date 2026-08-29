@@ -1,4 +1,6 @@
 const db    = require('../config/db');
+const fs    = require('fs');
+const path  = require('path');
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
@@ -214,7 +216,7 @@ const createCompra = async (req, res) => {
   try {
     const {
       id_proveedor, id_sucursal, id_deposito_destino, id_moneda,
-      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, items,
+      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, numero_factura, items,
     } = req.body;
 
     if (!id_proveedor || !id_sucursal || !id_deposito_destino || !id_moneda)
@@ -230,13 +232,13 @@ const createCompra = async (req, res) => {
          (numero, id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
           estado, condicion_pago, dias_credito, fecha_pedido, fecha_estim_llegada,
           subtotal, descuento, impuesto, flete, otros_costos, total, saldo_pendiente,
-          id_usuario_crea, observaciones)
-       VALUES (?,?,?,?,?,?, 'PRE_PEDIDO','CONTADO',0, ?,?, ?,?,?,?,?,?,?, ?,?)`,
+          id_usuario_crea, observaciones, numero_factura)
+       VALUES (?,?,?,?,?,?, 'PRE_PEDIDO','CONTADO',0, ?,?, ?,?,?,?,?,?,?, ?,?,?)`,
       [numero, id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
        fecha_pedido || new Date().toISOString().slice(0, 10), fecha_estim_llegada || null,
        tots.subtotal, tots.descuento, tots.impuesto, tots.flete, tots.otros_costos,
        tots.total, tots.total,
-       req.user.id_usuario, observaciones || null]
+       req.user.id_usuario, observaciones || null, numero_factura?.trim() || null]
     );
     const id_compra = r.insertId;
 
@@ -255,6 +257,8 @@ const createCompra = async (req, res) => {
     await auditLog(req.user.id_usuario, 'compras', id_compra, 'INSERT', getIp(req));
     res.status(201).json({ id_compra, numero });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Ese número de factura ya está registrado en otra compra' });
     console.error('[createCompra]', err);
     res.status(500).json({ error: 'Error al crear compra' });
   }
@@ -274,7 +278,7 @@ const updateCompra = async (req, res) => {
 
     const {
       id_proveedor, id_sucursal, id_deposito_destino, id_moneda,
-      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, items,
+      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, numero_factura, items,
     } = req.body;
 
     if (!Array.isArray(items) || !items.length)
@@ -287,12 +291,12 @@ const updateCompra = async (req, res) => {
          id_proveedor=?, id_sucursal=?, id_deposito_destino=?, id_moneda=?, tipo_cambio=?,
          fecha_pedido=?, fecha_estim_llegada=?,
          subtotal=?, descuento=?, impuesto=?, flete=?, otros_costos=?,
-         total=?, saldo_pendiente=?, observaciones=?
+         total=?, saldo_pendiente=?, observaciones=?, numero_factura=?
        WHERE id_compra = ?`,
       [id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
        fecha_pedido, fecha_estim_llegada || null,
        tots.subtotal, tots.descuento, tots.impuesto, tots.flete, tots.otros_costos,
-       tots.total, tots.total, observaciones || null, id]
+       tots.total, tots.total, observaciones || null, numero_factura?.trim() || null, id]
     );
 
     await db.promise().query(`DELETE FROM compra_detalle WHERE id_compra = ?`, [id]);
@@ -311,6 +315,8 @@ const updateCompra = async (req, res) => {
     await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
     res.json({ ok: true });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Ese número de factura ya está registrado en otra compra' });
     console.error('[updateCompra]', err);
     res.status(500).json({ error: 'Error al actualizar compra' });
   }
@@ -616,8 +622,9 @@ const createPago = async (req, res) => {
     const {
       metodo_pago, id_moneda, tipo_cambio = 1, monto,
       id_cuota, id_cuenta_proveedor,
-      numero_referencia, comprobante_url, observaciones, fecha,
+      numero_referencia, observaciones, fecha,
     } = req.body;
+    const comprobante_url = req.file ? `/uploads/compras/${req.file.filename}` : (req.body.comprobante_url || null);
 
     if (!metodo_pago || !id_moneda || !monto)
       return res.status(400).json({ error: 'Método de pago, moneda y monto son requeridos' });
@@ -649,7 +656,7 @@ const createPago = async (req, res) => {
       [numeroPago, id, id_cuota || null, compra.id_proveedor, compra.id_sucursal,
        fecha ? new Date(fecha) : new Date(),
        metodo_pago, id_cuenta_proveedor || null, id_moneda, tipo_cambio, montoPago,
-       numero_referencia || null, comprobante_url || null,
+       numero_referencia || null, comprobante_url,
        req.user.id_usuario, observaciones || null]
     );
 
@@ -722,6 +729,36 @@ const actualizarCuota = async (req, res) => {
   }
 };
 
+// ── Subir imagen de factura / nota de venta del proveedor ─────────────────────
+
+const subirFacturaImagen = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen' });
+
+    const [[compra]] = await db.promise().query(
+      `SELECT factura_imagen_url FROM compras WHERE id_compra = ?`, [id]
+    );
+    if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
+
+    const url = `/uploads/compras/${req.file.filename}`;
+    await db.promise().query(
+      `UPDATE compras SET factura_imagen_url = ? WHERE id_compra = ?`, [url, id]
+    );
+
+    if (compra.factura_imagen_url) {
+      const anterior = path.join(__dirname, '..', compra.factura_imagen_url.replace(/^\/+/, ''));
+      fs.unlink(anterior, () => {});
+    }
+
+    await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
+    res.json({ factura_imagen_url: url, mensaje: 'Imagen subida correctamente' });
+  } catch (err) {
+    console.error('[subirFacturaImagen]', err);
+    res.status(500).json({ error: 'Error al subir la imagen' });
+  }
+};
+
 // ── Anular pago ───────────────────────────────────────────────────────────────
 
 const anularPago = async (req, res) => {
@@ -755,6 +792,11 @@ const anularPago = async (req, res) => {
 
     await db.promise().query(`DELETE FROM pagos_compra WHERE id_pago = ?`, [idPago]);
 
+    if (pago.comprobante_url) {
+      const archivo = path.join(__dirname, '..', pago.comprobante_url.replace(/^\/+/, ''));
+      fs.unlink(archivo, () => {});
+    }
+
     // Recalcular saldo del proveedor si la compra era a crédito
     if (compraAnular?.condicion_pago === 'CREDITO') {
       await db.promise().query(
@@ -779,7 +821,7 @@ const anularPago = async (req, res) => {
 module.exports = {
   getFormData,
   getCompras, getCompra,
-  createCompra, updateCompra, actualizarFacturaCompra,
+  createCompra, updateCompra, actualizarFacturaCompra, subirFacturaImagen,
   aprobarCompra, confirmarPedido, recibirMercaderia, anularCompra,
   createPago, anularPago,
   actualizarCuota,

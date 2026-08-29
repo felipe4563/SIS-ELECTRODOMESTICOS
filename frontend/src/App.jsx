@@ -97,6 +97,7 @@ import CobroRecibo from './pages/cobros/CobroRecibo';
 import ServicioTecnico         from './pages/servicioTecnico/ServicioTecnico';
 import ServicioTecnicoForm     from './pages/servicioTecnico/ServicioTecnicoForm';
 import ServicioTecnicoDetalle  from './pages/servicioTecnico/ServicioTecnicoDetalle';
+import ServicioTecnicoImprimirDirecto from './pages/servicioTecnico/ServicioTecnicoImprimirDirecto';
 import TecnicosExternos        from './pages/servicioTecnico/TecnicosExternos';
 
 // ── Ventas ────────────────────────────────────────────────────────────────────
@@ -434,6 +435,11 @@ export default function App() {
               <Route path="/servicio-tecnico/:id/editar" element={
                 <PageRoute action="editar" subject="servicio_tecnico">
                   <ServicioTecnicoForm />
+                </PageRoute>
+              } />
+              <Route path="/servicio-tecnico/:id/imprimir" element={
+                <PageRoute action="imprimir" subject="servicio_tecnico">
+                  <ServicioTecnicoImprimirDirecto />
                 </PageRoute>
               } />
 

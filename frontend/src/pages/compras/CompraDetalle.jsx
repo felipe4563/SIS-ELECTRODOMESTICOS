@@ -5,6 +5,9 @@ import { descargarCompraPDF } from './CompraImprimir';
 import { usePermission }   from '../../hooks/usePermission';
 import { useEmpresa }      from '../../contexts/EmpresaContext';
 
+const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+const buildFileUrl = url => !url ? null : (url.startsWith('http') ? url : BACKEND + url);
+
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtDT    = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -83,6 +86,48 @@ function FacturaProvCell({ id, value, editable, onSaved }) {
         <button onClick={() => setEdit(false)} disabled={saving} className="text-zinc-400 hover:text-zinc-300 text-xs">✕</button>
       </div>
       {errLocal && <p className="text-xs text-red-500 mt-1">{errLocal}</p>}
+    </div>
+  );
+}
+
+// ── Imagen de factura / nota de venta del proveedor ────────────────────────────
+function FacturaImagenUpload({ id, url, editable, onSubir }) {
+  const [subiendo, setSubiendo] = useState(false);
+  const [err,      setErr]      = useState('');
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setSubiendo(true); setErr('');
+    try {
+      await onSubir(id, file);
+    } catch (error) {
+      setErr(error?.response?.data?.error ?? 'Error al subir la imagen');
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-0.5">Foto de factura / nota de venta</p>
+      <div className="flex items-center gap-2">
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
+            <img src={url} alt="Factura" className="w-12 h-12 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+          </a>
+        ) : (
+          <span className="text-zinc-400 dark:text-zinc-500 italic text-sm">Sin imagen</span>
+        )}
+        {editable && (
+          <label className={`text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${subiendo ? 'opacity-50 pointer-events-none' : ''}`}>
+            {subiendo ? 'Subiendo…' : (url ? 'Cambiar' : '+ Tomar foto / subir')}
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} disabled={subiendo} />
+          </label>
+        )}
+      </div>
+      {err && <p className="text-xs text-red-500 mt-1">{err}</p>}
     </div>
   );
 }
@@ -242,13 +287,24 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
 // ── Modal Pagar ───────────────────────────────────────────────────────────────
 function ModalPagar({ cuotas, monedas, saldoPendiente, onConfirm, onClose, loading, error }) {
   const HOY = new Date().toISOString().slice(0, 10);
+  const cuotasPendientes = cuotas.filter(c => c.estado !== 'PAGADA').sort((a, b) => a.numero_cuota - b.numero_cuota);
+  const cuotaSugerida = cuotasPendientes[0] ?? null;
   const [form, setForm] = useState({
     metodo_pago: 'EFECTIVO', id_moneda: '', tipo_cambio: '1',
-    monto: String(+Number(saldoPendiente).toFixed(2)),
-    id_cuota: '', numero_referencia: '', observaciones: '', fecha: HOY,
+    monto: String(+Number(cuotaSugerida ? cuotaSugerida.monto : saldoPendiente).toFixed(2)),
+    id_cuota: cuotaSugerida ? String(cuotaSugerida.id_cuota) : '',
+    numero_referencia: '', observaciones: '', fecha: HOY,
   });
+  const [comprobanteFile, setComprobanteFile] = useState(null);
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const cuotasPendientes = cuotas.filter(c => c.estado !== 'PAGADA');
+  const seleccionarCuota = (id_cuota) => {
+    const cuota = cuotasPendientes.find(c => String(c.id_cuota) === id_cuota);
+    setForm(p => ({
+      ...p,
+      id_cuota,
+      monto: cuota ? String(+Number(cuota.monto).toFixed(2)) : String(+Number(saldoPendiente).toFixed(2)),
+    }));
+  };
   const METODOS = ['EFECTIVO', 'TRANSFERENCIA', 'QR', 'CHEQUE', 'TARJETA', 'OTRO'];
 
   return (
@@ -282,8 +338,8 @@ function ModalPagar({ cuotas, monedas, saldoPendiente, onConfirm, onClose, loadi
         </div>
         {cuotasPendientes.length > 0 && (
           <div>
-            <label className={labelCls}>Aplicar a cuota (opcional)</label>
-            <select value={form.id_cuota} onChange={e => setF('id_cuota', e.target.value)} className={fieldCls}>
+            <label className={labelCls}>Aplicar a cuota</label>
+            <select value={form.id_cuota} onChange={e => seleccionarCuota(e.target.value)} className={fieldCls}>
               <option value="">Sin cuota específica</option>
               {cuotasPendientes.map(c => (
                 <option key={c.id_cuota} value={c.id_cuota}>
@@ -303,13 +359,28 @@ function ModalPagar({ cuotas, monedas, saldoPendiente, onConfirm, onClose, loadi
           <input type="text" value={form.observaciones}
             onChange={e => setF('observaciones', e.target.value)} className={fieldCls} />
         </div>
+        <div>
+          <label className={labelCls}>Foto del comprobante / recibo</label>
+          <div className="flex items-center gap-2">
+            {comprobanteFile ? (
+              <img src={URL.createObjectURL(comprobanteFile)} alt="Comprobante" className="w-12 h-12 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+            ) : (
+              <span className="text-zinc-400 dark:text-zinc-500 italic text-sm">Sin foto</span>
+            )}
+            <label className="text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline">
+              {comprobanteFile ? 'Cambiar' : '+ Tomar foto / subir'}
+              <input type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={e => setComprobanteFile(e.target.files?.[0] ?? null)} />
+            </label>
+          </div>
+        </div>
         {error && <p className="text-sm text-red-500">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} disabled={loading}
             className="flex-1 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50">
             Cancelar
           </button>
-          <button onClick={() => onConfirm(form)} disabled={loading}
+          <button onClick={() => onConfirm(form, comprobanteFile)} disabled={loading}
             className="flex-1 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
             {loading ? 'Guardando…' : 'Registrar pago'}
           </button>
@@ -502,12 +573,12 @@ export default function CompraDetalle() {
       {modal === 'pagar' && (
         <ModalPagar cuotas={cuotas} monedas={monedas} saldoPendiente={compra.saldo_pendiente}
           loading={saving} error={modalErr} onClose={closeModal}
-          onConfirm={form => runAction(() => comprasService.createPago(id, {
+          onConfirm={(form, comprobanteFile) => runAction(() => comprasService.createPago(id, {
             ...form,
             id_cuota:  form.id_cuota  ? Number(form.id_cuota)  : undefined,
             id_moneda: form.id_moneda ? Number(form.id_moneda) : undefined,
             monto:     Number(form.monto),
-          }))} />
+          }, comprobanteFile))} />
       )}
       {modal === 'anular' && (
         <Modal titulo="Anular compra" onClose={closeModal}>
@@ -658,6 +729,15 @@ export default function CompraDetalle() {
                 onSaved={async (id, nuevoValor) => {
                   const { data } = await comprasService.actualizarFactura(id, nuevoValor);
                   setData(prev => ({ ...prev, compra: data.compra }));
+                }}
+              />
+              <FacturaImagenUpload
+                id={compra.id_compra}
+                url={buildFileUrl(compra.factura_imagen_url)}
+                editable={puedeEditarFactura}
+                onSubir={async (id, file) => {
+                  const { data } = await comprasService.subirFacturaImagen(id, file);
+                  setData(prev => ({ ...prev, compra: { ...prev.compra, factura_imagen_url: data.factura_imagen_url } }));
                 }}
               />
             </div>
@@ -937,7 +1017,7 @@ export default function CompraDetalle() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                      {['Número', 'Fecha', 'Método', 'Monto', 'Cuota', 'Registrado por', ...(puedeAnulPago ? [''] : [])].map(h => (
+                      {['Número', 'Fecha', 'Método', 'Monto', 'Cuota', 'Comprobante', 'Registrado por', ...(puedeAnulPago ? [''] : [])].map(h => (
                         <th key={h} className={thCls}>{h}</th>
                       ))}
                     </tr>
@@ -950,6 +1030,15 @@ export default function CompraDetalle() {
                         <td className="px-4 py-3 whitespace-nowrap text-zinc-700 dark:text-zinc-300">{p.metodo_pago}</td>
                         <td className="px-4 py-3 text-right font-mono font-semibold text-green-600 dark:text-green-400">{fmtMonto(p.monto)}</td>
                         <td className="px-4 py-3 text-zinc-400">{p.numero_cuota ? `#${p.numero_cuota}` : '—'}</td>
+                        <td className="px-4 py-3">
+                          {p.comprobante_url ? (
+                            <a href={buildFileUrl(p.comprobante_url)} target="_blank" rel="noreferrer">
+                              <img src={buildFileUrl(p.comprobante_url)} alt="Comprobante" className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                            </a>
+                          ) : (
+                            <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
                           {p.usuario_nombres} {p.usuario_apellidos}
                         </td>
@@ -988,6 +1077,11 @@ export default function CompraDetalle() {
                       {p.numero_cuota && <span>· Cuota #{p.numero_cuota}</span>}
                       <span>· {p.usuario_nombres} {p.usuario_apellidos}</span>
                     </div>
+                    {p.comprobante_url && (
+                      <a href={buildFileUrl(p.comprobante_url)} target="_blank" rel="noreferrer" className="inline-block mb-2">
+                        <img src={buildFileUrl(p.comprobante_url)} alt="Comprobante" className="w-10 h-10 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                      </a>
+                    )}
                     {puedeAnulPago && (
                       <button
                         onClick={() => {

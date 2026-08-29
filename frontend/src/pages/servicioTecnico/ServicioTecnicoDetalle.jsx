@@ -303,6 +303,12 @@ export default function ServicioTecnicoDetalle() {
                 </button>
               )}
               {puedeImprimir && (
+                <button onClick={() => navigate(`/servicio-tecnico/${id}/imprimir`)}
+                  className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-center">
+                  Imprimir
+                </button>
+              )}
+              {puedeImprimir && (
                 <button onClick={descargarPDF} disabled={descargando}
                   className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-center disabled:opacity-50 flex items-center justify-center gap-1.5">
                   {descargando && <FaSpinner className="animate-spin" size={10} />}

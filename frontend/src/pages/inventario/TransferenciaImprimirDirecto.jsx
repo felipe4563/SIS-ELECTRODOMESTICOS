@@ -27,7 +27,7 @@ const sumarTotales = (detalle = []) => detalle.reduce((acc, d) => ({
   recibida: acc.recibida + Number(d.cantidad_recibida ?? 0),
 }), { enviada: 0, recibida: 0 });
 
-const PRODUCTOS_POR_HOJA_A4 = 3;
+const PRODUCTOS_POR_HOJA_A4 = 13;
 const chunkArray = (arr, size) => {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -208,7 +208,7 @@ function Ticket110({ t, detalle, empresa: e, logoUrl }) {
   );
 }
 
-/* ─── Ticket A4 (formal, 2 copias por hoja — mismo diseño que VentaImprimir) ──
+/* ─── Ticket A4 (formal, 1 copia por hoja) ──
    Si hay muchos productos, se pagina en hojas de PRODUCTOS_POR_HOJA_A4 ítems,
    cada hoja repite la cabecera completa (mismo número de transferencia) y
    muestra los totales de esa hoja — no crea transferencias nuevas. */
@@ -218,9 +218,6 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
 
   const renderCopia = (detalleHoja, pagina, totalPaginas) => (
     <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', lineHeight: '1.45', color: '#111' }}>
-
-      {/* Franja superior */}
-      <div style={{ height: '3px', background: '#1a1a1a', marginBottom: '10px' }} />
 
       {/* ── Cabecera: datos empresa | logo | caja documento ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center', marginBottom: '10px' }}>
@@ -394,19 +391,12 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
     </div>
   );
 
+  // La nota de transferencia imprime una sola copia por hoja (no doble copia
+  // con corte, como sí hace ventas).
   return (
     <div id="ticket" style={{ width: '190mm', background: 'white' }}>
       {paginas.map((detalleHoja, i) => (
-        <div key={i} className="tf-hoja" style={{ pageBreakAfter: i < paginas.length - 1 ? 'always' : 'auto' }}>
-          {renderCopia(detalleHoja, i + 1, paginas.length)}
-
-          {/* Línea de corte */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10mm 0' }}>
-            <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-            <span style={{ fontSize: '9px', color: '#bbb', letterSpacing: '2px', whiteSpace: 'nowrap', userSelect: 'none' }}>✂ &nbsp; CORTAR AQUÍ &nbsp; ✂</span>
-            <div style={{ flex: 1, borderTop: '1px dashed #bbb' }} />
-          </div>
-
+        <div key={i} style={{ pageBreakAfter: i < paginas.length - 1 ? 'always' : 'auto' }}>
           {renderCopia(detalleHoja, i + 1, paginas.length)}
         </div>
       ))}
@@ -570,6 +560,19 @@ export default function TransferenciaImprimirDirecto() {
           .no-print { display: none !important; }
           body * { visibility: hidden !important; }
           #ticket, #ticket * { visibility: visible !important; }
+          html, body, #root {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .overflow-hidden, .overflow-y-auto {
+            overflow: visible !important;
+          }
+          .h-screen {
+            height: auto !important;
+          }
+          .min-h-screen {
+            min-height: auto !important;
+          }
           ${formato === 'A4' ? `
           #ticket {
             position: static !important;
@@ -577,10 +580,10 @@ export default function TransferenciaImprimirDirecto() {
             padding: 0 !important;
             background: white !important;
             color: #000 !important;
-            width: 190mm !important;
+            width: 186mm !important;
             font-size: 11px !important;
           }
-          @page { size: auto; margin: 14mm; }
+          @page { size: auto; margin: 10mm; }
           ` : `
           #ticket {
             position: fixed !important;
