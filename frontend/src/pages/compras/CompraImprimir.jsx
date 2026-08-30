@@ -113,6 +113,9 @@ const S = StyleSheet.create({
               borderWidth: 1, borderColor: '#e5e7eb' },
   tSmRow:   { flexDirection: 'row', borderLeftWidth: 1, borderRightWidth: 1,
               borderBottomWidth: 1, borderColor: '#e5e7eb' },
+  tSmRowWrap: { borderLeftWidth: 1, borderRightWidth: 1,
+                borderBottomWidth: 1, borderColor: '#e5e7eb' },
+  tSmObs:     { fontSize: 7, color: '#6b7280', paddingHorizontal: 5, paddingBottom: 4 },
 
   // Firmas
   firmas:   { flexDirection: 'row', justifyContent: 'space-around', marginTop: 40, gap: 20 },
@@ -292,21 +295,23 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
         {cuotas.length > 0 && (
           <>
             <View style={S.divider} />
-            <Text style={S.secTitle}>Plan de Cuotas</Text>
-            <View style={S.tSmHead}>
-              <Text style={[S.th, { width: 40 }]}>Cuota</Text>
-              <Text style={[S.th, { flex: 1 }]}>Vencimiento</Text>
-              <Text style={[S.th, { width: 100, textAlign: 'right' }]}>Monto</Text>
-              <Text style={[S.th, { width: 70, textAlign: 'right' }]}>Estado</Text>
-            </View>
-            {cuotas.map(cu => (
-              <View key={cu.id_cuota} style={S.tSmRow}>
-                <Text style={[S.td, { width: 40, textAlign: 'center', color: '#6b7280' }]}>{cu.numero_cuota}</Text>
-                <Text style={[S.td, { flex: 1 }]}>{fecha(cu.fecha_vencimiento)}</Text>
-                <Text style={[S.td, { width: 100, textAlign: 'right', fontFamily: 'Courier' }]}>{fmtM(cu.monto)}</Text>
-                <Text style={[S.td, { width: 70, textAlign: 'right', fontSize: 7, color: '#6b7280' }]}>{cu.estado}</Text>
+            <View wrap={false}>
+              <Text style={S.secTitle}>Plan de Cuotas</Text>
+              <View style={S.tSmHead}>
+                <Text style={[S.th, { width: 40 }]}>Cuota</Text>
+                <Text style={[S.th, { flex: 1 }]}>Vencimiento</Text>
+                <Text style={[S.th, { width: 100, textAlign: 'right' }]}>Monto</Text>
+                <Text style={[S.th, { width: 70, textAlign: 'right' }]}>Estado</Text>
               </View>
-            ))}
+              {cuotas.map(cu => (
+                <View key={cu.id_cuota} style={S.tSmRow}>
+                  <Text style={[S.td, { width: 40, textAlign: 'center', color: '#6b7280' }]}>{cu.numero_cuota}</Text>
+                  <Text style={[S.td, { flex: 1 }]}>{fecha(cu.fecha_vencimiento)}</Text>
+                  <Text style={[S.td, { width: 100, textAlign: 'right', fontFamily: 'Courier' }]}>{fmtM(cu.monto)}</Text>
+                  <Text style={[S.td, { width: 70, textAlign: 'right', fontSize: 7, color: '#6b7280' }]}>{cu.estado}</Text>
+                </View>
+              ))}
+            </View>
           </>
         )}
 
@@ -314,24 +319,31 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
         {pagosActivos.length > 0 && (
           <>
             <View style={S.divider} />
-            <Text style={S.secTitle}>Pagos Registrados</Text>
-            <View style={S.tSmHead}>
-              <Text style={[S.th, { width: 90 }]}>N° Pago</Text>
-              <Text style={[S.th, { flex: 1 }]}>Método</Text>
-              <Text style={[S.th, { width: 70, textAlign: 'right' }]}>Fecha</Text>
-              <Text style={[S.th, { width: 100, textAlign: 'right' }]}>Monto</Text>
-            </View>
-            {pagosActivos.map(p => (
-              <View key={p.id_pago} style={S.tSmRow}>
-                <Text style={[S.td, { width: 90, fontFamily: 'Courier', fontSize: 7 }]}>{p.numero}</Text>
-                <Text style={[S.td, { flex: 1 }]}>{p.metodo_pago}</Text>
-                <Text style={[S.td, { width: 70, textAlign: 'right' }]}>{fecha(p.fecha?.slice(0, 10))}</Text>
-                <Text style={[S.td, { width: 100, textAlign: 'right', fontFamily: 'Courier' }]}>{fmtM(p.monto)}</Text>
+            <View wrap={false}>
+              <Text style={S.secTitle}>Pagos Registrados</Text>
+              <View style={S.tSmHead}>
+                <Text style={[S.th, { width: 90 }]}>N° Pago</Text>
+                <Text style={[S.th, { flex: 1 }]}>Método</Text>
+                <Text style={[S.th, { width: 70, textAlign: 'right' }]}>Fecha</Text>
+                <Text style={[S.th, { width: 100, textAlign: 'right' }]}>Monto</Text>
               </View>
-            ))}
+              {pagosActivos.map(p => (
+                <View key={p.id_pago} style={S.tSmRowWrap}>
+                  <View style={{ flexDirection: 'row' }}>
+                    <Text style={[S.td, { width: 90, fontFamily: 'Courier', fontSize: 7 }]}>{p.numero}</Text>
+                    <Text style={[S.td, { flex: 1 }]}>{p.metodo_pago}</Text>
+                    <Text style={[S.td, { width: 70, textAlign: 'right' }]}>{fecha(p.fecha?.slice(0, 10))}</Text>
+                    <Text style={[S.td, { width: 100, textAlign: 'right', fontFamily: 'Courier' }]}>{fmtM(p.monto)}</Text>
+                  </View>
+                  {p.observaciones && (
+                    <Text style={S.tSmObs}>{p.observaciones}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
 
             {pagosActivos.some(p => p.comprobante_base64) && (
-              <View style={{ marginTop: 8 }}>
+              <View style={{ marginTop: 8 }} wrap={false}>
                 <Text style={S.secTitle}>Comprobantes de Pago</Text>
                 <View style={S.compGrid}>
                   {pagosActivos.filter(p => p.comprobante_base64).map(p => (

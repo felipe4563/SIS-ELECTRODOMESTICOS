@@ -328,6 +328,7 @@ export default function CompraForm() {
   // ── Carrito ────────────────────────────────────────────────────────────────
   const agregarAlCarrito = useCallback((prod) => {
     if (!prod) return;
+    setFiltroMarca(''); setFiltroProducto(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
     setItems(prev => {
       const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
       if (idx >= 0) {
