@@ -44,6 +44,11 @@ router.put ('/:id', authMiddleware, checkPermission('editar_pre_pedido','compras
 router.put ('/:id/factura', authMiddleware, puedeEditarFactura, ctrl.actualizarFacturaCompra);
 router.post('/:id/factura-imagen', authMiddleware, puedeEditarFactura,
   upload.single('imagen'), validateMagic(IMAGES_ONLY), ctrl.subirFacturaImagen);
+router.post('/:id/detalle/:idDetalle/imagen', authMiddleware, puedeEditarFactura,
+  upload.single('imagen'), validateMagic(IMAGES_ONLY), ctrl.subirImagenDetalle);
+router.post('/:id/detalle/:idDetalle/series', authMiddleware, puedeEditarFactura,
+  upload.single('imagen'), validateMagic(IMAGES_ONLY), ctrl.agregarSerieDetalle);
+router.delete('/:id/detalle/:idDetalle/series/:idSerie', authMiddleware, puedeEditarFactura, ctrl.eliminarSerieDetalle);
 
 router.post('/:id/aprobar',   authMiddleware, checkPermission('aprobar',           'compras'), ctrl.aprobarCompra);
 router.post('/:id/confirmar', authMiddleware, checkPermission('confirmar_pedido',  'compras'), ctrl.confirmarPedido);

@@ -122,7 +122,7 @@ export default function Empresa() {
   );
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       <PageHeader
         title="Datos de la Empresa"
         description="Información general de tu empresa"
@@ -145,10 +145,15 @@ export default function Empresa() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 space-y-6">
+      <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-6 sm:p-8 space-y-7">
 
         {/* ── Sección logo ── */}
-        <div className="flex items-center gap-5 pb-5 border-b border-gray-100 dark:border-zinc-800">
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-0.5 h-4 rounded-full bg-amber-400" />
+            <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Identidad visual</p>
+          </div>
+          <div className="flex items-center gap-5 pb-6 border-b border-gray-100 dark:border-zinc-800">
           <div className="relative group shrink-0">
             <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
               {logoPreview && logoPreview !== '/logo.png' ? (
@@ -203,39 +208,58 @@ export default function Empresa() {
               </div>
             )}
           </div>
+          </div>
         </div>
 
         {/* ── Formulario datos ── */}
-        <form onSubmit={puedeEditar ? handleSubmit : e => e.preventDefault()} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className={label}>Razón Social *</label>
-              <input name="razon_social" value={form.razon_social ?? ''} onChange={handleChange} readOnly={!puedeEditar} required className={puedeEditar ? campo : campoSoloLectura} placeholder="Razón social de la empresa" />
+        <form onSubmit={puedeEditar ? handleSubmit : e => e.preventDefault()} className="space-y-7">
+
+          {/* Datos generales */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-0.5 h-4 rounded-full bg-amber-400" />
+              <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Datos generales</p>
             </div>
-            <div>
-              <label className={label}>Nombre Comercial</label>
-              <input name="nombre_comercial" value={form.nombre_comercial ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="Nombre comercial" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className={label}>Razón Social *</label>
+                <input name="razon_social" value={form.razon_social ?? ''} onChange={handleChange} readOnly={!puedeEditar} required className={puedeEditar ? campo : campoSoloLectura} placeholder="Razón social de la empresa" />
+              </div>
+              <div>
+                <label className={label}>Nombre Comercial</label>
+                <input name="nombre_comercial" value={form.nombre_comercial ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="Nombre comercial" />
+              </div>
+              <div>
+                <label className={label}>NIT / RUC</label>
+                <input name="nit" value={form.nit ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="Número de NIT" />
+              </div>
             </div>
-            <div>
-              <label className={label}>NIT / RUC</label>
-              <input name="nit" value={form.nit ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="Número de NIT" />
+          </div>
+
+          {/* Contacto */}
+          <div className="pt-6 border-t border-gray-100 dark:border-zinc-800">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-0.5 h-4 rounded-full bg-amber-400" />
+              <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Contacto</p>
             </div>
-            <div className="sm:col-span-2">
-              <label className={label}>Dirección</label>
-              <input name="direccion" value={form.direccion ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="Dirección principal" />
-            </div>
-            <div>
-              <label className={label}>Teléfono</label>
-              <input name="telefono" value={form.telefono ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="+591 ..." />
-            </div>
-            <div>
-              <label className={label}>Correo Electrónico</label>
-              <input name="email" type="email" value={form.email ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="contacto@empresa.com" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className={label}>Dirección</label>
+                <input name="direccion" value={form.direccion ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="Dirección principal" />
+              </div>
+              <div>
+                <label className={label}>Teléfono</label>
+                <input name="telefono" value={form.telefono ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="+591 ..." />
+              </div>
+              <div>
+                <label className={label}>Correo Electrónico</label>
+                <input name="email" type="email" value={form.email ?? ''} onChange={handleChange} readOnly={!puedeEditar} className={puedeEditar ? campo : campoSoloLectura} placeholder="contacto@empresa.com" />
+              </div>
             </div>
           </div>
 
           {(puedeEditar || !empresa) && (
-            <div className="pt-2 flex justify-end">
+            <div className="pt-6 border-t border-gray-100 dark:border-zinc-800 flex justify-end">
               <button
                 type="submit"
                 disabled={guardando}

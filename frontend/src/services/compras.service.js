@@ -14,6 +14,22 @@ export const comprasService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  subirImagenDetalle: (id, idDetalle, file) => {
+    const form = new FormData();
+    form.append('imagen', file);
+    return api.post(`/compras/${id}/detalle/${idDetalle}/imagen`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  agregarSerieDetalle: (id, idDetalle, numero_serie, file) => {
+    const form = new FormData();
+    form.append('numero_serie', numero_serie);
+    if (file) form.append('imagen', file);
+    return api.post(`/compras/${id}/detalle/${idDetalle}/series`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  eliminarSerieDetalle: (id, idDetalle, idSerie) => api.delete(`/compras/${id}/detalle/${idDetalle}/series/${idSerie}`),
   aprobar:         (id)                 => api.post(`/compras/${id}/aprobar`),
   confirmar:       (id, data)           => api.post(`/compras/${id}/confirmar`, data),
   recibir:         (id, data)           => api.post(`/compras/${id}/recibir`, data),

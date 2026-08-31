@@ -241,7 +241,7 @@ export default function ServicioTecnicoDetalle() {
   const fmtDt = d => d ? new Date(d).toLocaleString('es-PY') : null;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="space-y-4">
 
       {/* ── Docket header — número de orden estilo ticket de taller ── */}
       <div className={`${CARD} overflow-hidden`}>

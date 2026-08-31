@@ -114,7 +114,7 @@ export default function CotizacionDetalle() {
   const esTerminal = ['CONVERTIDA', 'ANULADA', 'RECHAZADA'].includes(estado);
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5">
 
       {/* Breadcrumb + encabezado */}
       <div>

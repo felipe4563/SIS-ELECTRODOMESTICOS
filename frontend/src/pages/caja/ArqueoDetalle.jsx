@@ -713,7 +713,7 @@ export default function ArqueoDetalle() {
   ];
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>

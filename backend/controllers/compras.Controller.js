@@ -79,9 +79,15 @@ const getFormData = async (req, res) => {
       db.promise().query(`
         SELECT p.id_producto, p.codigo_interno, p.codigo_barras, p.producto, p.precio_real,
                p.id_impuesto_default, p.id_proveedor_default, p.modelo, p.color, p.capacidad,
-               p.detalle AS producto_detalle, p.imagen_url, m.nombre AS marca
+               p.detalle AS producto_detalle, p.imagen_url, m.nombre AS marca,
+               p.stock_minimo, p.stock_maximo,
+               COALESCE(st.stock_actual, 0) AS stock_actual
         FROM productos p
         LEFT JOIN marcas m ON m.id_marca = p.id_marca
+        LEFT JOIN (
+          SELECT id_producto, SUM(cantidad) AS stock_actual
+          FROM stock GROUP BY id_producto
+        ) st ON st.id_producto = p.id_producto
         WHERE p.activo = 1 ORDER BY p.producto
       `),
       db.promise().query(`SELECT id_impuesto, codigo, nombre, porcentaje, tipo, es_default, activo
@@ -187,6 +193,16 @@ const getCompra = async (req, res) => {
        WHERE cd.id_compra = ?
        ORDER BY cd.id_detalle`, [id]
     );
+    if (detalle.length) {
+      const [series] = await db.promise().query(
+        `SELECT id_serie, id_detalle, numero_serie, imagen_url
+         FROM compra_detalle_series WHERE id_detalle IN (?)
+         ORDER BY id_serie`, [detalle.map(d => d.id_detalle)]
+      );
+      for (const d of detalle) {
+        d.series = series.filter(s => s.id_detalle === d.id_detalle);
+      }
+    }
 
     const [cuotas] = await db.promise().query(
       `SELECT * FROM compra_cuotas WHERE id_compra = ? ORDER BY numero_cuota`, [id]
@@ -203,7 +219,29 @@ const getCompra = async (req, res) => {
        ORDER BY pg.fecha DESC`, [id]
     );
 
-    res.json({ compra, detalle, cuotas, pagos });
+    const [recepciones] = await db.promise().query(
+      `SELECT cr.id_recepcion, cr.fecha, cr.observaciones,
+              u.nombres AS usuario_nombres, u.apellidos AS usuario_apellidos
+       FROM compra_recepciones cr
+       JOIN usuarios u ON u.id_usuario = cr.id_usuario
+       WHERE cr.id_compra = ?
+       ORDER BY cr.fecha DESC`, [id]
+    );
+    if (recepciones.length) {
+      const [recDetalle] = await db.promise().query(
+        `SELECT crd.id_recepcion, crd.cantidad_recibida, cd.id_producto,
+                p.producto, p.codigo_interno
+         FROM compra_recepcion_detalle crd
+         JOIN compra_detalle cd ON cd.id_detalle = crd.id_detalle
+         JOIN productos p ON p.id_producto = cd.id_producto
+         WHERE crd.id_recepcion IN (?)`, [recepciones.map(r => r.id_recepcion)]
+      );
+      for (const r of recepciones) {
+        r.items = recDetalle.filter(d => d.id_recepcion === r.id_recepcion);
+      }
+    }
+
+    res.json({ compra, detalle, cuotas, pagos, recepciones });
   } catch (err) {
     console.error('[getCompra]', err);
     res.status(500).json({ error: 'Error al obtener compra' });
@@ -216,7 +254,7 @@ const createCompra = async (req, res) => {
   try {
     const {
       id_proveedor, id_sucursal, id_deposito_destino, id_moneda,
-      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, numero_factura, items,
+      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, numero_factura, procedencia, items,
     } = req.body;
 
     if (!id_proveedor || !id_sucursal || !id_deposito_destino || !id_moneda)
@@ -232,13 +270,13 @@ const createCompra = async (req, res) => {
          (numero, id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
           estado, condicion_pago, dias_credito, fecha_pedido, fecha_estim_llegada,
           subtotal, descuento, impuesto, flete, otros_costos, total, saldo_pendiente,
-          id_usuario_crea, observaciones, numero_factura)
-       VALUES (?,?,?,?,?,?, 'PRE_PEDIDO','CONTADO',0, ?,?, ?,?,?,?,?,?,?, ?,?,?)`,
+          id_usuario_crea, observaciones, numero_factura, procedencia)
+       VALUES (?,?,?,?,?,?, 'PRE_PEDIDO','CONTADO',0, ?,?, ?,?,?,?,?,?,?, ?,?,?,?)`,
       [numero, id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
        fecha_pedido || new Date().toISOString().slice(0, 10), fecha_estim_llegada || null,
        tots.subtotal, tots.descuento, tots.impuesto, tots.flete, tots.otros_costos,
        tots.total, tots.total,
-       req.user.id_usuario, observaciones || null, numero_factura?.trim() || null]
+       req.user.id_usuario, observaciones || null, numero_factura?.trim() || null, procedencia?.trim() || null]
     );
     const id_compra = r.insertId;
 
@@ -278,7 +316,7 @@ const updateCompra = async (req, res) => {
 
     const {
       id_proveedor, id_sucursal, id_deposito_destino, id_moneda,
-      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, numero_factura, items,
+      tipo_cambio = 1, fecha_pedido, fecha_estim_llegada, observaciones, numero_factura, procedencia, items,
     } = req.body;
 
     if (!Array.isArray(items) || !items.length)
@@ -291,12 +329,12 @@ const updateCompra = async (req, res) => {
          id_proveedor=?, id_sucursal=?, id_deposito_destino=?, id_moneda=?, tipo_cambio=?,
          fecha_pedido=?, fecha_estim_llegada=?,
          subtotal=?, descuento=?, impuesto=?, flete=?, otros_costos=?,
-         total=?, saldo_pendiente=?, observaciones=?, numero_factura=?
+         total=?, saldo_pendiente=?, observaciones=?, numero_factura=?, procedencia=?
        WHERE id_compra = ?`,
       [id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
        fecha_pedido, fecha_estim_llegada || null,
        tots.subtotal, tots.descuento, tots.impuesto, tots.flete, tots.otros_costos,
-       tots.total, tots.total, observaciones || null, numero_factura?.trim() || null, id]
+       tots.total, tots.total, observaciones || null, numero_factura?.trim() || null, procedencia?.trim() || null, id]
     );
 
     await db.promise().query(`DELETE FROM compra_detalle WHERE id_compra = ?`, [id]);
@@ -477,6 +515,12 @@ const recibirMercaderia = async (req, res) => {
       });
     }
 
+    const [recepcionRes] = await db.promise().query(
+      `INSERT INTO compra_recepciones (id_compra, id_usuario, observaciones) VALUES (?,?,?)`,
+      [id, req.user.id_usuario, observaciones || null]
+    );
+    const id_recepcion = recepcionRes.insertId;
+
     for (const rec of recepciones) {
       const detalle = detalles.find(d => d.id_detalle === Number(rec.id_detalle));
       if (!detalle) continue;
@@ -485,6 +529,11 @@ const recibirMercaderia = async (req, res) => {
       const maxPendiente  = +(Number(detalle.cantidad) - Number(detalle.cantidad_recibida)).toFixed(4);
       const cantReal      = +Math.min(cantNueva, maxPendiente).toFixed(4);
       if (cantReal <= 0) continue;
+
+      await db.promise().query(
+        `INSERT INTO compra_recepcion_detalle (id_recepcion, id_detalle, cantidad_recibida) VALUES (?,?,?)`,
+        [id_recepcion, detalle.id_detalle, cantReal]
+      );
 
       await db.promise().query(
         `UPDATE compra_detalle SET cantidad_recibida = cantidad_recibida + ? WHERE id_detalle = ?`,
@@ -759,6 +808,96 @@ const subirFacturaImagen = async (req, res) => {
   }
 };
 
+// ── Subir imagen del producto recibido (por línea de detalle) ─────────────────
+
+const subirImagenDetalle = async (req, res) => {
+  try {
+    const { id, idDetalle } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen' });
+
+    const [[detalle]] = await db.promise().query(
+      `SELECT imagen_url FROM compra_detalle WHERE id_detalle = ? AND id_compra = ?`, [idDetalle, id]
+    );
+    if (!detalle) return res.status(404).json({ error: 'Línea de compra no encontrada' });
+
+    const url = `/uploads/compras/${req.file.filename}`;
+    await db.promise().query(
+      `UPDATE compra_detalle SET imagen_url = ? WHERE id_detalle = ?`, [url, idDetalle]
+    );
+
+    if (detalle.imagen_url) {
+      const anterior = path.join(__dirname, '..', detalle.imagen_url.replace(/^\/+/, ''));
+      fs.unlink(anterior, () => {});
+    }
+
+    await auditLog(req.user.id_usuario, 'compra_detalle', idDetalle, 'UPDATE', getIp(req));
+    res.json({ imagen_url: url, mensaje: 'Imagen subida correctamente' });
+  } catch (err) {
+    console.error('[subirImagenDetalle]', err);
+    res.status(500).json({ error: 'Error al subir la imagen' });
+  }
+};
+
+// ── Agregar número de serie + foto de una unidad recibida ─────────────────────
+
+const agregarSerieDetalle = async (req, res) => {
+  try {
+    const { id, idDetalle } = req.params;
+    const { numero_serie } = req.body;
+    if (!numero_serie?.trim())
+      return res.status(400).json({ error: 'El número de serie es requerido' });
+
+    const [[detalle]] = await db.promise().query(
+      `SELECT cd.id_detalle, cd.cantidad_recibida
+       FROM compra_detalle cd WHERE cd.id_detalle = ? AND cd.id_compra = ?`, [idDetalle, id]
+    );
+    if (!detalle) return res.status(404).json({ error: 'Línea de compra no encontrada' });
+
+    const [[{ cnt }]] = await db.promise().query(
+      `SELECT COUNT(*) AS cnt FROM compra_detalle_series WHERE id_detalle = ?`, [idDetalle]
+    );
+    if (cnt >= Number(detalle.cantidad_recibida)) {
+      return res.status(409).json({ error: 'Ya se registraron números de serie para todas las unidades recibidas' });
+    }
+
+    const imagenUrl = req.file ? `/uploads/compras/${req.file.filename}` : null;
+    const [r] = await db.promise().query(
+      `INSERT INTO compra_detalle_series (id_detalle, numero_serie, imagen_url, id_usuario) VALUES (?,?,?,?)`,
+      [idDetalle, numero_serie.trim(), imagenUrl, req.user.id_usuario]
+    );
+
+    await auditLog(req.user.id_usuario, 'compra_detalle_series', r.insertId, 'INSERT', getIp(req));
+    res.status(201).json({ id_serie: r.insertId, numero_serie: numero_serie.trim(), imagen_url: imagenUrl });
+  } catch (err) {
+    console.error('[agregarSerieDetalle]', err);
+    res.status(500).json({ error: 'Error al registrar el número de serie' });
+  }
+};
+
+const eliminarSerieDetalle = async (req, res) => {
+  try {
+    const { id, idDetalle, idSerie } = req.params;
+    const [[serie]] = await db.promise().query(
+      `SELECT s.imagen_url FROM compra_detalle_series s
+       JOIN compra_detalle cd ON cd.id_detalle = s.id_detalle
+       WHERE s.id_serie = ? AND s.id_detalle = ? AND cd.id_compra = ?`, [idSerie, idDetalle, id]
+    );
+    if (!serie) return res.status(404).json({ error: 'Número de serie no encontrado' });
+
+    await db.promise().query(`DELETE FROM compra_detalle_series WHERE id_serie = ?`, [idSerie]);
+    if (serie.imagen_url) {
+      const archivo = path.join(__dirname, '..', serie.imagen_url.replace(/^\/+/, ''));
+      fs.unlink(archivo, () => {});
+    }
+
+    await auditLog(req.user.id_usuario, 'compra_detalle_series', idSerie, 'DELETE', getIp(req));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[eliminarSerieDetalle]', err);
+    res.status(500).json({ error: 'Error al eliminar el número de serie' });
+  }
+};
+
 // ── Anular pago ───────────────────────────────────────────────────────────────
 
 const anularPago = async (req, res) => {
@@ -821,7 +960,8 @@ const anularPago = async (req, res) => {
 module.exports = {
   getFormData,
   getCompras, getCompra,
-  createCompra, updateCompra, actualizarFacturaCompra, subirFacturaImagen,
+  createCompra, updateCompra, actualizarFacturaCompra, subirFacturaImagen, subirImagenDetalle,
+  agregarSerieDetalle, eliminarSerieDetalle,
   aprobarCompra, confirmarPedido, recibirMercaderia, anularCompra,
   createPago, anularPago,
   actualizarCuota,

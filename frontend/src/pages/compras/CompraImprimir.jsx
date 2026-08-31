@@ -9,6 +9,7 @@ const buildFileUrl = url => !url ? null : (url.startsWith('http') ? url : BACKEN
 const fmt   = n  => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN  = n  => Number(n ?? 0).toLocaleString('es-BO', { maximumFractionDigits: 4 });
 const fecha = s  => s ? new Date(s.includes('T') ? s : s + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+const fechaHora = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
 const ESTADO_COLOR = {
   PRE_PEDIDO: { bg: '#f4f4f5', fg: '#52525b' },
@@ -117,6 +118,15 @@ const S = StyleSheet.create({
                 borderBottomWidth: 1, borderColor: '#e5e7eb' },
   tSmObs:     { fontSize: 7, color: '#6b7280', paddingHorizontal: 5, paddingBottom: 4 },
 
+  // Historial de recepciones
+  recBox:     { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 3, padding: 8, marginBottom: 8 },
+  recHead:    { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
+  recFecha:   { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#111827' },
+  recUser:    { fontSize: 7, color: '#9ca3af' },
+  recItem:    { fontSize: 7.5, color: '#374151', marginTop: 1 },
+  recObs:     { fontSize: 7.5, color: '#6b7280', fontStyle: 'italic', marginTop: 4,
+                backgroundColor: '#f9fafb', borderRadius: 2, padding: 4 },
+
   // Firmas
   firmas:   { flexDirection: 'row', justifyContent: 'space-around', marginTop: 40, gap: 20 },
   firmaBlq: { flex: 1, alignItems: 'center' },
@@ -131,7 +141,7 @@ const S = StyleSheet.create({
 });
 
 /* ─── Documento PDF ────────────────────────────────────────────────────── */
-function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: e, logoUrl, facturaImagen }) {
+function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], recepciones = [], empresa: e, logoUrl, facturaImagen }) {
   const sym  = c.moneda_simbolo ?? c.moneda_codigo ?? '';
   const fmtM = (n) => `${sym} ${fmt(n)}`;
   const est  = ESTADO_COLOR[c.estado] ?? ESTADO_COLOR.ANULADO;
@@ -172,6 +182,7 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
             <Text style={S.val}>{c.proveedor_nombre}</Text>
             {c.proveedor_codigo   && <Text style={S.sub}>Cód: {c.proveedor_codigo}</Text>}
             {c.proveedor_telefono && <Text style={S.sub}>Tel: {c.proveedor_telefono}</Text>}
+            {c.procedencia        && <Text style={S.sub}>Procedencia: {c.procedencia}</Text>}
           </View>
           <View style={S.col}>
             <Text style={S.lbl}>Destino</Text>
@@ -288,6 +299,30 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], empresa: 
             <View style={S.divider} />
             <Text style={S.secTitle}>Factura / Nota de Venta del Proveedor</Text>
             <Image src={facturaImagen} style={S.facturaImg} />
+          </>
+        )}
+
+        {/* ── Historial de recepciones ── */}
+        {recepciones.length > 0 && (
+          <>
+            <View style={S.divider} />
+            <Text style={S.secTitle}>Historial de Recepciones</Text>
+            {recepciones.map(r => (
+              <View key={r.id_recepcion} style={S.recBox} wrap={false}>
+                <View style={S.recHead}>
+                  <Text style={S.recFecha}>{fechaHora(r.fecha)}</Text>
+                  <Text style={S.recUser}>{r.usuario_nombres} {r.usuario_apellidos}</Text>
+                </View>
+                {(r.items ?? []).map((it, i) => (
+                  <Text key={i} style={S.recItem}>
+                    {fmtN(it.cantidad_recibida)} × {it.producto} ({it.codigo_interno})
+                  </Text>
+                ))}
+                {r.observaciones && (
+                  <Text style={S.recObs}>{r.observaciones}</Text>
+                )}
+              </View>
+            ))}
           </>
         )}
 
@@ -414,7 +449,7 @@ export async function descargarCompraPDF(id, empresa, logoUrl) {
     comprasService.getOne(id),
     urlToBase64(logoUrl),
   ]);
-  const { compra, detalle, cuotas, pagos = [] } = data;
+  const { compra, detalle, cuotas, pagos = [], recepciones = [] } = data;
 
   const [facturaBase64, pagosConImagen] = await Promise.all([
     urlToBase64(buildFileUrl(compra.factura_imagen_url)),
@@ -430,6 +465,7 @@ export async function descargarCompraPDF(id, empresa, logoUrl) {
       detalle={detalle}
       cuotas={cuotas}
       pagos={pagosConImagen}
+      recepciones={recepciones}
       empresa={empresa}
       logoUrl={logoBase64}
       facturaImagen={facturaBase64}

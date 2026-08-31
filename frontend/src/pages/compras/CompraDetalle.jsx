@@ -132,6 +132,164 @@ function FacturaImagenUpload({ id, url, editable, onSubir }) {
   );
 }
 
+// ── Imagen del producto recibido (por línea de detalle) ───────────────────────
+function ImagenDetalleUpload({ id, idDetalle, url, editable, onSubir, compact = false }) {
+  const [subiendo, setSubiendo] = useState(false);
+  const [err,      setErr]      = useState('');
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setSubiendo(true); setErr('');
+    try {
+      await onSubir(id, idDetalle, file);
+    } catch (error) {
+      setErr(error?.response?.data?.error ?? 'Error al subir la imagen');
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const inputEl = (
+    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} disabled={subiendo} />
+  );
+
+  if (compact) {
+    return (
+      <div className="flex flex-col items-center gap-1 w-16 mx-auto text-center">
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer">
+            <img src={url} alt="Producto recibido" className="w-11 h-11 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+          </a>
+        ) : (
+          <div className="w-11 h-11 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-300 dark:text-zinc-600 text-[9px] leading-tight">
+            Sin foto
+          </div>
+        )}
+        {editable && (
+          <label className={`text-[10px] font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${subiendo ? 'opacity-50 pointer-events-none' : ''}`}>
+            {subiendo ? '…' : (url ? 'Cambiar' : '+ Foto')}
+            {inputEl}
+          </label>
+        )}
+        {err && <p className="text-[9px] text-red-500 leading-tight">{err}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
+          <img src={url} alt="Producto recibido" className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+        </a>
+      ) : (
+        <span className="text-zinc-300 dark:text-zinc-600 text-xs italic">Sin foto</span>
+      )}
+      {editable && (
+        <label className={`text-[11px] font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline whitespace-nowrap ${subiendo ? 'opacity-50 pointer-events-none' : ''}`}>
+          {subiendo ? 'Subiendo…' : (url ? 'Cambiar' : '+ Foto')}
+          {inputEl}
+        </label>
+      )}
+      {err && <p className="text-[10px] text-red-500">{err}</p>}
+    </div>
+  );
+}
+
+// ── Números de serie por unidad recibida (uno por unidad, con foto opcional) ──
+function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEliminar }) {
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [numeroSerie,  setNumeroSerie]  = useState('');
+  const [file,         setFile]         = useState(null);
+  const [guardando,    setGuardando]    = useState(false);
+  const [err,          setErr]          = useState('');
+
+  if (maxCantidad <= 0) return null;
+  const puedeAgregar = editable && series.length < maxCantidad;
+
+  const agregar = async () => {
+    if (!numeroSerie.trim()) return setErr('Ingresá el número de serie');
+    setGuardando(true); setErr('');
+    try {
+      await onAgregar(numeroSerie.trim(), file);
+      setNumeroSerie(''); setFile(null);
+    } catch (e) {
+      setErr(e?.response?.data?.error ?? 'Error al guardar');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button" onClick={() => setModalAbierto(true)}
+        className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+      >
+        {series.length > 0 ? `Ver series y fotos (${series.length}/${maxCantidad})` : `+ Agregar N° de serie (0/${maxCantidad})`}
+      </button>
+
+      {modalAbierto && (
+        <Modal titulo="Números de serie" onClose={() => { setModalAbierto(false); setErr(''); }}>
+          <div className="space-y-4">
+            {series.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {series.map(s => {
+                  const url = buildFileUrl(s.imagen_url);
+                  return (
+                    <div key={s.id_serie} className="relative flex flex-col items-center">
+                      {editable && (
+                        <button onClick={() => onEliminar(s.id_serie)}
+                          className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-zinc-700 text-white text-xs leading-none flex items-center justify-center hover:bg-red-500 transition-colors">
+                          ×
+                        </button>
+                      )}
+                      {url ? (
+                        <a href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt="N° serie" className="w-20 h-20 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                        </a>
+                      ) : (
+                        <div className="w-20 h-20 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-300 dark:text-zinc-600 text-[10px] text-center">
+                          Sin foto
+                        </div>
+                      )}
+                      <span className="mt-1.5 font-mono text-xs text-zinc-600 dark:text-zinc-300 text-center break-all">
+                        {s.numero_serie}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-400 text-center py-4">Todavía no se registró ningún número de serie.</p>
+            )}
+
+            {puedeAgregar && (
+              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-wrap items-center gap-2">
+                <input type="text" value={numeroSerie} onChange={e => setNumeroSerie(e.target.value)}
+                  placeholder="N° de serie" disabled={guardando}
+                  className="flex-1 min-w-[140px] px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <label className={`text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${guardando ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {file ? 'Foto ✓' : '+ Foto'}
+                  <input type="file" accept="image/*" capture="environment" className="hidden" disabled={guardando}
+                    onChange={e => setFile(e.target.files?.[0] ?? null)} />
+                </label>
+                <button onClick={agregar} disabled={guardando}
+                  className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-zinc-900 text-xs font-semibold disabled:opacity-50 transition-colors">
+                  {guardando ? 'Guardando…' : 'Agregar'}
+                </button>
+              </div>
+            )}
+            {err && <p className="text-xs text-red-500">{err}</p>}
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 // ── Modal base ────────────────────────────────────────────────────────────────
 function Modal({ titulo, onClose, children }) {
   return (
@@ -227,7 +385,7 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
                       <p className="text-[11px] text-zinc-400 mb-1">
                         Pedido: {fmtNum(d.cantidad)} · Recibido: {fmtNum(d.cantidad_recibida)} · Pendiente: <span className="font-semibold text-orange-500">{fmtNum(maxPend)}</span>
                       </p>
-                      <input type="number" min="0" max={maxPend} step="0.01"
+                      <input type="number" min="0" max={maxPend} step="1"
                         value={recs[idx]?.cantidad_recibida ?? 0}
                         onChange={e => setRec(idx, Number(e.target.value))}
                         className={fieldCls} />
@@ -458,6 +616,30 @@ export default function CompraDetalle() {
     comprasService.getFormData().then(r => setMonedas(r.data.monedas ?? [])).catch(() => {});
   }, []); // eslint-disable-line
 
+  const subirImagenDetalle = async (idCompra, idDetalle, file) => {
+    const { data: res } = await comprasService.subirImagenDetalle(idCompra, idDetalle, file);
+    setData(prev => ({
+      ...prev,
+      detalle: prev.detalle.map(d => d.id_detalle === idDetalle ? { ...d, imagen_url: res.imagen_url } : d),
+    }));
+  };
+
+  const agregarSerie = async (idDetalle, numeroSerie, file) => {
+    const { data: res } = await comprasService.agregarSerieDetalle(id, idDetalle, numeroSerie, file);
+    setData(prev => ({
+      ...prev,
+      detalle: prev.detalle.map(d => d.id_detalle === idDetalle ? { ...d, series: [...(d.series ?? []), res] } : d),
+    }));
+  };
+
+  const eliminarSerie = async (idDetalle, idSerie) => {
+    await comprasService.eliminarSerieDetalle(id, idDetalle, idSerie);
+    setData(prev => ({
+      ...prev,
+      detalle: prev.detalle.map(d => d.id_detalle === idDetalle ? { ...d, series: (d.series ?? []).filter(s => s.id_serie !== idSerie) } : d),
+    }));
+  };
+
   const openModal  = m => { setModalErr(''); setModal(m); };
   const closeModal = () => { setModal(null); setModalErr(''); };
 
@@ -509,7 +691,7 @@ export default function CompraDetalle() {
     <div className="flex items-center justify-center py-20 text-zinc-400 text-sm">Compra no encontrada</div>
   );
 
-  const { compra, detalle, cuotas, pagos } = data;
+  const { compra, detalle, cuotas, pagos, recepciones = [] } = data;
   const badge = ESTADO_BADGE[compra.estado] ?? { label: compra.estado, cls: 'bg-zinc-100 text-zinc-600' };
 
   const puedeEditar        = puede('editar_pre_pedido',  'compras') && compra.estado === 'PRE_PEDIDO';
@@ -540,7 +722,7 @@ export default function CompraDetalle() {
   };
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5">
 
       {/* Modales */}
       {modal === 'aprobar' && (
@@ -712,6 +894,7 @@ export default function CompraDetalle() {
                 ['Depósito dest.', compra.deposito_nombre],
                 ['Moneda',         `${compra.moneda_codigo} (TC: ${compra.tipo_cambio})`],
                 ['Cond. de pago',  compra.condicion_pago + (compra.condicion_pago === 'CREDITO' ? ` · ${compra.dias_credito} días` : '')],
+                ['Procedencia',    compra.procedencia || '—'],
                 ['Fecha pedido',   fmtFecha(compra.fecha_pedido)],
                 ['Est. llegada',   fmtFecha(compra.fecha_estim_llegada)],
                 ['Fecha recep.',   fmtFecha(compra.fecha_recepcion)],
@@ -792,9 +975,10 @@ export default function CompraDetalle() {
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
         <div className="flex border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
           {[
-            { key: 'productos', label: `Productos (${detalle.length})` },
-            { key: 'cuotas',    label: `Cuotas (${cuotas.length})` },
-            { key: 'pagos',     label: `Pagos (${pagos.length})` },
+            { key: 'productos',   label: `Productos (${detalle.length})` },
+            { key: 'recepciones', label: `Recepciones (${recepciones.length})` },
+            { key: 'cuotas',      label: `Cuotas (${cuotas.length})` },
+            { key: 'pagos',       label: `Pagos (${pagos.length})` },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-5 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
@@ -815,10 +999,10 @@ export default function CompraDetalle() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                    {['Producto', 'Cant. pedida', 'Cant. recibida', 'Pendiente',
+                    {['Producto', 'Foto', 'Cant. pedida', 'Cant. recibida', 'Pendiente',
                       ...(puedeVerCostos ? ['Precio unit.', 'Subtotal'] : [])
                     ].map(h => (
-                      <th key={h} className={thCls}>{h}</th>
+                      <th key={h} className={`${thCls} ${h === 'Foto' ? 'text-center w-20' : ''}`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -827,7 +1011,7 @@ export default function CompraDetalle() {
                     const pendiente = +(Number(d.cantidad) - Number(d.cantidad_recibida)).toFixed(4);
                     return (
                       <tr key={d.id_detalle} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-middle">
                           <p className="font-medium text-zinc-900 dark:text-white">{d.producto}</p>
                           <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{d.codigo_interno}</p>
                           {d.producto_detalle && (
@@ -836,6 +1020,23 @@ export default function CompraDetalle() {
                           {specLinea(d) && (
                             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
                           )}
+                          <SeriesDetalle
+                            series={d.series ?? []}
+                            maxCantidad={Number(d.cantidad_recibida)}
+                            editable={puedeEditarFactura}
+                            onAgregar={(numeroSerie, file) => agregarSerie(d.id_detalle, numeroSerie, file)}
+                            onEliminar={idSerie => eliminarSerie(d.id_detalle, idSerie)}
+                          />
+                        </td>
+                        <td className="px-2 py-3 align-middle">
+                          <ImagenDetalleUpload
+                            compact
+                            id={compra.id_compra}
+                            idDetalle={d.id_detalle}
+                            url={buildFileUrl(d.imagen_url)}
+                            editable={puedeEditarFactura}
+                            onSubir={subirImagenDetalle}
+                          />
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-zinc-700 dark:text-zinc-300">
                           {fmtNum(d.cantidad)} <span className="text-xs text-zinc-400">{d.unidad_codigo}</span>
@@ -874,6 +1075,22 @@ export default function CompraDetalle() {
                       {specLinea(d) && (
                         <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
                       )}
+                      <SeriesDetalle
+                        series={d.series ?? []}
+                        maxCantidad={Number(d.cantidad_recibida)}
+                        editable={puedeEditarFactura}
+                        onAgregar={(numeroSerie, file) => agregarSerie(d.id_detalle, numeroSerie, file)}
+                        onEliminar={idSerie => eliminarSerie(d.id_detalle, idSerie)}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <ImagenDetalleUpload
+                        id={compra.id_compra}
+                        idDetalle={d.id_detalle}
+                        url={buildFileUrl(d.imagen_url)}
+                        editable={puedeEditarFactura}
+                        onSubir={subirImagenDetalle}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
@@ -907,6 +1124,42 @@ export default function CompraDetalle() {
               })}
             </div>
           </>
+        )}
+
+        {/* Tab: Recepciones */}
+        {tab === 'recepciones' && (
+          recepciones.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-zinc-400 gap-2">
+              <span className="text-3xl">📦</span>
+              <p className="text-sm">Sin recepciones registradas todavía</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {recepciones.map(r => (
+                <div key={r.id_recepcion} className="px-4 py-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">{fmtDT(r.fecha)}</p>
+                    <p className="text-xs text-zinc-400">{r.usuario_nombres} {r.usuario_apellidos}</p>
+                  </div>
+                  {r.items?.length > 0 && (
+                    <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5 mb-2">
+                      {r.items.map((it, i) => (
+                        <li key={i}>
+                          <span className="font-mono text-zinc-400 mr-1">{fmtNum(it.cantidad_recibida)}×</span>
+                          {it.producto} <span className="font-mono text-[10px] text-zinc-400">({it.codigo_interno})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {r.observaciones && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 italic bg-zinc-50 dark:bg-zinc-800/60 rounded-lg px-3 py-2">
+                      {r.observaciones}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         {/* Tab: Cuotas */}

@@ -84,19 +84,37 @@ function SectionCard({ title, badge, actions, children }) {
 }
 
 /* ─── Tile de producto (grilla estilo POS) ───────────────────────────────── */
-function ProductoTile({ prod, enCarrito, onClick }) {
+function ProductoTile({ prod, enCarrito, onClick, onDecrement }) {
   const [errImg, setErrImg] = useState(false);
   const img = buildImgUrl(prod.imagen_url);
 
   return (
-    <button
+    <div
+      role="button" tabIndex={0}
       onClick={onClick}
-      className="relative flex flex-col items-stretch text-left bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:border-yellow-400 dark:hover:border-yellow-400 hover:shadow-md active:scale-[0.98] transition-all overflow-hidden group"
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      className="relative flex flex-col items-stretch text-left bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:border-yellow-400 dark:hover:border-yellow-400 hover:shadow-md active:scale-[0.98] transition-all overflow-hidden group cursor-pointer"
     >
       {enCarrito > 0 && (
-        <span className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-yellow-400 text-zinc-900 text-[11px] font-bold flex items-center justify-center shadow">
-          {enCarrito}
-        </span>
+        <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 bg-yellow-400 text-zinc-900 rounded-full shadow px-0.5 py-0.5">
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onDecrement(); }}
+            className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-yellow-500 transition-colors"
+            title="Quitar una unidad"
+          >
+            <Ic id="minus" size={10} />
+          </button>
+          <span className="min-w-[1rem] text-center text-[11px] font-bold">{enCarrito}</span>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onClick(); }}
+            className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-yellow-500 transition-colors"
+            title="Agregar una unidad"
+          >
+            <Ic id="plus" size={10} />
+          </button>
+        </div>
       )}
       <div className="aspect-square bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
         {img && !errImg ? (
@@ -117,7 +135,7 @@ function ProductoTile({ prod, enCarrito, onClick }) {
         )}
         <p className="font-mono font-bold text-sm text-zinc-900 dark:text-white">Bs {fmtMonto(prod.precio_real)}</p>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -226,6 +244,7 @@ export default function CompraForm() {
     id_moneda:           '',
     tipo_cambio:         '1',
     numero_factura:      '',
+    procedencia:         '',
     fecha_pedido:        HOY,
     fecha_estim_llegada: '',
     descuento:           '0',
@@ -246,10 +265,15 @@ export default function CompraForm() {
   const [filtroCapacidad,  setFiltroCapacidad]  = useState('');
   const [verTodosProveedor, setVerTodosProveedor] = useState(false);
 
-  const [npModal,     setNpModal]     = useState(false);
-  const [npForm,      setNpForm]      = useState(NP_VACIO);
-  const [npError,     setNpError]     = useState('');
-  const [npGuardando, setNpGuardando] = useState(false);
+  const [modoLista,      setModoLista]      = useState(false);
+  const [soloStockBajo,  setSoloStockBajo]  = useState(true);
+  const [seleccionLista, setSeleccionLista] = useState({}); // id_producto -> cantidad (string)
+
+  const [npModal,      setNpModal]      = useState(false);
+  const [npForm,       setNpForm]       = useState(NP_VACIO);
+  const [npError,      setNpError]      = useState('');
+  const [npGuardando,  setNpGuardando]  = useState(false);
+  const [npImagenFile, setNpImagenFile] = useState(null);
 
   // Carga catálogos + compra (si es edición)
   useEffect(() => {
@@ -284,6 +308,7 @@ export default function CompraForm() {
           id_moneda:           String(compra.id_moneda),
           tipo_cambio:         String(compra.tipo_cambio),
           numero_factura:      compra.numero_factura ?? '',
+          procedencia:         compra.procedencia ?? '',
           fecha_pedido:        compra.fecha_pedido?.slice(0, 10) ?? HOY,
           fecha_estim_llegada: compra.fecha_estim_llegada?.slice(0, 10) ?? '',
           descuento:           String(compra.descuento),
@@ -350,6 +375,68 @@ export default function CompraForm() {
       }];
     });
   }, [catalogo]);
+
+  const sugeridoReposicion = prod => Math.max(0, Number(prod.stock_maximo || 0) - Number(prod.stock_actual || 0));
+
+  const toggleSeleccionLista = (prod, checked) => {
+    setSeleccionLista(prev => {
+      const next = { ...prev };
+      if (checked) {
+        const sugerido = sugeridoReposicion(prod);
+        next[prod.id_producto] = String(sugerido > 0 ? sugerido : 1);
+      } else {
+        delete next[prod.id_producto];
+      }
+      return next;
+    });
+  };
+  const cambiarCantidadLista = (idProducto, valor) => setSeleccionLista(prev => ({ ...prev, [idProducto]: valor }));
+
+  const agregarSeleccionLista = () => {
+    const entradas = Object.entries(seleccionLista).filter(([, c]) => Number(c) > 0);
+    if (!entradas.length) return;
+    setFiltroMarca(''); setFiltroProducto(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+    setItems(prev => {
+      const next = [...prev];
+      for (const [idProducto, cant] of entradas) {
+        const prod = catalogo.productos.find(p => String(p.id_producto) === idProducto);
+        if (!prod) continue;
+        const idx = next.findIndex(it => String(it.id_producto) === idProducto);
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], cantidad: Number(next[idx].cantidad) + Number(cant) };
+          continue;
+        }
+        const impDef = prod.id_impuesto_default
+          ? catalogo.impuestos.find(i => String(i.id_impuesto) === String(prod.id_impuesto_default))
+          : catalogo.impuestos.find(i => i.es_default);
+        next.push({
+          _key:            crypto.randomUUID(),
+          id_producto:     idProducto,
+          cantidad:        Number(cant),
+          precio_unitario: prod.precio_real,
+          descuento_porc:  0,
+          id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
+          impuesto_porc:   impDef ? Number(impDef.porcentaje) : 0,
+        });
+      }
+      return next;
+    });
+    setSeleccionLista({});
+    setModoLista(false);
+  };
+
+  const quitarUnidadDelCarrito = useCallback((prod) => {
+    if (!prod) return;
+    setItems(prev => {
+      const idx = prev.findIndex(it => String(it.id_producto) === String(prod.id_producto));
+      if (idx < 0) return prev;
+      const cantidadNueva = Number(prev[idx].cantidad) - 1;
+      if (cantidadNueva <= 0) return prev.filter((_, i) => i !== idx);
+      const next = [...prev];
+      next[idx] = { ...next[idx], cantidad: cantidadNueva };
+      return next;
+    });
+  }, []);
 
   const cambiarCantidad = (i, delta) => {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, cantidad: Math.max(0.01, Number(it.cantidad) + delta) } : it));
@@ -419,6 +506,7 @@ export default function CompraForm() {
       id_proveedor_default: datos.id_proveedor || '',
       id_moneda_costo: catalogo?.monedas.find(m => m.es_moneda_base)?.id_moneda ?? '',
     });
+    setNpImagenFile(null);
     setNpModal(true);
   };
   const setNp = (k, v) => setNpForm(p => ({ ...p, [k]: v }));
@@ -437,6 +525,14 @@ export default function CompraForm() {
       const creado = res.data.producto;
       const marcaNombre = metaProductos?.marcas.find(m => String(m.id_marca) === String(creado.id_marca))?.nombre ?? creado.marca_nombre;
 
+      let imagenUrl = creado.imagen_url;
+      if (npImagenFile) {
+        try {
+          const imgRes = await productosService.uploadImagen(creado.id_producto, npImagenFile);
+          imagenUrl = imgRes.data.imagen_url;
+        } catch { /* el producto ya se creó; la foto se puede agregar después desde Productos */ }
+      }
+
       const prodParaCatalogo = {
         id_producto:          creado.id_producto,
         codigo_interno:       creado.codigo_interno,
@@ -449,13 +545,14 @@ export default function CompraForm() {
         color:                creado.color,
         capacidad:            creado.capacidad,
         producto_detalle:     creado.detalle,
-        imagen_url:           creado.imagen_url,
+        imagen_url:           imagenUrl,
         marca:                marcaNombre,
       };
 
       setCatalogo(prev => ({ ...prev, productos: [...prev.productos, prodParaCatalogo] }));
       agregarAlCarrito(prodParaCatalogo);
       setNpModal(false);
+      setNpImagenFile(null);
       setBusquedaProducto('');
     } catch (err) {
       setNpError(err.response?.data?.error ?? 'Error al crear el producto');
@@ -520,6 +617,11 @@ export default function CompraForm() {
     }
     return lista;
   }, [baseProductos, filtroMarca, filtroProducto, filtroModelo, filtroColor, filtroCapacidad, busquedaProducto]);
+
+  const productosListado = useMemo(
+    () => productosVisibles.filter(p => !soloStockBajo || Number(p.stock_actual ?? 0) < Number(p.stock_minimo ?? 0)),
+    [productosVisibles, soloStockBajo]
+  );
 
   const cantidadesEnCarrito = items.reduce((acc, it) => {
     acc[it.id_producto] = (acc[it.id_producto] ?? 0) + Number(it.cantidad ?? 0);
@@ -602,6 +704,19 @@ export default function CompraForm() {
           </div>
 
           <div>
+            <label className={fieldLbl}>Procedencia</label>
+            <input type="text" list="procedencias-sugeridas" value={datos.procedencia} onChange={e => setD('procedencia', e.target.value)}
+              placeholder="Ej: Santa Cruz, China…" className={compactCls} />
+            <datalist id="procedencias-sugeridas">
+              <option value="Montero" />
+              <option value="IPP" />
+              <option value="China" />
+              <option value="Santa Cruz" />
+              <option value="Tarija" />
+            </datalist>
+          </div>
+
+          <div>
             <label className={fieldLbl}>Moneda *</label>
             <select value={datos.id_moneda} onChange={e => setD('id_moneda', e.target.value)} className={compactCls}>
               <option value="">— Seleccionar —</option>
@@ -650,6 +765,18 @@ export default function CompraForm() {
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => { setModoLista(v => !v); setSeleccionLista({}); }}
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                  modoLista
+                    ? 'bg-yellow-400 text-zinc-900'
+                    : 'border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                }`}
+                title="Marcar varios productos a reponer de una sola vez"
+              >
+                <Ic id="tune" size={13} /> {modoLista ? 'Ver grilla' : 'Ver como lista (reposición)'}
+              </button>
               {puedeCrearProducto && (
                 <button
                   type="button" onClick={abrirNuevoProducto}
@@ -660,6 +787,27 @@ export default function CompraForm() {
                 </button>
               )}
             </div>
+
+            {modoLista && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                <label className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox" checked={soloStockBajo}
+                    onChange={e => setSoloStockBajo(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-yellow-400"
+                  />
+                  Solo productos con stock bajo (debajo del mínimo)
+                </label>
+                {Object.keys(seleccionLista).length > 0 && (
+                  <button
+                    type="button" onClick={agregarSeleccionLista}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 text-xs font-semibold transition-colors"
+                  >
+                    <Ic id="cart" size={13} /> Agregar {Object.keys(seleccionLista).length} marcado{Object.keys(seleccionLista).length !== 1 ? 's' : ''} al pre-pedido
+                  </button>
+                )}
+              </div>
+            )}
 
             {hayFiltroProveedor && (
               <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 cursor-pointer select-none w-fit">
@@ -700,7 +848,67 @@ export default function CompraForm() {
               </select>
             </div>
 
-            {productosVisibles.length === 0 ? (
+            {modoLista ? (
+              productosListado.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2 text-zinc-400">
+                  <Ic id="package" size={32} className="text-zinc-300 dark:text-zinc-700" />
+                  <p className="text-sm font-medium">
+                    {soloStockBajo ? 'Ningún producto está por debajo del stock mínimo' : 'Sin productos para este filtro'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto -mx-3.5">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-100 dark:border-zinc-800 text-[10px] uppercase tracking-wide text-zinc-400">
+                        <th className="w-8 px-3.5 py-2 text-left"></th>
+                        <th className="px-2 py-2 text-left">Producto</th>
+                        <th className="px-2 py-2 text-right">Stock actual</th>
+                        <th className="px-2 py-2 text-right">Mínimo</th>
+                        <th className="px-2 py-2 text-right">Sugerido</th>
+                        <th className="px-2 py-2 text-right w-24">Cantidad</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
+                      {productosListado.map(p => {
+                        const marcado = Object.prototype.hasOwnProperty.call(seleccionLista, p.id_producto);
+                        const bajoMinimo = Number(p.stock_actual ?? 0) < Number(p.stock_minimo ?? 0);
+                        return (
+                          <tr key={p.id_producto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                            <td className="px-3.5 py-2">
+                              <input
+                                type="checkbox" checked={marcado}
+                                onChange={e => toggleSeleccionLista(p, e.target.checked)}
+                                className="w-3.5 h-3.5 rounded accent-yellow-400"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <p className="font-medium text-zinc-800 dark:text-zinc-200">{p.producto}</p>
+                              <p className="font-mono text-[10px] text-amber-600 dark:text-amber-400">{p.codigo_interno}</p>
+                            </td>
+                            <td className={`px-2 py-2 text-right font-mono ${bajoMinimo ? 'text-orange-500 dark:text-orange-400 font-semibold' : 'text-zinc-500'}`}>
+                              {fmtMonto(p.stock_actual ?? 0)}
+                            </td>
+                            <td className="px-2 py-2 text-right font-mono text-zinc-400">{fmtMonto(p.stock_minimo ?? 0)}</td>
+                            <td className="px-2 py-2 text-right font-mono text-zinc-400">{fmtMonto(sugeridoReposicion(p))}</td>
+                            <td className="px-2 py-2 text-right">
+                              <input
+                                type="number" min="0" step="0.01"
+                                value={seleccionLista[p.id_producto] ?? ''}
+                                disabled={!marcado}
+                                onChange={e => cambiarCantidadLista(p.id_producto, e.target.value)}
+                                placeholder="0"
+                                className="w-20 text-right font-mono text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white py-1 px-1.5 focus:outline-none focus:ring-1 focus:ring-yellow-400 disabled:opacity-40"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : productosVisibles.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2.5 text-zinc-400">
                 <Ic id="package" size={32} className="text-zinc-300 dark:text-zinc-700" />
                 <p className="text-sm font-medium">Sin productos para este filtro</p>
@@ -721,6 +929,7 @@ export default function CompraForm() {
                     prod={p}
                     enCarrito={cantidadesEnCarrito[p.id_producto] ?? 0}
                     onClick={() => agregarAlCarrito(p)}
+                    onDecrement={() => quitarUnidadDelCarrito(p)}
                   />
                 ))}
               </div>
@@ -876,6 +1085,30 @@ export default function CompraForm() {
               <label className={labelCls}>Nombre del producto *</label>
               <input value={npForm.producto} onChange={e => setNp('producto', e.target.value)}
                 className={inputCls} placeholder="Ej: COCINA DE PISO" style={{ textTransform: 'uppercase' }} />
+            </div>
+
+            <div>
+              <label className={labelCls}>Foto del producto</label>
+              <div className="flex items-center gap-3">
+                {npImagenFile ? (
+                  <img src={URL.createObjectURL(npImagenFile)} alt="Producto" className="w-14 h-14 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-300 dark:text-zinc-600">
+                    <Ic id="package" size={20} />
+                  </div>
+                )}
+                <label className="text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline">
+                  {npImagenFile ? 'Cambiar' : '+ Tomar foto / subir'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
+                    onChange={e => setNpImagenFile(e.target.files?.[0] ?? null)} />
+                </label>
+                {npImagenFile && (
+                  <button type="button" onClick={() => setNpImagenFile(null)}
+                    className="text-xs text-zinc-400 hover:text-red-500 transition-colors">
+                    Quitar
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
