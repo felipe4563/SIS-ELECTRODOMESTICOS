@@ -86,6 +86,13 @@ function Ticket80({ data, logoUrl }) {
         </>
       )}
 
+      {data.observaciones && (
+        <>
+          <Divisor />
+          <ObservacionesInfo data={data} />
+        </>
+      )}
+
       <Divisor />
       <Nota />
       <Divisor />
@@ -232,6 +239,13 @@ function Ticket110({ data, logoUrl }) {
         <>
           <Divisor />
           <EntregaInfo data={data} fontSize="9px" />
+        </>
+      )}
+
+      {data.observaciones && (
+        <>
+          <Divisor />
+          <ObservacionesInfo data={data} fontSize="9px" />
         </>
       )}
 
@@ -396,6 +410,9 @@ function TicketA4({ data, logoUrl }) {
           {data.requiere_entrega && data.direccion_entrega && (
             <EntregaInfo data={data} fontSize="10px" />
           )}
+          {data.observaciones && (
+            <ObservacionesInfo data={data} fontSize="10px" />
+          )}
         </div>
 
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
@@ -537,6 +554,13 @@ const EntregaInfo = ({ data, fontSize = '10px' }) => (
     <div style={{ fontWeight: 'bold' }}>DIRECCIÓN DE ENTREGA</div>
     <div>{data.direccion_entrega}</div>
     {data.fecha_entrega && <div>Fecha: {fmtFecha(data.fecha_entrega)}</div>}
+  </div>
+);
+
+const ObservacionesInfo = ({ data, fontSize = '10px' }) => (
+  <div style={{ fontSize }}>
+    <div style={{ fontWeight: 'bold' }}>OBSERVACIONES</div>
+    <div style={{ wordBreak: 'break-word' }}>{data.observaciones}</div>
   </div>
 );
 

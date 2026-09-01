@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   FaPlus, FaEdit, FaTrash, FaSpinner, FaUsers, FaKey, FaStore,
-  FaSignOutAlt, FaCheckCircle, FaTimesCircle, FaSearch,
+  FaSignOutAlt, FaCheckCircle, FaTimesCircle, FaSearch, FaEye, FaEyeSlash,
 } from 'react-icons/fa';
 import { usuariosService } from '../../services/usuariosRoles.service';
 import { usePermission } from '../../hooks/usePermission';
@@ -13,6 +13,27 @@ import { isValidEmail, validatePassword } from '../../utils/validation';
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
 const EMPTY    = { username: '', password: '', nombres: '', apellidos: '', documento: '', email: '', telefono: '', celular: '', direccion: '', celular_emergencia: '', id_rol: '', id_sucursal_default: '', activo: true, porcentaje_comision: 0 };
+
+// ── Campo de contraseña con ojo para mostrar/ocultar ───────────────────────────
+function PasswordField({ name, value, onChange, required, minLength, placeholder, autoComplete }) {
+  const [ver, setVer] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        name={name} type={ver ? 'text' : 'password'} value={value} onChange={onChange}
+        required={required} minLength={minLength} placeholder={placeholder} autoComplete={autoComplete}
+        className={`${inputCls} pr-10`}
+      />
+      <button
+        type="button" onClick={() => setVer(v => !v)} tabIndex={-1}
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors"
+        title={ver ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+      >
+        {ver ? <FaEyeSlash className="h-4 w-4" /> : <FaEye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ nombres, apellidos }) {
@@ -203,7 +224,7 @@ function ResetPassModal({ open, onClose, usuario }) {
           {error && <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>}
           <div className="mb-4">
             <label className={labelCls}>Nueva contraseña *</label>
-            <input type="password" value={pass} onChange={e => setPass(e.target.value)} className={inputCls} placeholder="Mín. 8 car., 1 mayúscula, 1 número" autoComplete="new-password" />
+            <PasswordField value={pass} onChange={e => setPass(e.target.value)} placeholder="Mín. 8 car., 1 mayúscula, 1 número" autoComplete="new-password" />
           </div>
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
             <button onClick={onClose} className="w-full sm:w-auto px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
@@ -488,7 +509,7 @@ export default function Usuarios() {
               </div>
               <div>
                 <label className={labelCls}>Contraseña temporal *</label>
-                <input name="password" type="password" value={form.password} onChange={handleChange} required minLength={6} className={inputCls} autoComplete="new-password" />
+                <PasswordField name="password" value={form.password} onChange={handleChange} required minLength={6} autoComplete="new-password" />
               </div>
             </>)}
             <div>
