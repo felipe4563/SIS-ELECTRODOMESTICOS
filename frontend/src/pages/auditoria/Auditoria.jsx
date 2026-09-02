@@ -527,16 +527,40 @@ function TabSesiones() {
 }
 
 // ── Página principal ──────────────────────────────────────────────────────
+const TABS = [
+  { key: 'log',      label: 'Log de auditoría',  desc: 'Historial de cambios (INSERT/UPDATE/DELETE) y accesos' },
+  { key: 'sesiones', label: 'Sesiones activas',   desc: 'Sesiones abiertas del sistema' },
+];
+
 export default function Auditoria() {
+  const [tab, setTab] = useState('log');
+  const activa = TABS.find(t => t.key === tab);
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Auditoría</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Sesiones activas del sistema</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{activa.desc}</p>
+      </div>
+
+      <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              tab === t.key
+                ? 'border-yellow-400 text-zinc-900 dark:text-white'
+                : 'border-transparent text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
-        <TabSesiones />
+        {tab === 'log' ? <TabAuditoria /> : <TabSesiones />}
       </div>
     </div>
   );
