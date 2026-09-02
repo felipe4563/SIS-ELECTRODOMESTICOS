@@ -12,7 +12,11 @@ import { isValidEmail, validatePassword } from '../../utils/validation';
 
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
-const EMPTY    = { username: '', password: '', nombres: '', apellidos: '', documento: '', email: '', telefono: '', celular: '', direccion: '', celular_emergencia: '', id_rol: '', id_sucursal_default: '', activo: true, porcentaje_comision: 0 };
+const EMPTY    = {
+  username: '', password: '', nombres: '', apellidos: '', cargo: '', documento: '', email: '',
+  telefono: '', celular: '', direccion: '', celular_emergencia: '', nombre_contacto_emergencia: '',
+  fecha_nacimiento: '', fecha_ingreso: '', id_rol: '', id_sucursal_default: '', activo: true, porcentaje_comision: 0,
+};
 
 // ── Campo de contraseña con ojo para mostrar/ocultar ───────────────────────────
 function PasswordField({ name, value, onChange, required, minLength, placeholder, autoComplete }) {
@@ -259,7 +263,7 @@ function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCer
       <div className="space-y-1.5">
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-          <span className="truncate">{u.rol_nombre}</span>
+          <span className="truncate">{u.rol_nombre}{u.cargo ? ` · ${u.cargo}` : ''}</span>
         </div>
         {u.sucursal_nombre && (
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
@@ -288,7 +292,20 @@ function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCer
         {u.celular_emergencia && (
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
             <span className="w-1.5 h-1.5 rounded-full bg-red-300 dark:bg-red-500/60 shrink-0" />
-            <span className="truncate">Emergencia: {u.celular_emergencia}</span>
+            <span className="truncate">
+              Emergencia: {u.celular_emergencia}{u.nombre_contacto_emergencia ? ` (${u.nombre_contacto_emergencia})` : ''}
+            </span>
+          </div>
+        )}
+        {(u.fecha_nacimiento || u.fecha_ingreso) && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+            <span className="truncate">
+              {[
+                u.fecha_nacimiento && `Nac.: ${new Date(u.fecha_nacimiento).toLocaleDateString('es-BO')}`,
+                u.fecha_ingreso && `Ingreso: ${new Date(u.fecha_ingreso).toLocaleDateString('es-BO')}`,
+              ].filter(Boolean).join(' · ')}
+            </span>
           </div>
         )}
         {u.direccion && (
@@ -365,7 +382,11 @@ export default function Usuarios() {
 
   const abrirModal = (u = null) => {
     setEditando(u);
-    setForm(u ? { ...u, password: '', activo: !!u.activo } : EMPTY);
+    setForm(u ? {
+      ...u, password: '', activo: !!u.activo,
+      fecha_nacimiento: u.fecha_nacimiento ? String(u.fecha_nacimiento).slice(0, 10) : '',
+      fecha_ingreso:    u.fecha_ingreso    ? String(u.fecha_ingreso).slice(0, 10)    : '',
+    } : EMPTY);
     setFormError(null);
     // Cargar roles y sucursales desde el endpoint del propio módulo de usuarios
     usuariosService.getFormData()
@@ -502,6 +523,10 @@ export default function Usuarios() {
               <label className={labelCls}>Apellidos *</label>
               <input name="apellidos" value={form.apellidos} onChange={handleChange} required className={inputCls} />
             </div>
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Cargo</label>
+              <input name="cargo" value={form.cargo ?? ''} onChange={handleChange} className={inputCls} placeholder="Ej: Ejecutivo de Ventas" />
+            </div>
             {!editando && (<>
               <div>
                 <label className={labelCls}>Username *</label>
@@ -527,6 +552,18 @@ export default function Usuarios() {
             <div>
               <label className={labelCls}>Celular de emergencia</label>
               <input name="celular_emergencia" value={form.celular_emergencia ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Nombre contacto de emergencia</label>
+              <input name="nombre_contacto_emergencia" value={form.nombre_contacto_emergencia ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Fecha de nacimiento</label>
+              <input name="fecha_nacimiento" type="date" value={form.fecha_nacimiento ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Fecha de ingreso</label>
+              <input name="fecha_ingreso" type="date" value={form.fecha_ingreso ?? ''} onChange={handleChange} className={inputCls} />
             </div>
             <div className="sm:col-span-2">
               <label className={labelCls}>Email</label>

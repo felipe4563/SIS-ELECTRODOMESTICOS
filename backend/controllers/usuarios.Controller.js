@@ -6,8 +6,9 @@ const { isValidEmail, validatePassword } = require('../utils/validators');
 const getUsuarios = async (req, res) => {
   try {
     const [rows] = await db.promise().query(`
-      SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.email,
-             u.telefono, u.celular, u.direccion, u.celular_emergencia,
+      SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.cargo, u.email,
+             u.telefono, u.celular, u.direccion, u.celular_emergencia, u.nombre_contacto_emergencia,
+             u.fecha_nacimiento, u.fecha_ingreso,
              u.documento, u.id_rol, u.id_sucursal_default,
              u.foto_url, u.debe_cambiar_pass, u.ultimo_login, u.activo,
              u.porcentaje_comision, u.fecha_creacion,
@@ -32,8 +33,9 @@ const getUsuarios = async (req, res) => {
 const getUsuario = async (req, res) => {
   try {
     const [rows] = await db.promise().query(`
-      SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.email,
-             u.telefono, u.celular, u.direccion, u.celular_emergencia,
+      SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.cargo, u.email,
+             u.telefono, u.celular, u.direccion, u.celular_emergencia, u.nombre_contacto_emergencia,
+             u.fecha_nacimiento, u.fecha_ingreso,
              u.documento, u.id_rol, u.id_sucursal_default,
              u.foto_url, u.debe_cambiar_pass, u.ultimo_login, u.activo,
              u.porcentaje_comision,
@@ -62,7 +64,10 @@ const getUsuario = async (req, res) => {
 
 // POST /api/usuarios
 const createUsuario = async (req, res) => {
-  const { username, password, nombres, apellidos, documento, email, telefono, celular, direccion, celular_emergencia, id_rol, id_sucursal_default } = req.body;
+  const {
+    username, password, nombres, apellidos, cargo, documento, email, telefono, celular, direccion,
+    celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso, id_rol, id_sucursal_default,
+  } = req.body;
 
   if (!username?.trim() || !password || !nombres?.trim() || !apellidos?.trim() || !id_rol) {
     return res.status(400).json({ error: 'username, contraseña, nombres, apellidos y rol son requeridos' });
@@ -76,17 +81,18 @@ const createUsuario = async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     const [result] = await db.promise().query(
-      `INSERT INTO usuarios (username, password_hash, nombres, apellidos, documento, email, telefono, celular, direccion, celular_emergencia, id_rol, id_sucursal_default, debe_cambiar_pass)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [username.trim(), hash, nombres.trim(), apellidos.trim(),
+      `INSERT INTO usuarios (username, password_hash, nombres, apellidos, cargo, documento, email, telefono, celular, direccion, celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso, id_rol, id_sucursal_default, debe_cambiar_pass)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [username.trim(), hash, nombres.trim(), apellidos.trim(), cargo?.trim() || null,
        documento?.trim() || null, email?.trim() || null,
        telefono?.trim() || null, celular?.trim() || null,
-       direccion?.trim() || null, celular_emergencia?.trim() || null,
+       direccion?.trim() || null, celular_emergencia?.trim() || null, nombre_contacto_emergencia?.trim() || null,
+       fecha_nacimiento || null, fecha_ingreso || null,
        id_rol, id_sucursal_default || null]
     );
 
     const [insertedUser] = await db.promise().query(
-      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, celular, direccion, celular_emergencia, id_rol, id_sucursal_default, debe_cambiar_pass, activo, fecha_creacion
+      `SELECT id_usuario, username, nombres, apellidos, cargo, documento, email, telefono, celular, direccion, celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso, id_rol, id_sucursal_default, debe_cambiar_pass, activo, fecha_creacion
        FROM usuarios WHERE id_usuario = ?`,
       [result.insertId]
     );
@@ -112,7 +118,11 @@ const createUsuario = async (req, res) => {
 // PUT /api/usuarios/:id
 const updateUsuario = async (req, res) => {
   const { id } = req.params;
-  const { nombres, apellidos, documento, email, telefono, celular, direccion, celular_emergencia, id_rol, id_sucursal_default, activo, porcentaje_comision } = req.body;
+  const {
+    nombres, apellidos, cargo, documento, email, telefono, celular, direccion,
+    celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso,
+    id_rol, id_sucursal_default, activo, porcentaje_comision,
+  } = req.body;
 
   if (!nombres?.trim() || !apellidos?.trim() || !id_rol) {
     return res.status(400).json({ error: 'nombres, apellidos y rol son requeridos' });
@@ -144,12 +154,13 @@ const updateUsuario = async (req, res) => {
 
     const comisionPorc = Math.max(0, Math.min(100, Number(porcentaje_comision ?? 0)));
     await db.promise().query(
-      `UPDATE usuarios SET nombres=?, apellidos=?, documento=?, email=?, telefono=?,
-       celular=?, direccion=?, celular_emergencia=?,
+      `UPDATE usuarios SET nombres=?, apellidos=?, cargo=?, documento=?, email=?, telefono=?,
+       celular=?, direccion=?, celular_emergencia=?, nombre_contacto_emergencia=?, fecha_nacimiento=?, fecha_ingreso=?,
        id_rol=?, id_sucursal_default=?, activo=?, porcentaje_comision=? WHERE id_usuario=?`,
-      [nombres.trim(), apellidos.trim(), documento?.trim() || null,
+      [nombres.trim(), apellidos.trim(), cargo?.trim() || null, documento?.trim() || null,
        email?.trim() || null, telefono?.trim() || null,
        celular?.trim() || null, direccion?.trim() || null, celular_emergencia?.trim() || null,
+       nombre_contacto_emergencia?.trim() || null, fecha_nacimiento || null, fecha_ingreso || null,
        id_rol, id_sucursal_default || null, activo ? 1 : 0, comisionPorc, id]
     );
 
