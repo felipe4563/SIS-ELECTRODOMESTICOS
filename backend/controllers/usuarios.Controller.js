@@ -8,7 +8,7 @@ const getUsuarios = async (req, res) => {
     const [rows] = await db.promise().query(`
       SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.cargo, u.email,
              u.telefono, u.celular, u.direccion, u.celular_emergencia, u.nombre_contacto_emergencia,
-             u.fecha_nacimiento, u.fecha_ingreso,
+             u.fecha_nacimiento, u.fecha_ingreso, u.hora_entrada_esperada, u.hora_salida_esperada,
              u.documento, u.id_rol, u.id_sucursal_default,
              u.foto_url, u.debe_cambiar_pass, u.ultimo_login, u.activo,
              u.porcentaje_comision, u.fecha_creacion,
@@ -35,7 +35,7 @@ const getUsuario = async (req, res) => {
     const [rows] = await db.promise().query(`
       SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.cargo, u.email,
              u.telefono, u.celular, u.direccion, u.celular_emergencia, u.nombre_contacto_emergencia,
-             u.fecha_nacimiento, u.fecha_ingreso,
+             u.fecha_nacimiento, u.fecha_ingreso, u.hora_entrada_esperada, u.hora_salida_esperada,
              u.documento, u.id_rol, u.id_sucursal_default,
              u.foto_url, u.debe_cambiar_pass, u.ultimo_login, u.activo,
              u.porcentaje_comision,
@@ -66,7 +66,8 @@ const getUsuario = async (req, res) => {
 const createUsuario = async (req, res) => {
   const {
     username, password, nombres, apellidos, cargo, documento, email, telefono, celular, direccion,
-    celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso, id_rol, id_sucursal_default,
+    celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso,
+    hora_entrada_esperada, hora_salida_esperada, id_rol, id_sucursal_default,
   } = req.body;
 
   if (!username?.trim() || !password || !nombres?.trim() || !apellidos?.trim() || !id_rol) {
@@ -81,13 +82,14 @@ const createUsuario = async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 10);
     const [result] = await db.promise().query(
-      `INSERT INTO usuarios (username, password_hash, nombres, apellidos, cargo, documento, email, telefono, celular, direccion, celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso, id_rol, id_sucursal_default, debe_cambiar_pass)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      `INSERT INTO usuarios (username, password_hash, nombres, apellidos, cargo, documento, email, telefono, celular, direccion, celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso, hora_entrada_esperada, hora_salida_esperada, id_rol, id_sucursal_default, debe_cambiar_pass)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [username.trim(), hash, nombres.trim(), apellidos.trim(), cargo?.trim() || null,
        documento?.trim() || null, email?.trim() || null,
        telefono?.trim() || null, celular?.trim() || null,
        direccion?.trim() || null, celular_emergencia?.trim() || null, nombre_contacto_emergencia?.trim() || null,
        fecha_nacimiento || null, fecha_ingreso || null,
+       hora_entrada_esperada || null, hora_salida_esperada || null,
        id_rol, id_sucursal_default || null]
     );
 
@@ -121,6 +123,7 @@ const updateUsuario = async (req, res) => {
   const {
     nombres, apellidos, cargo, documento, email, telefono, celular, direccion,
     celular_emergencia, nombre_contacto_emergencia, fecha_nacimiento, fecha_ingreso,
+    hora_entrada_esperada, hora_salida_esperada,
     id_rol, id_sucursal_default, activo, porcentaje_comision,
   } = req.body;
 
@@ -159,11 +162,13 @@ const updateUsuario = async (req, res) => {
     await db.promise().query(
       `UPDATE usuarios SET nombres=?, apellidos=?, cargo=?, documento=?, email=?, telefono=?,
        celular=?, direccion=?, celular_emergencia=?, nombre_contacto_emergencia=?, fecha_nacimiento=?, fecha_ingreso=?,
+       hora_entrada_esperada=?, hora_salida_esperada=?,
        id_rol=?, id_sucursal_default=?, activo=?, porcentaje_comision=? WHERE id_usuario=?`,
       [nombres.trim(), apellidos.trim(), cargo?.trim() || null, documento?.trim() || null,
        email?.trim() || null, telefono?.trim() || null,
        celular?.trim() || null, direccion?.trim() || null, celular_emergencia?.trim() || null,
        nombre_contacto_emergencia?.trim() || null, fecha_nacimiento || null, fecha_ingreso || null,
+       hora_entrada_esperada || null, hora_salida_esperada || null,
        id_rol, id_sucursal_default || null, activo ? 1 : 0, comisionPorc, id]
     );
 

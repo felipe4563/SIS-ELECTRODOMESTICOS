@@ -33,7 +33,7 @@ const getSucursal = async (req, res) => {
 
 // POST /api/sucursales
 const createSucursal = async (req, res) => {
-  const { id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta } = req.body;
+  const { id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, latitud, longitud, radio_metros } = req.body;
 
   if (!codigo?.trim() || !nombre?.trim() || !tipo)
     return res.status(400).json({ error: 'Código, nombre y tipo son requeridos' });
@@ -50,11 +50,12 @@ const createSucursal = async (req, res) => {
     const empresaId = id_empresa ?? emp[0].id_empresa;
 
     const [result] = await db.promise().query(
-      `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, latitud, longitud, radio_metros)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [empresaId, codigo.trim(), nombre.trim(), tipo,
        direccion ?? null, ciudad ?? null, telefono ?? null,
-       responsable ?? null, es_punto_venta ? 1 : 1]
+       responsable ?? null, es_punto_venta ? 1 : 1,
+       latitud ?? null, longitud ?? null, Number(radio_metros) > 0 ? Number(radio_metros) : 100]
     );
 
     const ip = req.ip || req.socket?.remoteAddress || null;
@@ -79,7 +80,7 @@ const createSucursal = async (req, res) => {
 // PUT /api/sucursales/:id
 const updateSucursal = async (req, res) => {
   const { id } = req.params;
-  const { codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, activo } = req.body;
+  const { codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, activo, latitud, longitud, radio_metros } = req.body;
 
   if (!codigo?.trim() || !nombre?.trim() || !tipo)
     return res.status(400).json({ error: 'Código, nombre y tipo son requeridos' });
@@ -88,11 +89,13 @@ const updateSucursal = async (req, res) => {
     const [result] = await db.promise().query(
       `UPDATE sucursales
        SET codigo = ?, nombre = ?, tipo = ?, direccion = ?,
-           ciudad = ?, telefono = ?, responsable = ?, es_punto_venta = ?, activo = ?
+           ciudad = ?, telefono = ?, responsable = ?, es_punto_venta = ?, activo = ?,
+           latitud = ?, longitud = ?, radio_metros = ?
        WHERE id_sucursal = ?`,
       [codigo.trim(), nombre.trim(), tipo, direccion ?? null,
        ciudad ?? null, telefono ?? null, responsable ?? null,
-       es_punto_venta ? 1 : 0, activo !== undefined ? (activo ? 1 : 0) : 1, id]
+       es_punto_venta ? 1 : 0, activo !== undefined ? (activo ? 1 : 0) : 1,
+       latitud ?? null, longitud ?? null, Number(radio_metros) > 0 ? Number(radio_metros) : 100, id]
     );
 
     if (result.affectedRows === 0)
