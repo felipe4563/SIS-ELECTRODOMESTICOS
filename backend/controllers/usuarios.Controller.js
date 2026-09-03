@@ -133,8 +133,11 @@ const updateUsuario = async (req, res) => {
 
   try {
     const [oldRows] = await db.promise().query(
-      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo
-       FROM usuarios WHERE id_usuario = ?`,
+      `SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.documento, u.email, u.telefono,
+              u.id_rol, u.id_sucursal_default, u.debe_cambiar_pass, u.activo,
+              u.cargo, u.porcentaje_comision, s.nombre AS sucursal_nombre
+       FROM usuarios u LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
+       WHERE u.id_usuario = ?`,
       [id]
     );
     if (oldRows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -165,8 +168,11 @@ const updateUsuario = async (req, res) => {
     );
 
     const [newRows] = await db.promise().query(
-      `SELECT id_usuario, username, nombres, apellidos, documento, email, telefono, id_rol, id_sucursal_default, debe_cambiar_pass, activo
-       FROM usuarios WHERE id_usuario = ?`,
+      `SELECT u.id_usuario, u.username, u.nombres, u.apellidos, u.documento, u.email, u.telefono,
+              u.id_rol, u.id_sucursal_default, u.debe_cambiar_pass, u.activo,
+              u.cargo, u.porcentaje_comision, s.nombre AS sucursal_nombre
+       FROM usuarios u LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
+       WHERE u.id_usuario = ?`,
       [id]
     );
     const userDespues = newRows[0];
@@ -176,6 +182,19 @@ const updateUsuario = async (req, res) => {
       `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, datos_antes, datos_despues, ip_origen) VALUES (?, 'usuarios', ?, 'UPDATE', ?, ?, ?)`,
       [req.user.id_usuario, id, JSON.stringify(userAntes), JSON.stringify(userDespues), ip]
     );
+
+    const cambiosHistorial = [
+      { campo: 'CARGO',    antes: userAntes.cargo,             despues: userDespues.cargo },
+      { campo: 'SUCURSAL', antes: userAntes.sucursal_nombre,   despues: userDespues.sucursal_nombre },
+      { campo: 'COMISION', antes: String(userAntes.porcentaje_comision ?? '0'), despues: String(userDespues.porcentaje_comision ?? '0') },
+    ].filter(c => (c.antes || '') !== (c.despues || ''));
+
+    for (const c of cambiosHistorial) {
+      await db.promise().query(
+        `INSERT INTO usuario_historial (id_usuario, campo, valor_anterior, valor_nuevo, id_usuario_edito) VALUES (?, ?, ?, ?, ?)`,
+        [id, c.campo, c.antes || null, c.despues || null, req.user.id_usuario]
+      );
+    }
 
     res.json({ mensaje: 'Usuario actualizado' });
   } catch (err) {
@@ -368,7 +387,27 @@ const getFormData = async (req, res) => {
   }
 };
 
+// GET /api/usuarios/:id/historial
+const getHistorialUsuario = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT h.id_historial, h.campo, h.valor_anterior, h.valor_nuevo, h.fecha,
+              CONCAT(e.nombres, ' ', e.apellidos) AS editor_nombre
+       FROM usuario_historial h
+       JOIN usuarios e ON e.id_usuario = h.id_usuario_edito
+       WHERE h.id_usuario = ?
+       ORDER BY h.fecha DESC`,
+      [id]
+    );
+    res.json({ historial: rows });
+  } catch (err) {
+    console.error('[getHistorialUsuario]', err);
+    res.status(500).json({ error: 'Error al obtener historial' });
+  }
+};
+
 module.exports = {
   getUsuarios, getUsuario, getFormData, createUsuario, updateUsuario, deleteUsuario,
-  resetPassword, asignarSucursales, cerrarSesiones, updateMiPerfil,
+  resetPassword, asignarSucursales, cerrarSesiones, updateMiPerfil, getHistorialUsuario,
 };

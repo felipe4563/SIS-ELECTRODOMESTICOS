@@ -17,5 +17,6 @@ router.delete('/:id', authMiddleware, checkPermission('eliminar', 'usuarios'), c
 router.post('/:id/reset-password',  authMiddleware, checkPermission('resetear_password',  'usuarios'), ctrl.resetPassword);
 router.put('/:id/sucursales',        authMiddleware, checkPermission('asignar_sucursales', 'usuarios'), ctrl.asignarSucursales);
 router.post('/:id/cerrar-sesiones',  authMiddleware, checkPermission('cerrar_sesiones',    'usuarios'), ctrl.cerrarSesiones);
+router.get('/:id/historial', authMiddleware, checkPermission('ver', 'usuarios'), ctrl.getHistorialUsuario);
 
 module.exports = router;
