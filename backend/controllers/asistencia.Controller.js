@@ -51,6 +51,11 @@ const marcarEntrada = async (req, res) => {
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Ubicación GPS requerida' });
   }
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+    return res.status(400).json({ error: 'Ubicación GPS inválida' });
+  }
   try {
     const [existe] = await db.promise().query(
       `SELECT id_asistencia FROM asistencias WHERE id_usuario = ? AND fecha = CURDATE()`,
@@ -60,7 +65,7 @@ const marcarEntrada = async (req, res) => {
       return res.status(400).json({ error: 'Ya marcaste entrada hoy' });
     }
 
-    const val = await validarUbicacion(req.user.id_usuario, Number(lat), Number(lng));
+    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
     const [[u]] = await db.promise().query(
@@ -78,10 +83,13 @@ const marcarEntrada = async (req, res) => {
     await db.promise().query(
       `INSERT INTO asistencias (id_usuario, fecha, hora_entrada, lat_entrada, lng_entrada, estado)
        VALUES (?, CURDATE(), CURTIME(), ?, ?, ?)`,
-      [req.user.id_usuario, lat, lng, estado]
+      [req.user.id_usuario, latNum, lngNum, estado]
     );
     res.status(201).json({ mensaje: 'Entrada registrada', estado });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Ya marcaste entrada hoy' });
+    }
     console.error('[marcarEntrada]', err);
     res.status(500).json({ error: 'Error al marcar entrada' });
   }
@@ -93,6 +101,11 @@ const marcarSalida = async (req, res) => {
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Ubicación GPS requerida' });
   }
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+    return res.status(400).json({ error: 'Ubicación GPS inválida' });
+  }
   try {
     const [rows] = await db.promise().query(
       `SELECT id_asistencia, hora_salida FROM asistencias WHERE id_usuario = ? AND fecha = CURDATE()`,
@@ -101,12 +114,12 @@ const marcarSalida = async (req, res) => {
     if (rows.length === 0) return res.status(400).json({ error: 'Todavía no marcaste entrada hoy' });
     if (rows[0].hora_salida) return res.status(400).json({ error: 'Ya marcaste salida hoy' });
 
-    const val = await validarUbicacion(req.user.id_usuario, Number(lat), Number(lng));
+    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
     await db.promise().query(
       `UPDATE asistencias SET hora_salida = CURTIME(), lat_salida = ?, lng_salida = ? WHERE id_asistencia = ?`,
-      [lat, lng, rows[0].id_asistencia]
+      [latNum, lngNum, rows[0].id_asistencia]
     );
     res.json({ mensaje: 'Salida registrada' });
   } catch (err) {
