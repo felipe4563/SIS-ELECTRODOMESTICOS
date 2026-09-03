@@ -15,14 +15,38 @@ function distanciaMetros(lat1, lng1, lat2, lng2) {
 const getMiAsistenciaHoy = async (req, res) => {
   try {
     const [rows] = await db.promise().query(
-      `SELECT id_asistencia, hora_entrada, hora_salida, estado
-       FROM asistencias WHERE id_usuario = ? AND fecha = CURDATE()`,
+      `SELECT a.id_asistencia, a.hora_entrada, a.hora_salida, a.estado,
+              s.nombre AS sucursal_nombre
+       FROM asistencias a
+       JOIN usuarios u ON u.id_usuario = a.id_usuario
+       LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
+       WHERE a.id_usuario = ? AND a.fecha = CURDATE()`,
       [req.user.id_usuario]
     );
     res.json({ asistencia: rows[0] || null });
   } catch (err) {
     console.error('[getMiAsistenciaHoy]', err);
     res.status(500).json({ error: 'Error al obtener asistencia del día' });
+  }
+};
+
+// GET /api/asistencia/mi-historial — últimos N días del propio usuario logueado
+const getMiHistorial = async (req, res) => {
+  const dias = Math.min(Number(req.query.dias) || 7, 30);
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT id_asistencia, DATE_FORMAT(fecha, '%Y-%m-%d') AS fecha,
+              hora_entrada, hora_salida, estado, motivo_falta
+       FROM asistencias
+       WHERE id_usuario = ? AND fecha < CURDATE()
+       ORDER BY fecha DESC
+       LIMIT ?`,
+      [req.user.id_usuario, dias]
+    );
+    res.json({ historial: rows });
+  } catch (err) {
+    console.error('[getMiHistorial]', err);
+    res.status(500).json({ error: 'Error al obtener historial de asistencia' });
   }
 };
 
@@ -234,4 +258,4 @@ const generarFaltasDelDia = async () => {
   return { total: pendientes.length, fecha };
 };
 
-module.exports = { getMiAsistenciaHoy, marcarEntrada, marcarSalida, validarUbicacion, distanciaMetros, getAsistencias, justificarFalta, generarFaltasDelDia };
+module.exports = { getMiAsistenciaHoy, getMiHistorial, marcarEntrada, marcarSalida, validarUbicacion, distanciaMetros, getAsistencias, justificarFalta, generarFaltasDelDia };
