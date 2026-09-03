@@ -63,6 +63,7 @@ const ICONS = {
   moon:           <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>,
   chevron:        <polyline points="9 18 15 12 9 6"/>,
   clock:          <><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></>,
+  list:           <><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></>,
 };
 
 /* ─── Estructura de menú ─────────────────────────────────────────────────── */
@@ -170,6 +171,7 @@ const MENU = [
     label: 'Asistencia',
     items: [
       { label: 'Mi Asistencia', path: '/mi-asistencia', icon: 'clock', action: 'marcar', subject: 'asistencia' },
+      { label: 'Reporte',       path: '/asistencia',     icon: 'list',  action: 'ver',    subject: 'asistencia' },
     ],
   },
   {

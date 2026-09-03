@@ -73,6 +73,7 @@ import Reportes from './pages/reportes/Reportes';
 // ── Auditoría ─────────────────────────────────────────────────────────────────
 import Auditoria from './pages/auditoria/Auditoria';
 import MiAsistencia from './pages/asistencia/MiAsistencia';
+import Asistencia from './pages/asistencia/Asistencia';
 
 // ── Herramientas ───────────────────────────────────────────────────────────────
 import Herramientas from './pages/herramientas/Herramientas';
@@ -473,6 +474,9 @@ export default function App() {
               {/* ── Asistencia ────────────────────────────────────────── */}
               <Route path="/mi-asistencia" element={
                 <PageRoute action="marcar" subject="asistencia"><MiAsistencia /></PageRoute>
+              } />
+              <Route path="/asistencia" element={
+                <PageRoute action="ver" subject="asistencia"><Asistencia /></PageRoute>
               } />
 
               {/* ── Herramientas ──────────────────────────────────────── */}
