@@ -183,17 +183,22 @@ const updateUsuario = async (req, res) => {
       [req.user.id_usuario, id, JSON.stringify(userAntes), JSON.stringify(userDespues), ip]
     );
 
+    const sucursalCambio = Number(userAntes.id_sucursal_default ?? 0) !== Number(userDespues.id_sucursal_default ?? 0);
     const cambiosHistorial = [
-      { campo: 'CARGO',    antes: userAntes.cargo,             despues: userDespues.cargo },
-      { campo: 'SUCURSAL', antes: userAntes.sucursal_nombre,   despues: userDespues.sucursal_nombre },
-      { campo: 'COMISION', antes: String(userAntes.porcentaje_comision ?? '0'), despues: String(userDespues.porcentaje_comision ?? '0') },
-    ].filter(c => (c.antes || '') !== (c.despues || ''));
+      { campo: 'CARGO',    cambio: (userAntes.cargo || '') !== (userDespues.cargo || ''), antes: userAntes.cargo, despues: userDespues.cargo },
+      { campo: 'SUCURSAL', cambio: sucursalCambio, antes: userAntes.sucursal_nombre, despues: userDespues.sucursal_nombre },
+      { campo: 'COMISION', cambio: String(userAntes.porcentaje_comision ?? '0') !== String(userDespues.porcentaje_comision ?? '0'), antes: String(userAntes.porcentaje_comision ?? '0'), despues: String(userDespues.porcentaje_comision ?? '0') },
+    ].filter(c => c.cambio);
 
-    for (const c of cambiosHistorial) {
-      await db.promise().query(
-        `INSERT INTO usuario_historial (id_usuario, campo, valor_anterior, valor_nuevo, id_usuario_edito) VALUES (?, ?, ?, ?, ?)`,
-        [id, c.campo, c.antes || null, c.despues || null, req.user.id_usuario]
-      );
+    try {
+      for (const c of cambiosHistorial) {
+        await db.promise().query(
+          `INSERT INTO usuario_historial (id_usuario, campo, valor_anterior, valor_nuevo, id_usuario_edito) VALUES (?, ?, ?, ?, ?)`,
+          [id, c.campo, c.antes || null, c.despues || null, req.user.id_usuario]
+        );
+      }
+    } catch (err) {
+      console.error('[updateUsuario:historial]', err);
     }
 
     res.json({ mensaje: 'Usuario actualizado' });
@@ -293,6 +298,15 @@ const asignarSucursales = async (req, res) => {
   }
 
   try {
+    const [oldUserRows] = await db.promise().query(
+      `SELECT u.id_sucursal_default, s.nombre AS sucursal_nombre
+       FROM usuarios u LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
+       WHERE u.id_usuario = ?`,
+      [id]
+    );
+    const idSucursalAntes = oldUserRows[0]?.id_sucursal_default ?? null;
+    const nombreSucursalAntes = oldUserRows[0]?.sucursal_nombre ?? null;
+
     await db.promise().query(`DELETE FROM usuario_sucursal WHERE id_usuario = ?`, [id]);
 
     if (sucursales.length > 0) {
@@ -306,6 +320,22 @@ const asignarSucursales = async (req, res) => {
       `UPDATE usuarios SET id_sucursal_default = ? WHERE id_usuario = ?`,
       [nuevaDefault, id]
     );
+
+    if (Number(idSucursalAntes ?? 0) !== Number(nuevaDefault ?? 0)) {
+      try {
+        const [newSucRows] = await db.promise().query(
+          `SELECT nombre FROM sucursales WHERE id_sucursal = ?`,
+          [nuevaDefault]
+        );
+        const nombreSucursalDespues = newSucRows[0]?.nombre ?? null;
+        await db.promise().query(
+          `INSERT INTO usuario_historial (id_usuario, campo, valor_anterior, valor_nuevo, id_usuario_edito) VALUES (?, 'SUCURSAL', ?, ?, ?)`,
+          [id, nombreSucursalAntes, nombreSucursalDespues, req.user.id_usuario]
+        );
+      } catch (err) {
+        console.error('[asignarSucursales:historial]', err);
+      }
+    }
 
     const ip = req.ip || null;
     await db.promise().query(
@@ -397,7 +427,7 @@ const getHistorialUsuario = async (req, res) => {
        FROM usuario_historial h
        JOIN usuarios e ON e.id_usuario = h.id_usuario_edito
        WHERE h.id_usuario = ?
-       ORDER BY h.fecha DESC`,
+       ORDER BY h.fecha DESC, h.id_historial DESC`,
       [id]
     );
     res.json({ historial: rows });

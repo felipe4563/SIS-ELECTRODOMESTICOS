@@ -248,12 +248,14 @@ const CAMPO_LABEL = { CARGO: 'Cargo', SUCURSAL: 'Sucursal', COMISION: 'Comisión
 function HistorialModal({ open, onClose, usuario }) {
   const [historial, setHistorial] = useState([]);
   const [cargando,  setCargando]  = useState(true);
+  const [error,     setError]     = useState(null);
 
   useEffect(() => {
     if (!open || !usuario) return;
-    setCargando(true);
+    setCargando(true); setError(null);
     usuariosService.getHistorial(usuario.id_usuario)
       .then(({ data }) => setHistorial(data.historial))
+      .catch(() => setError('No se pudo cargar el historial.'))
       .finally(() => setCargando(false));
   }, [open, usuario]);
 
@@ -261,6 +263,8 @@ function HistorialModal({ open, onClose, usuario }) {
     <Modal open={open} onClose={onClose} title={`Historial laboral — ${usuario?.nombres} ${usuario?.apellidos}`} maxWidth="max-w-lg">
       {cargando ? (
         <div className="flex items-center justify-center h-32 text-gray-400"><FaSpinner className="animate-spin h-5 w-5" /></div>
+      ) : error ? (
+        <p className="text-sm text-red-500 dark:text-red-400 text-center py-8">{error}</p>
       ) : historial.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-8">Sin cambios registrados todavía.</p>
       ) : (
