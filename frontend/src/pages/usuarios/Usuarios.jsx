@@ -16,6 +16,7 @@ const EMPTY    = {
   username: '', password: '', nombres: '', apellidos: '', cargo: '', documento: '', email: '',
   telefono: '', celular: '', direccion: '', celular_emergencia: '', nombre_contacto_emergencia: '',
   fecha_nacimiento: '', fecha_ingreso: '', id_rol: '', id_sucursal_default: '', activo: true, porcentaje_comision: 0,
+  hora_entrada_esperada: '', hora_salida_esperada: '',
 };
 
 // ── Campo de contraseña con ojo para mostrar/ocultar ───────────────────────────
@@ -614,6 +615,14 @@ export default function Usuarios() {
             <div>
               <label className={labelCls}>Fecha de ingreso</label>
               <input name="fecha_ingreso" type="date" value={form.fecha_ingreso ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Hora de entrada esperada</label>
+              <input name="hora_entrada_esperada" type="time" value={form.hora_entrada_esperada ?? ''} onChange={handleChange} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Hora de salida esperada</label>
+              <input name="hora_salida_esperada" type="time" value={form.hora_salida_esperada ?? ''} onChange={handleChange} className={inputCls} />
             </div>
             <div className="sm:col-span-2">
               <label className={labelCls}>Email</label>

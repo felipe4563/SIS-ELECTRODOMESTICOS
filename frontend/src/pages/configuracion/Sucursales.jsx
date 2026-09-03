@@ -5,7 +5,7 @@ import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 
-const EMPTY = { codigo: '', nombre: '', tipo: 'SUCURSAL', direccion: '', ciudad: '', telefono: '', responsable: '', es_punto_venta: true, activo: true };
+const EMPTY = { codigo: '', nombre: '', tipo: 'SUCURSAL', direccion: '', ciudad: '', telefono: '', responsable: '', es_punto_venta: true, activo: true, latitud: '', longitud: '', radio_metros: 100 };
 
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 dark:focus:border-amber-500/50 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
@@ -274,6 +274,28 @@ export default function Sucursales() {
             <div className="sm:col-span-2">
               <label className={labelCls}>Responsable</label>
               <input name="responsable" value={form.responsable ?? ''} onChange={handleChange} className={inputCls} placeholder="Nombre del responsable" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Ubicación (para marcar asistencia)</label>
+              <div className="flex flex-wrap gap-2 items-center">
+                <input name="latitud" value={form.latitud ?? ''} onChange={handleChange} className={`${inputCls} w-36`} placeholder="Latitud" />
+                <input name="longitud" value={form.longitud ?? ''} onChange={handleChange} className={`${inputCls} w-36`} placeholder="Longitud" />
+                <input name="radio_metros" type="number" min="10" value={form.radio_metros ?? 100} onChange={handleChange} className={`${inputCls} w-28`} placeholder="Radio (m)" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!navigator.geolocation) { alert('Este navegador no soporta geolocalización'); return; }
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => setForm(f => ({ ...f, latitud: pos.coords.latitude.toFixed(7), longitud: pos.coords.longitude.toFixed(7) })),
+                      () => alert('No se pudo obtener la ubicación. Revisá los permisos del navegador.')
+                    );
+                  }}
+                  className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-zinc-900 text-sm font-semibold rounded-xl transition-colors"
+                >
+                  Usar mi ubicación actual
+                </button>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">Parate en la sucursal y tocá el botón, o pegá las coordenadas de Google Maps.</p>
             </div>
           </div>
 
