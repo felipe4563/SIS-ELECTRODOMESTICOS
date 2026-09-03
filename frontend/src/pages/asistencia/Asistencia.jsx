@@ -64,7 +64,9 @@ function ModalJustificar({ row, onClose, onGuardado }) {
 
 export default function Asistencia() {
   const [filas, setFilas]       = useState([]);
+  const [truncado, setTruncado] = useState(false);
   const [cargando, setCargando] = useState(false);
+  const [error, setError]       = useState(null);
   const [justificarRow, setJustificarRow] = useState(null);
   const [filtros, setFiltros]   = useState({
     fecha_desde: inicioMes(), fecha_hasta: hoy(), estado: '',
@@ -72,9 +74,11 @@ export default function Asistencia() {
 
   const buscar = useCallback(() => {
     setCargando(true);
+    setError(null);
     const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== ''));
     asistenciaService.getAsistencias(params)
-      .then(r => setFilas(r.data.asistencias))
+      .then(r => { setFilas(r.data.asistencias); setTruncado(!!r.data.truncated); })
+      .catch(() => setError('No se pudieron cargar las asistencias'))
       .finally(() => setCargando(false));
   }, [filtros]);
 
@@ -120,6 +124,10 @@ export default function Asistencia() {
         </button>
       </div>
 
+      {error && (
+        <div className="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
+      )}
+
       <div className="flex items-center gap-x-5 gap-y-2 flex-wrap bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm">
         <span>Total: <strong>{filas.length}</strong></span>
         <span>Presentes: <strong>{resumen.PRESENTE || 0}</strong></span>
@@ -128,9 +136,15 @@ export default function Asistencia() {
         <span>Justificadas: <strong>{resumen.JUSTIFICADA || 0}</strong></span>
       </div>
 
+      {truncado && (
+        <div className="px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs">
+          Mostrando los primeros 500 registros — afiná los filtros para ver el total exacto.
+        </div>
+      )}
+
       {cargando ? (
         <p className="text-center py-16 text-zinc-400 text-sm">Cargando…</p>
-      ) : filas.length === 0 ? (
+      ) : error ? null : filas.length === 0 ? (
         <p className="text-center py-16 text-zinc-400 text-sm">Sin registros en este período</p>
       ) : (
         <div className="overflow-x-auto">

@@ -45,6 +45,13 @@ async function validarUbicacion(id_usuario, lat, lng) {
   return { ok: true };
 }
 
+// Expresión SQL que decide PRESENTE/TARDANZA usando el reloj de MySQL
+// (CURTIME/CURDATE), nunca el reloj del proceso Node — evita desajustes de
+// zona horaria entre el contenedor (UTC) y el negocio (America/La_Paz).
+const ESTADO_CASE_SQL = `CASE WHEN u.hora_entrada_esperada IS NOT NULL
+                                AND CURTIME() > ADDTIME(u.hora_entrada_esperada, '00:10:00')
+                               THEN 'TARDANZA' ELSE 'PRESENTE' END`;
+
 // POST /api/asistencia/entrada  body: { lat, lng }
 const marcarEntrada = async (req, res) => {
   const { lat, lng } = req.body;
@@ -58,34 +65,45 @@ const marcarEntrada = async (req, res) => {
   }
   try {
     const [existe] = await db.promise().query(
-      `SELECT id_asistencia FROM asistencias WHERE id_usuario = ? AND fecha = CURDATE()`,
+      `SELECT id_asistencia, hora_entrada FROM asistencias WHERE id_usuario = ? AND fecha = CURDATE()`,
       [req.user.id_usuario]
     );
-    if (existe.length > 0) {
+
+    // Ya hay una entrada real marcada hoy: bloquear.
+    if (existe.length > 0 && existe[0].hora_entrada !== null) {
       return res.status(400).json({ error: 'Ya marcaste entrada hoy' });
     }
 
     const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
-    const [[u]] = await db.promise().query(
-      `SELECT hora_entrada_esperada FROM usuarios WHERE id_usuario = ?`, [req.user.id_usuario]
-    );
-
-    let estado = 'PRESENTE';
-    if (u.hora_entrada_esperada) {
-      const [h, m] = u.hora_entrada_esperada.split(':').map(Number);
-      const esperada = new Date();
-      esperada.setHours(h, m + 10, 0, 0); // 10 min de tolerancia
-      if (new Date() > esperada) estado = 'TARDANZA';
+    let idAsistencia;
+    if (existe.length > 0) {
+      // Ya existe una fila de hoy sin hora_entrada (FALTA generada por el cron):
+      // convertirla en una marcación real en vez de bloquear.
+      idAsistencia = existe[0].id_asistencia;
+      await db.promise().query(
+        `UPDATE asistencias a
+         JOIN usuarios u ON u.id_usuario = a.id_usuario
+         SET a.hora_entrada = CURTIME(), a.lat_entrada = ?, a.lng_entrada = ?,
+             a.estado = ${ESTADO_CASE_SQL}
+         WHERE a.id_asistencia = ?`,
+        [latNum, lngNum, idAsistencia]
+      );
+    } else {
+      const [result] = await db.promise().query(
+        `INSERT INTO asistencias (id_usuario, fecha, hora_entrada, lat_entrada, lng_entrada, estado)
+         SELECT ?, CURDATE(), CURTIME(), ?, ?, ${ESTADO_CASE_SQL}
+         FROM usuarios u WHERE u.id_usuario = ?`,
+        [req.user.id_usuario, latNum, lngNum, req.user.id_usuario]
+      );
+      idAsistencia = result.insertId;
     }
 
-    await db.promise().query(
-      `INSERT INTO asistencias (id_usuario, fecha, hora_entrada, lat_entrada, lng_entrada, estado)
-       VALUES (?, CURDATE(), CURTIME(), ?, ?, ?)`,
-      [req.user.id_usuario, latNum, lngNum, estado]
+    const [[fila]] = await db.promise().query(
+      `SELECT estado FROM asistencias WHERE id_asistencia = ?`, [idAsistencia]
     );
-    res.status(201).json({ mensaje: 'Entrada registrada', estado });
+    res.status(201).json({ mensaje: 'Entrada registrada', estado: fila.estado });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'Ya marcaste entrada hoy' });
@@ -142,7 +160,7 @@ const getAsistencias = async (req, res) => {
 
   try {
     const [rows] = await db.promise().query(
-      `SELECT a.id_asistencia, a.fecha, a.hora_entrada, a.hora_salida, a.estado, a.motivo_falta,
+      `SELECT a.id_asistencia, DATE_FORMAT(a.fecha, '%Y-%m-%d') AS fecha, a.hora_entrada, a.hora_salida, a.estado, a.motivo_falta,
               CONCAT(u.nombres, ' ', u.apellidos) AS empleado, u.id_usuario,
               s.nombre AS sucursal_nombre
        FROM asistencias a
@@ -150,10 +168,12 @@ const getAsistencias = async (req, res) => {
        LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
        ${where}
        ORDER BY a.fecha DESC, empleado ASC
-       LIMIT 500`,
+       LIMIT 501`,
       params
     );
-    res.json({ asistencias: rows });
+    const truncated = rows.length > 500;
+    if (truncated) rows.length = 500;
+    res.json({ asistencias: rows, truncated });
   } catch (err) {
     console.error('[getAsistencias]', err);
     res.status(500).json({ error: 'Error al obtener asistencias' });
@@ -174,6 +194,14 @@ const justificarFalta = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Registro no encontrado o no está en estado FALTA' });
     }
+
+    const ip = req.ip || req.socket?.remoteAddress || null;
+    await db.promise().query(
+      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen)
+       VALUES (?, 'asistencias', ?, 'UPDATE', ?)`,
+      [req.user.id_usuario, id, ip]
+    );
+
     res.json({ mensaje: 'Falta justificada' });
   } catch (err) {
     console.error('[justificarFalta]', err);
@@ -183,20 +211,27 @@ const justificarFalta = async (req, res) => {
 
 // Genera faltas del día anterior para usuarios activos con horario asignado
 // que no tengan fila de asistencia ese día. Usado por el cron (Task 4).
-const generarFaltasDelDia = async (fechaISO) => {
+// "Ayer" se calcula con CURDATE() de MySQL, no con Date de Node, para que
+// use el mismo reloj/calendario que el resto de la lógica de asistencia.
+const generarFaltasDelDia = async () => {
+  const [[{ fecha }]] = await db.promise().query(
+    `SELECT DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d') AS fecha`
+  );
   const [pendientes] = await db.promise().query(
     `SELECT u.id_usuario FROM usuarios u
      WHERE u.activo = 1 AND u.hora_entrada_esperada IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM asistencias a WHERE a.id_usuario = u.id_usuario AND a.fecha = ?)`,
-    [fechaISO]
+       AND NOT EXISTS (
+         SELECT 1 FROM asistencias a
+         WHERE a.id_usuario = u.id_usuario AND a.fecha = DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+       )`
   );
   for (const u of pendientes) {
     await db.promise().query(
-      `INSERT INTO asistencias (id_usuario, fecha, estado) VALUES (?, ?, 'FALTA')`,
-      [u.id_usuario, fechaISO]
+      `INSERT INTO asistencias (id_usuario, fecha, estado) VALUES (?, DATE_SUB(CURDATE(), INTERVAL 1 DAY), 'FALTA')`,
+      [u.id_usuario]
     );
   }
-  return pendientes.length;
+  return { total: pendientes.length, fecha };
 };
 
 module.exports = { getMiAsistenciaHoy, marcarEntrada, marcarSalida, validarUbicacion, distanciaMetros, getAsistencias, justificarFalta, generarFaltasDelDia };

@@ -3,12 +3,8 @@ const cron = require('node-cron');
 async function ejecutarGeneracionFaltas() {
   try {
     const { generarFaltasDelDia } = require('../controllers/asistencia.Controller');
-    const ayer = new Date();
-    ayer.setDate(ayer.getDate() - 1);
-    const fechaISO = ayer.toISOString().slice(0, 10);
-
-    const total = await generarFaltasDelDia(fechaISO);
-    console.log(`✅ Faltas generadas para ${fechaISO}: ${total}`);
+    const { total, fecha } = await generarFaltasDelDia();
+    console.log(`✅ Faltas generadas para ${fecha}: ${total}`);
   } catch (e) {
     console.error('❌ Error al generar faltas automáticas:', e.message);
   }

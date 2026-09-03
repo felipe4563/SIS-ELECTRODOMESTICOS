@@ -18,11 +18,14 @@ export default function MiAsistencia() {
   const [cargando, setCargando] = useState(true);
   const [marcando, setMarcando] = useState(false);
   const [error, setError]     = useState(null);
+  const [errorCarga, setErrorCarga] = useState(null);
 
   const cargar = () => {
     setCargando(true);
+    setErrorCarga(null);
     asistenciaService.getHoy()
       .then(r => setHoy(r.data.asistencia))
+      .catch(() => setErrorCarga('No se pudo cargar tu asistencia de hoy'))
       .finally(() => setCargando(false));
   };
 
@@ -53,6 +56,8 @@ export default function MiAsistencia() {
       <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 text-center space-y-4">
         {cargando ? (
           <p className="text-sm text-zinc-400">Cargando…</p>
+        ) : errorCarga ? (
+          <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 rounded-xl p-3">{errorCarga}</p>
         ) : (
           <>
             <div className="space-y-1">

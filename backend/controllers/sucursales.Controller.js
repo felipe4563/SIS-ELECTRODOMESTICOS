@@ -49,13 +49,16 @@ const createSucursal = async (req, res) => {
 
     const empresaId = id_empresa ?? emp[0].id_empresa;
 
+    const latVal = (latitud === '' || latitud === undefined || latitud === null) ? null : Number(latitud);
+    const lngVal = (longitud === '' || longitud === undefined || longitud === null) ? null : Number(longitud);
+
     const [result] = await db.promise().query(
       `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, latitud, longitud, radio_metros)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [empresaId, codigo.trim(), nombre.trim(), tipo,
        direccion ?? null, ciudad ?? null, telefono ?? null,
        responsable ?? null, es_punto_venta ? 1 : 1,
-       latitud ?? null, longitud ?? null, Number(radio_metros) > 0 ? Number(radio_metros) : 100]
+       latVal, lngVal, Number(radio_metros) > 0 ? Number(radio_metros) : 100]
     );
 
     const ip = req.ip || req.socket?.remoteAddress || null;
@@ -86,6 +89,9 @@ const updateSucursal = async (req, res) => {
     return res.status(400).json({ error: 'Código, nombre y tipo son requeridos' });
 
   try {
+    const latVal = (latitud === '' || latitud === undefined || latitud === null) ? null : Number(latitud);
+    const lngVal = (longitud === '' || longitud === undefined || longitud === null) ? null : Number(longitud);
+
     const [result] = await db.promise().query(
       `UPDATE sucursales
        SET codigo = ?, nombre = ?, tipo = ?, direccion = ?,
@@ -95,7 +101,7 @@ const updateSucursal = async (req, res) => {
       [codigo.trim(), nombre.trim(), tipo, direccion ?? null,
        ciudad ?? null, telefono ?? null, responsable ?? null,
        es_punto_venta ? 1 : 0, activo !== undefined ? (activo ? 1 : 0) : 1,
-       latitud ?? null, longitud ?? null, Number(radio_metros) > 0 ? Number(radio_metros) : 100, id]
+       latVal, lngVal, Number(radio_metros) > 0 ? Number(radio_metros) : 100, id]
     );
 
     if (result.affectedRows === 0)
