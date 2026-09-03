@@ -37,6 +37,7 @@ const gastosRoutes        = require('./routes/gastos.Routes');
 const herramientasRoutes      = require('./routes/herramientas.Routes');
 const publicRoutes            = require('./routes/public.Routes');
 const servicioTecnicoRoutes   = require('./routes/servicioTecnico.Routes');
+const asistenciaRoutes        = require('./routes/asistencia.Routes');
 
 const backupScheduler = require('./cron/backupScheduler');
 
@@ -113,6 +114,7 @@ app.use('/api/gastos',        gastosRoutes);
 app.use('/api/herramientas',      herramientasRoutes);
 app.use('/api/public',            publicRoutes);
 app.use('/api/servicio-tecnico',  servicioTecnicoRoutes);
+app.use('/api/asistencia',        asistenciaRoutes);
 
 
 // ── Servidor ──────────────────────────────────────────────────────────────
