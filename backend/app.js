@@ -40,6 +40,7 @@ const servicioTecnicoRoutes   = require('./routes/servicioTecnico.Routes');
 const asistenciaRoutes        = require('./routes/asistencia.Routes');
 
 const backupScheduler = require('./cron/backupScheduler');
+const asistenciaScheduler = require('./cron/asistenciaScheduler');
 
 const app = express();
 
@@ -123,4 +124,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Conectado a la base de datos MySQL`);
   console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
   backupScheduler.iniciar();
+  asistenciaScheduler.iniciar();
 });
