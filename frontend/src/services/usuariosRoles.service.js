@@ -22,4 +22,5 @@ export const usuariosService = {
   asignarSucursales:(id, sucursales, id_sucursal_default) => api.put(`/usuarios/${id}/sucursales`, { sucursales, id_sucursal_default }),
   cerrarSesiones:   (id)         => api.post(`/usuarios/${id}/cerrar-sesiones`),
   updateMiPerfil:   (data)       => api.put('/usuarios/mi-perfil', data),
+  getHistorial:     (id)         => api.get(`/usuarios/${id}/historial`),
 };

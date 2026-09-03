@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   FaPlus, FaEdit, FaTrash, FaSpinner, FaUsers, FaKey, FaStore,
-  FaSignOutAlt, FaCheckCircle, FaTimesCircle, FaSearch, FaEye, FaEyeSlash,
+  FaSignOutAlt, FaCheckCircle, FaTimesCircle, FaSearch, FaEye, FaEyeSlash, FaHistory,
 } from 'react-icons/fa';
 import { usuariosService } from '../../services/usuariosRoles.service';
 import { usePermission } from '../../hooks/usePermission';
@@ -242,8 +242,49 @@ function ResetPassModal({ open, onClose, usuario }) {
   );
 }
 
+// ── Modal: Historial laboral ──────────────────────────────────────────────────
+const CAMPO_LABEL = { CARGO: 'Cargo', SUCURSAL: 'Sucursal', COMISION: 'Comisión (%)' };
+
+function HistorialModal({ open, onClose, usuario }) {
+  const [historial, setHistorial] = useState([]);
+  const [cargando,  setCargando]  = useState(true);
+
+  useEffect(() => {
+    if (!open || !usuario) return;
+    setCargando(true);
+    usuariosService.getHistorial(usuario.id_usuario)
+      .then(({ data }) => setHistorial(data.historial))
+      .finally(() => setCargando(false));
+  }, [open, usuario]);
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Historial laboral — ${usuario?.nombres} ${usuario?.apellidos}`} maxWidth="max-w-lg">
+      {cargando ? (
+        <div className="flex items-center justify-center h-32 text-gray-400"><FaSpinner className="animate-spin h-5 w-5" /></div>
+      ) : historial.length === 0 ? (
+        <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-8">Sin cambios registrados todavía.</p>
+      ) : (
+        <ul className="space-y-3">
+          {historial.map(h => (
+            <li key={h.id_historial} className="text-sm border-b border-gray-100 dark:border-zinc-800 pb-3 last:border-0">
+              <div className="flex justify-between items-baseline gap-2">
+                <span className="font-semibold text-gray-800 dark:text-zinc-200">{CAMPO_LABEL[h.campo] || h.campo}</span>
+                <span className="text-xs text-gray-400 dark:text-zinc-500 font-mono">{new Date(h.fecha).toLocaleString('es-BO')}</span>
+              </div>
+              <p className="text-gray-500 dark:text-zinc-400 mt-1">
+                {h.valor_anterior || <em className="text-gray-300 dark:text-zinc-600">vacío</em>} → <span className="font-medium text-gray-700 dark:text-zinc-300">{h.valor_nuevo || <em className="text-gray-300 dark:text-zinc-600">vacío</em>}</span>
+              </p>
+              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">por {h.editor_nombre}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  );
+}
+
 // ── Tarjeta de usuario ────────────────────────────────────────────────────────
-function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCerrarSesiones }) {
+function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCerrarSesiones, onHistorial }) {
   return (
     <div className={`bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 transition-shadow hover:shadow-md dark:hover:shadow-zinc-950/60 ${!u.activo ? 'opacity-60' : ''}`}>
 
@@ -336,6 +377,9 @@ function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCer
         {puede('cerrar_sesiones', 'usuarios') && u.id_usuario !== yo?.id && (
           <AccionBtn title="Cerrar sesiones" color="purple" icon={FaSignOutAlt} onClick={() => onCerrarSesiones(u)} />
         )}
+        {puede('ver', 'usuarios') && (
+          <AccionBtn title="Historial laboral" color="blue" icon={FaHistory} onClick={() => onHistorial(u)} />
+        )}
         {puede('editar', 'usuarios') && (
           <AccionBtn title="Editar" color="green" icon={FaEdit} onClick={() => onEdit(u)} />
         )}
@@ -368,6 +412,7 @@ export default function Usuarios() {
   const [confirm,      setConfirm]      = useState(null);
   const [resetModal,   setResetModal]   = useState(null);
   const [sucModal,     setSucModal]     = useState(null);
+  const [historialModal, setHistorialModal] = useState(null);
   const [sesionConfirm, setSesionConfirm] = useState(null);
   const [toast,        setToast]        = useState(null);
 
@@ -503,6 +548,7 @@ export default function Usuarios() {
               onReset={setResetModal}
               onSucursales={setSucModal}
               onCerrarSesiones={handleCerrarSesiones}
+              onHistorial={setHistorialModal}
             />
           ))}
         </div>
@@ -632,6 +678,7 @@ export default function Usuarios() {
 
       <ResetPassModal  open={!!resetModal} onClose={() => setResetModal(null)} usuario={resetModal} />
       <SucursalesModal open={!!sucModal}   onClose={() => setSucModal(null)}   usuario={sucModal}   onSaved={cargar} />
+      <HistorialModal  open={!!historialModal} onClose={() => setHistorialModal(null)} usuario={historialModal} />
 
       {/* Modal confirmar cerrar sesiones */}
       <Modal open={!!sesionConfirm} onClose={() => setSesionConfirm(null)} title="Cerrar sesiones" maxWidth="max-w-sm">
