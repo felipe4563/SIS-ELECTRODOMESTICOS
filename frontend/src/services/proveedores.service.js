@@ -9,6 +9,7 @@ export const proveedoresService = {
   remove:  (id)         => api.delete(`/proveedores/${id}`),
 
   getSaldo:    (idP)       => api.get(`/proveedores/${idP}/saldo`),
+  updateCredito: (idP, data) => api.patch(`/proveedores/${idP}/credito`, data),
 
   getContactos:   (idP)            => api.get(`/proveedores/${idP}/contactos`),
   createContacto: (idP, data)      => api.post(`/proveedores/${idP}/contactos`, data),

@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { isValidEmail } = require('../utils/validators');
+const { tiene_permiso } = require('../middlewares/authMiddleware');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -149,6 +150,44 @@ const deleteProveedor = async (req, res) => {
   } catch (err) {
     console.error('[deleteProveedor]', err);
     return res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
+// ── Crédito ───────────────────────────────────────────────────────────────
+
+const updateCredito = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { permite_credito, limite_credito, dias_credito } = req.body;
+
+    const [[exists]] = await db.promise().query(
+      `SELECT id_proveedor FROM proveedores WHERE id_proveedor = ?`, [id]
+    );
+    if (!exists) return res.status(404).json({ error: 'Proveedor no encontrado' });
+
+    const puedeOtorgar = tiene_permiso(req, 'proveedores', 'dar_credito');
+
+    if (puedeOtorgar) {
+      await db.promise().query(
+        `UPDATE proveedores SET permite_credito = ?, limite_credito = ?, plazo_credito_dias = ? WHERE id_proveedor = ?`,
+        [permite_credito ? 1 : 0, limite_credito ?? 0, dias_credito ?? 0, id]
+      );
+    } else {
+      // Solo modificar_limite: no puede cambiar permite_credito
+      await db.promise().query(
+        `UPDATE proveedores SET limite_credito = ?, plazo_credito_dias = ? WHERE id_proveedor = ?`,
+        [limite_credito ?? 0, dias_credito ?? 0, id]
+      );
+    }
+
+    await auditLog(req.user.id_usuario, 'proveedores', id, 'UPDATE_CREDITO', getIp(req));
+    const [[updated]] = await db.promise().query(
+      `SELECT id_proveedor, permite_credito, limite_credito, saldo_actual, plazo_credito_dias FROM proveedores WHERE id_proveedor = ?`, [id]
+    );
+    return res.json({ credito: updated });
+  } catch (err) {
+    console.error('[updateCredito]', err);
+    return res.status(500).json({ error: 'Error al actualizar el crédito' });
   }
 };
 
@@ -408,7 +447,7 @@ const deleteCuenta = async (req, res) => {
 
 module.exports = {
   getProveedores, getProveedor, createProveedor, updateProveedor, deleteProveedor,
-  getSaldo,
+  getSaldo, updateCredito,
   getFormData,
   getContactos, createContacto, updateContacto, deleteContacto,
   getCuentas, createCuenta, updateCuenta, deleteCuenta,

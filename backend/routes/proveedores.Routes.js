@@ -1,7 +1,7 @@
 const express         = require('express');
 const router          = express.Router();
 const ctrl            = require('../controllers/proveedores.Controller');
-const {authMiddleware, checkPermission}  = require('../middlewares/authMiddleware');
+const {authMiddleware, checkPermission, checkAnyPermission}  = require('../middlewares/authMiddleware');
 
 // ── Proveedores ───────────────────────────────────────────────────────────
 router.get('/',           authMiddleware, checkPermission('ver', 'proveedores'), ctrl.getProveedores);
@@ -10,6 +10,11 @@ router.get('/:id',        authMiddleware, checkPermission('ver', 'proveedores'),
 router.post('/',   authMiddleware, checkPermission('crear',    'proveedores'), ctrl.createProveedor);
 router.put('/:id', authMiddleware, checkPermission('editar',   'proveedores'), ctrl.updateProveedor);
 router.delete('/:id', authMiddleware, checkPermission('eliminar', 'proveedores'), ctrl.deleteProveedor);
+
+// ── Crédito ───────────────────────────────────────────────────────────────
+router.patch('/:id/credito', authMiddleware,
+  checkAnyPermission([['dar_credito', 'proveedores'], ['modificar_limite', 'proveedores']]),
+  ctrl.updateCredito);
 
 // ── Saldo / Cuenta por pagar ──────────────────────────────────────────────
 router.get('/:id/saldo',

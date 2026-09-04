@@ -413,6 +413,11 @@ export default function VentaForm() {
   const [rcError, setRcError] = useState('');
   const [rcGuardando, setRcGuardando] = useState(false);
 
+  const [editandoCredito, setEditandoCredito] = useState(false);
+  const [credForm, setCredForm] = useState({ permite_credito: false, limite_credito: '', dias_credito: '' });
+  const [credError, setCredError] = useState('');
+  const [credGuardando, setCredGuardando] = useState(false);
+
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -528,6 +533,7 @@ export default function VentaForm() {
   }, [form.tipo_venta]); // eslint-disable-line
 
   useEffect(() => {
+    setEditandoCredito(false);
     if (!form.id_cliente) { setClienteInfo(null); return; }
     const cli = clientes.find(c => String(c.id_cliente) === String(form.id_cliente));
     setClienteInfo(cli ?? null);
@@ -735,6 +741,41 @@ export default function VentaForm() {
       setRcGuardando(false);
     }
   }, [rcForm, busquedaCliente]);
+
+  const abrirEditarCredito = useCallback(() => {
+    if (!clienteInfo) return;
+    setCredForm({
+      permite_credito: Boolean(clienteInfo.permite_credito),
+      limite_credito: clienteInfo.limite_credito ?? '',
+      dias_credito: clienteInfo.dias_credito ?? '',
+    });
+    setCredError('');
+    setEditandoCredito(true);
+  }, [clienteInfo]);
+
+  const guardarCredito = useCallback(async () => {
+    setCredError('');
+    const { permite_credito, limite_credito, dias_credito } = credForm;
+    if (permite_credito && !(Number(limite_credito) >= 0)) {
+      return setCredError('Ingresá un límite de crédito válido');
+    }
+    setCredGuardando(true);
+    try {
+      const res = await clientesService.updateCredito(clienteInfo.id_cliente, {
+        permite_credito,
+        limite_credito: Number(limite_credito) || 0,
+        dias_credito: Number(dias_credito) || 0,
+      });
+      const actualizado = { ...clienteInfo, ...res.data.credito };
+      setClientes(prev => prev.map(c => String(c.id_cliente) === String(actualizado.id_cliente) ? { ...c, ...actualizado } : c));
+      setClienteInfo(actualizado);
+      setEditandoCredito(false);
+    } catch (err) {
+      setCredError(err.response?.data?.error ?? 'Error al actualizar el crédito');
+    } finally {
+      setCredGuardando(false);
+    }
+  }, [credForm, clienteInfo]);
 
   const inputCls   = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-shadow';
   const compactCls = 'w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400';
@@ -1000,6 +1041,14 @@ export default function VentaForm() {
                         Dto. {clienteInfo.descuento_default}% aplicado
                       </span>
                     )}
+                    {(puede('dar_credito', 'clientes') || puede('modificar_limite', 'clientes')) && (
+                      <button
+                        type="button" onClick={abrirEditarCredito}
+                        className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline"
+                      >
+                        ✎ Editar límite
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1031,6 +1080,14 @@ export default function VentaForm() {
                     <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold">
                       Dto. {clienteInfo.descuento_default}% aplicado
                     </span>
+                  )}
+                  {(puede('dar_credito', 'clientes') || puede('modificar_limite', 'clientes')) && (
+                    <button
+                      type="button" onClick={abrirEditarCredito}
+                      className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline"
+                    >
+                      ✎ Editar límite
+                    </button>
                   )}
                 </div>
               )}
@@ -1117,6 +1174,52 @@ export default function VentaForm() {
               </button>
             </div>
           ) : null}
+
+          {editandoCredito && clienteInfo && (
+            <div className="mt-2 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2.5">
+              {puede('dar_credito', 'clientes') && (
+                <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+                  <input
+                    type="checkbox" checked={credForm.permite_credito}
+                    onChange={e => setCredForm(p => ({ ...p, permite_credito: e.target.checked }))}
+                    className="w-4 h-4 rounded accent-yellow-400"
+                  />
+                  <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Habilitar crédito</span>
+                </label>
+              )}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <FieldLabel>Límite de crédito</FieldLabel>
+                  <input type="number" min={0} step="0.01" value={credForm.limite_credito}
+                    onChange={e => setCredForm(p => ({ ...p, limite_credito: e.target.value }))}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <FieldLabel>Días de crédito</FieldLabel>
+                  <input type="number" min={0} value={credForm.dias_credito}
+                    onChange={e => setCredForm(p => ({ ...p, dias_credito: e.target.value }))}
+                    className={inputCls} />
+                </div>
+              </div>
+              {credError && (
+                <p className="text-xs text-red-500 flex items-center gap-1.5"><span>⚠</span> {credError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button" onClick={guardarCredito} disabled={credGuardando}
+                  className="flex-1 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-xs transition-colors"
+                >
+                  {credGuardando ? 'Guardando…' : 'Guardar'}
+                </button>
+                <button
+                  type="button" onClick={() => setEditandoCredito(false)}
+                  className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -101,11 +101,11 @@ const S = StyleSheet.create({
   obsText:  { fontSize: 8, color: '#374151', marginTop: 2 },
 
   // Imagen de factura / comprobantes
-  facturaImg: { width: 170, height: 220, objectFit: 'contain', borderWidth: 1,
-                borderColor: '#e5e7eb', borderRadius: 3, marginTop: 4, alignSelf: 'center' },
-  compGrid:   { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 4 },
-  compCard:   { width: 100, alignItems: 'center' },
-  compImg:    { width: 90, height: 90, objectFit: 'cover', borderWidth: 1,
+  facturaImg: { width: '100%', objectFit: 'contain', borderWidth: 1,
+                borderColor: '#e5e7eb', borderRadius: 3, marginTop: 4 },
+  compGrid:   { marginTop: 4, gap: 10 },
+  compCard:   { width: '100%', alignItems: 'center' },
+  compImg:    { width: '100%', objectFit: 'contain', borderWidth: 1,
                 borderColor: '#e5e7eb', borderRadius: 3 },
   compLbl:    { fontSize: 6.5, color: '#6b7280', marginTop: 2, textAlign: 'center' },
 
@@ -378,11 +378,11 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], recepcion
             </View>
 
             {pagosActivos.some(p => p.comprobante_base64) && (
-              <View style={{ marginTop: 8 }} wrap={false}>
+              <View style={{ marginTop: 8 }}>
                 <Text style={S.secTitle}>Comprobantes de Pago</Text>
                 <View style={S.compGrid}>
                   {pagosActivos.filter(p => p.comprobante_base64).map(p => (
-                    <View key={p.id_pago} style={S.compCard}>
+                    <View key={p.id_pago} style={S.compCard} wrap={false}>
                       <Image src={p.comprobante_base64} style={S.compImg} />
                       <Text style={S.compLbl}>{p.numero} · {fecha(p.fecha?.slice(0, 10))}</Text>
                     </View>

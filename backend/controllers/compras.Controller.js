@@ -166,7 +166,9 @@ const getFormData = async (req, res) => {
         WHERE d.activo = 1 ORDER BY s.nombre, d.nombre
       `),
       db.promise().query(`SELECT id_moneda, nombre, codigo, simbolo, es_moneda_base, activo FROM monedas WHERE activo = 1 ORDER BY nombre`),
-      db.promise().query(`SELECT id_proveedor, codigo, razon_social, activo FROM proveedores WHERE activo = 1 ORDER BY razon_social`),
+      db.promise().query(`SELECT id_proveedor, codigo, razon_social, activo,
+                                 permite_credito, limite_credito, saldo_actual, plazo_credito_dias
+                          FROM proveedores WHERE activo = 1 ORDER BY razon_social`),
       db.promise().query(`
         SELECT p.id_producto, p.codigo_interno, p.codigo_barras, p.producto, p.precio_real,
                p.id_impuesto_default, p.id_proveedor_default, p.modelo, p.color, p.capacidad,
@@ -568,11 +570,26 @@ const confirmarPedido = async (req, res) => {
     const { condicion_pago = 'CONTADO', dias_credito = 0, num_cuotas = 1 } = req.body;
 
     const [[compra]] = await db.promise().query(
-      `SELECT id_compra, estado, total, fecha_pedido FROM compras WHERE id_compra = ?`, [id]
+      `SELECT id_compra, id_proveedor, estado, total, fecha_pedido FROM compras WHERE id_compra = ?`, [id]
     );
     if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
     if (!['PRE_PEDIDO', 'CONFIRMADO'].includes(compra.estado))
       return res.status(409).json({ error: 'Solo se pueden confirmar compras en estado PRE_PEDIDO o CONFIRMADO' });
+
+    if (condicion_pago === 'CREDITO') {
+      const [[prov]] = await db.promise().query(
+        `SELECT permite_credito, limite_credito, saldo_actual FROM proveedores WHERE id_proveedor = ?`, [compra.id_proveedor]
+      );
+      if (!prov?.permite_credito) {
+        return res.status(400).json({ error: 'El proveedor no tiene habilitado el crédito' });
+      }
+      const nuevoSaldo = Number(prov.saldo_actual) + Number(compra.total);
+      if (nuevoSaldo > Number(prov.limite_credito)) {
+        return res.status(400).json({
+          error: `Excede el límite de crédito del proveedor (Límite: ${prov.limite_credito}, Saldo: ${prov.saldo_actual}, Compra: ${Number(compra.total).toFixed(2)})`,
+        });
+      }
+    }
 
     await db.promise().query(
       `UPDATE compras SET

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { comprasService }     from '../../services/compras.service';
+import { proveedoresService } from '../../services/proveedores.service';
 import { productosService }   from '../../services/productos.service';
 import { tiposCambioService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
@@ -269,6 +270,11 @@ export default function CompraForm() {
   const [soloStockBajo,  setSoloStockBajo]  = useState(true);
   const [seleccionLista, setSeleccionLista] = useState({}); // id_producto -> cantidad (string)
 
+  const [editandoCredito, setEditandoCredito] = useState(false);
+  const [credForm, setCredForm] = useState({ permite_credito: false, limite_credito: '', dias_credito: '' });
+  const [credError, setCredError] = useState('');
+  const [credGuardando, setCredGuardando] = useState(false);
+
   const [npModal,      setNpModal]      = useState(false);
   const [npForm,       setNpForm]       = useState(NP_VACIO);
   const [npError,      setNpError]      = useState('');
@@ -331,6 +337,50 @@ export default function CompraForm() {
   }, []); // eslint-disable-line
 
   const setD = (k, v) => setDatos(p => ({ ...p, [k]: v }));
+
+  const proveedorInfo = useMemo(
+    () => catalogo?.proveedores.find(p => String(p.id_proveedor) === String(datos.id_proveedor)) ?? null,
+    [catalogo, datos.id_proveedor]
+  );
+
+  useEffect(() => { setEditandoCredito(false); }, [datos.id_proveedor]);
+
+  const abrirEditarCredito = useCallback(() => {
+    if (!proveedorInfo) return;
+    setCredForm({
+      permite_credito: Boolean(proveedorInfo.permite_credito),
+      limite_credito: proveedorInfo.limite_credito ?? '',
+      dias_credito: proveedorInfo.plazo_credito_dias ?? '',
+    });
+    setCredError('');
+    setEditandoCredito(true);
+  }, [proveedorInfo]);
+
+  const guardarCredito = useCallback(async () => {
+    setCredError('');
+    const { permite_credito, limite_credito, dias_credito } = credForm;
+    if (permite_credito && !(Number(limite_credito) >= 0)) {
+      return setCredError('Ingresá un límite de crédito válido');
+    }
+    setCredGuardando(true);
+    try {
+      const res = await proveedoresService.updateCredito(proveedorInfo.id_proveedor, {
+        permite_credito,
+        limite_credito: Number(limite_credito) || 0,
+        dias_credito: Number(dias_credito) || 0,
+      });
+      const actualizado = { ...proveedorInfo, ...res.data.credito, plazo_credito_dias: res.data.credito.plazo_credito_dias };
+      setCatalogo(prev => ({
+        ...prev,
+        proveedores: prev.proveedores.map(p => String(p.id_proveedor) === String(actualizado.id_proveedor) ? { ...p, ...actualizado } : p),
+      }));
+      setEditandoCredito(false);
+    } catch (err) {
+      setCredError(err.response?.data?.error ?? 'Error al actualizar el crédito');
+    } finally {
+      setCredGuardando(false);
+    }
+  }, [credForm, proveedorInfo]);
 
   // Auto-fill tipo de cambio al cambiar moneda
   useEffect(() => {
@@ -677,6 +727,68 @@ export default function CompraForm() {
                 <option key={p.id_proveedor} value={p.id_proveedor}>{p.codigo} — {p.razon_social}</option>
               ))}
             </select>
+            {proveedorInfo && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className={`text-xs ${proveedorInfo.permite_credito ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>
+                  {proveedorInfo.permite_credito
+                    ? `Crédito: Bs ${fmtMonto(proveedorInfo.limite_credito)} · Saldo: Bs ${fmtMonto(proveedorInfo.saldo_actual)}`
+                    : 'Sin crédito habilitado'}
+                </span>
+                {(puede('dar_credito', 'proveedores') || puede('modificar_limite', 'proveedores')) && (
+                  <button
+                    type="button" onClick={abrirEditarCredito}
+                    className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline"
+                  >
+                    ✎ Editar límite
+                  </button>
+                )}
+              </div>
+            )}
+            {editandoCredito && proveedorInfo && (
+              <div className="mt-2 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2.5">
+                {puede('dar_credito', 'proveedores') && (
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+                    <input
+                      type="checkbox" checked={credForm.permite_credito}
+                      onChange={e => setCredForm(p => ({ ...p, permite_credito: e.target.checked }))}
+                      className="w-4 h-4 rounded accent-yellow-400"
+                    />
+                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Habilitar crédito</span>
+                  </label>
+                )}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className={fieldLbl}>Límite de crédito</label>
+                    <input type="number" min={0} step="0.01" value={credForm.limite_credito}
+                      onChange={e => setCredForm(p => ({ ...p, limite_credito: e.target.value }))}
+                      className={compactCls} />
+                  </div>
+                  <div>
+                    <label className={fieldLbl}>Días de crédito</label>
+                    <input type="number" min={0} value={credForm.dias_credito}
+                      onChange={e => setCredForm(p => ({ ...p, dias_credito: e.target.value }))}
+                      className={compactCls} />
+                  </div>
+                </div>
+                {credError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1.5"><span>⚠</span> {credError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button" onClick={guardarCredito} disabled={credGuardando}
+                    className="flex-1 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-xs transition-colors"
+                  >
+                    {credGuardando ? 'Guardando…' : 'Guardar'}
+                  </button>
+                  <button
+                    type="button" onClick={() => setEditandoCredito(false)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
