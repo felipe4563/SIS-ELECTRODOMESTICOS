@@ -7,6 +7,7 @@ const fmt   = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigit
 const fmtN  = n => Number(n ?? 0).toLocaleString('es-BO', { maximumFractionDigits: 4 });
 const fecha = s => s ? new Date(s.includes('T') ? s : s + 'T00:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 const fechaCorta = s => s ? new Date(s.includes('T') ? s : s + 'T00:00:00').toLocaleDateString('es-BO') : '—';
+const fechaHora = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
 const ESTADO_COLOR = {
   PRE_PEDIDO: { bg: '#f4f4f5', fg: '#52525b' },
@@ -33,7 +34,7 @@ const chunkArray = (arr, size) => {
 };
 
 /* ─── Ticket 80mm (portrait) ──────────────────────────────────────────────── */
-function Ticket80({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
+function Ticket80({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM }) {
   return (
     <div
       id="ticket"
@@ -95,6 +96,13 @@ function Ticket80({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
         </>
       )}
 
+      {recepciones?.length > 0 && (
+        <>
+          <Divisor />
+          <HistorialRecepciones recepciones={recepciones} fontSize="10px" />
+        </>
+      )}
+
       <Divisor />
       <Pie e={e} />
     </div>
@@ -102,7 +110,7 @@ function Ticket80({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
 }
 
 /* ─── Ticket 110mm (horizontal / ancho) ───────────────────────────────────── */
-function Ticket110({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
+function Ticket110({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM }) {
   return (
     <div
       id="ticket"
@@ -206,6 +214,13 @@ function Ticket110({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
         </>
       )}
 
+      {recepciones?.length > 0 && (
+        <>
+          <Divisor />
+          <HistorialRecepciones recepciones={recepciones} fontSize="9px" />
+        </>
+      )}
+
       <Divisor />
       <Pie e={e} fontSize="9px" />
     </div>
@@ -216,7 +231,7 @@ function Ticket110({ c, detalle, pagos, empresa: e, logoUrl, fmtM }) {
    Si hay muchos productos, se pagina en hojas de PRODUCTOS_POR_HOJA_A4 ítems,
    cada hoja repite la cabecera completa (mismo número de compra) — no crea
    compras nuevas, solo reparte el detalle de productos entre hojas. */
-function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
+function TicketA4({ c, detalle, cuotas, pagos, recepciones, empresa: e, logoUrl, fmtM }) {
   const est = ESTADO_COLOR[c.estado] ?? ESTADO_COLOR.ANULADO;
   const paginas = chunkArray(detalle, PRODUCTOS_POR_HOJA_A4);
 
@@ -396,6 +411,7 @@ function TicketA4({ c, detalle, cuotas, pagos, empresa: e, logoUrl, fmtM }) {
             </div>
           )}
           <PagosProveedor c={c} pagos={pagos} fmtM={fmtM} fontSize="9px" />
+          <HistorialRecepciones recepciones={recepciones} fontSize="9px" />
         </div>
 
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
@@ -531,6 +547,27 @@ const PagosProveedor = ({ c, pagos, fmtM, fontSize = '10px' }) => {
   );
 };
 
+const HistorialRecepciones = ({ recepciones, fontSize = '9px' }) => {
+  if (!recepciones?.length) return null;
+  return (
+    <div style={{ fontSize, marginBottom: '2px' }}>
+      <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>HISTORIAL DE RECEPCIONES</div>
+      {recepciones.map(r => (
+        <div key={r.id_recepcion} style={{ marginBottom: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+            <span>{fechaHora(r.fecha)}</span>
+            <span style={{ color: '#666' }}>{r.usuario_nombres} {r.usuario_apellidos}</span>
+          </div>
+          {(r.items ?? []).map((it, i) => (
+            <div key={i} style={{ color: '#444' }}>{fmtN(it.cantidad_recibida)} × {it.producto} ({it.codigo_interno})</div>
+          ))}
+          {r.observaciones && <div style={{ color: '#374151' }}>{r.observaciones}</div>}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Pie = ({ e, fontSize = '11px' }) => (
   <div style={{ textAlign: 'center', fontSize, marginTop: '4px' }}>
     <div style={{ fontWeight: 'bold' }}>Documento interno de control de compras</div>
@@ -600,7 +637,7 @@ export default function CompraImprimirDirecto() {
   if (cargando) return <div className="flex items-center justify-center py-32 text-zinc-400">Cargando…</div>;
   if (!data)    return null;
 
-  const { compra, detalle = [], cuotas = [], pagos = [] } = data;
+  const { compra, detalle = [], cuotas = [], pagos = [], recepciones = [] } = data;
   const sym  = compra.moneda_simbolo ?? compra.moneda_codigo ?? '';
   const fmtM = n => `${sym} ${fmt(n)}`;
 
@@ -643,10 +680,10 @@ export default function CompraImprimirDirecto() {
       {/* Preview */}
       <div className="flex justify-center p-4 bg-zinc-100 dark:bg-zinc-950 min-h-screen">
         {formato === 'A4'
-          ? <TicketA4  c={compra} detalle={detalle} cuotas={cuotas} pagos={pagos} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
+          ? <TicketA4  c={compra} detalle={detalle} cuotas={cuotas} pagos={pagos} recepciones={recepciones} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
           : formato === '110mm'
-          ? <Ticket110 c={compra} detalle={detalle} pagos={pagos} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
-          : <Ticket80  c={compra} detalle={detalle} pagos={pagos} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
+          ? <Ticket110 c={compra} detalle={detalle} pagos={pagos} recepciones={recepciones} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
+          : <Ticket80  c={compra} detalle={detalle} pagos={pagos} recepciones={recepciones} empresa={empresa} logoUrl={logoUrl} fmtM={fmtM} />
         }
       </div>
 

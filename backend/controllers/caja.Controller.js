@@ -330,7 +330,10 @@ async function cerrarCaja(req, res) { return _cerrarArqueo(req, res, false); }
 
 async function getLibroCaja(req, res) {
   try {
-    let { id_sucursal, fecha_desde, fecha_hasta, metodo_pago } = req.query;
+    let { id_sucursal, fecha_desde, fecha_hasta, metodo_pago, page = 1, limit = 20 } = req.query;
+
+    const safeLimit = Math.min(Number(limit) || 20, 200);
+    const safePage  = Math.max(Number(page) || 1, 1);
 
     const verTodos = req.ability.can('ver_arqueo_todos', 'caja');
     if (!verTodos) id_sucursal = req.user.id_sucursal;
@@ -404,8 +407,19 @@ async function getLibroCaja(req, res) {
       m.saldo = +saldo.toFixed(2);
     }
 
+    // El saldo corrido se calcula sobre TODO el rango en orden cronológico
+    // (arriba). Para mostrar los más recientes primero, invertimos recién acá
+    // y paginamos ya en orden de exhibición — cada fila conserva el saldo que
+    // le corresponde, solo cambia el orden en que se listan.
+    const total = movimientos.length;
+    const offset = (safePage - 1) * safeLimit;
+    const pagina = [...movimientos].reverse().slice(offset, offset + safeLimit);
+
     res.json({
-      movimientos,
+      movimientos: pagina,
+      total,
+      page: safePage,
+      limit: safeLimit,
       totales: {
         ingresos: +totalIngresos.toFixed(2),
         egresos:  +totalEgresos.toFixed(2),

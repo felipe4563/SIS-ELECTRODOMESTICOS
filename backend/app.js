@@ -4,6 +4,7 @@ const cors      = require('cors');
 const path      = require('path');
 const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
+const multer    = require('multer');
 
 // ── Rutas ─────────────────────────────────────────────────────────────────
 const authRoutes          = require('./routes/auth.Routes');
@@ -117,6 +118,21 @@ app.use('/api/public',            publicRoutes);
 app.use('/api/servicio-tecnico',  servicioTecnicoRoutes);
 app.use('/api/asistencia',        asistenciaRoutes);
 
+// ── Manejador de errores ─────────────────────────────────────────────────────
+// Sin esto, un error de Multer (archivo muy grande, tipo no permitido, etc.)
+// llega al manejador por defecto de Express, que responde HTML — el frontend
+// no puede leer un mensaje de ese HTML y muestra su error genérico de fallback.
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    const mensajes = {
+      LIMIT_FILE_SIZE:  'El archivo supera el tamaño máximo permitido',
+      LIMIT_UNEXPECTED_FILE: 'Tipo de archivo no permitido o campo de archivo inesperado',
+    };
+    return res.status(400).json({ mensaje: mensajes[err.code] ?? 'Error al subir el archivo' });
+  }
+  console.error('[errorHandler]', err);
+  res.status(500).json({ mensaje: 'Error interno del servidor' });
+});
 
 // ── Servidor ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

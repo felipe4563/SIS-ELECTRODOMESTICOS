@@ -32,7 +32,10 @@ export default function LibroCaja() {
   const [sucursales, setSucursales] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
   const [totales, setTotales] = useState({ ingresos: 0, egresos: 0, saldo: 0 });
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [cargando, setCargando] = useState(false);
+  const LIMIT = 20;
 
   useEffect(() => {
     if (verTodos) {
@@ -40,19 +43,28 @@ export default function LibroCaja() {
     }
   }, [verTodos]);
 
-  const buscar = async () => {
+  const buscar = async (p = 1) => {
     setCargando(true);
     try {
       const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== ''));
-      const res = await cajaService.getLibroCaja(params);
+      const res = await cajaService.getLibroCaja({ ...params, page: p, limit: LIMIT });
       setMovimientos(res.data.movimientos ?? []);
       setTotales(res.data.totales ?? { ingresos: 0, egresos: 0, saldo: 0 });
+      setTotal(res.data.total ?? 0);
+      setPage(res.data.page ?? p);
     } catch { /* silencioso */ }
     finally { setCargando(false); }
   };
 
-  // Búsqueda automática al entrar, con los filtros por defecto (últimos 30 días)
-  useEffect(() => { buscar(); }, []); // eslint-disable-line
+  // Búsqueda automática al entrar y cada vez que cambian los filtros (con
+  // debounce), reseteando a la página 1 — ya no hace falta tocar "Buscar".
+  useEffect(() => {
+    const t = setTimeout(() => { buscar(1); }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros]);
+
+  const totalPages = Math.ceil(total / LIMIT);
 
   const set = (k, v) => setFiltros(prev => ({ ...prev, [k]: v }));
 
@@ -106,11 +118,11 @@ export default function LibroCaja() {
 
           <div className="flex items-end">
             <button
-              onClick={buscar}
+              onClick={() => buscar(1)}
               disabled={cargando}
               className="w-full px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm disabled:opacity-50 transition-colors"
             >
-              {cargando ? 'Buscando…' : '🔍 Buscar'}
+              {cargando ? 'Buscando…' : '↻ Actualizar'}
             </button>
           </div>
         </div>
@@ -238,8 +250,49 @@ export default function LibroCaja() {
               })}
             </div>
 
+            {/* Paginación desktop */}
+            {totalPages > 1 && (
+              <div className="hidden md:flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => buscar(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => buscar(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Paginación mobile */}
+            {totalPages > 1 && (
+              <div className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  disabled={page === 1}
+                  onClick={() => buscar(page - 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >← Anterior</button>
+                <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => buscar(page + 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >Siguiente →</button>
+              </div>
+            )}
+
             <div className="px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-400 dark:text-zinc-600">
-              {movimientos.length} movimiento{movimientos.length !== 1 ? 's' : ''}
+              {total} movimiento{total !== 1 ? 's' : ''}
             </div>
           </>
         )}

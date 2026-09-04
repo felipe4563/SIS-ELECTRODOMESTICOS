@@ -95,9 +95,24 @@ export default function VentaDetalle() {
   const [seriesUploading,  setSeriesUploading]  = useState({}); // {[id_detalle]: bool}
   const [seriesDone,       setSeriesDone]       = useState({}); // {[id_detalle]: bool}
   const [previewSerie,     setPreviewSerie]     = useState(null); // { url, id_detalle }
+  const [editandoSerie,    setEditandoSerie]    = useState(null); // id_detalle con el input abierto
+  const [serieTexto,       setSerieTexto]       = useState('');
+  const [guardandoSerie,   setGuardandoSerie]   = useState(null); // id_detalle guardando
   const serieInputRef = useRef(null);
   const serieDetalleRef = useRef(null);
   const backendBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+
+  const handleGuardarSerie = async (id_detalle) => {
+    if (!serieTexto.trim()) return;
+    setGuardandoSerie(id_detalle);
+    try {
+      await ventasService.actualizarSerie(id_detalle, serieTexto.trim());
+      setEditandoSerie(null);
+      setSerieTexto('');
+      await cargar();
+    } catch { /* silencioso */ }
+    finally { setGuardandoSerie(null); }
+  };
 
   const handleSubirSerie = async (file) => {
     const id_detalle = serieDetalleRef.current;
@@ -424,8 +439,33 @@ export default function VentaDetalle() {
                             </button>
                           )}
                         </div>
+                      ) : editandoSerie === d.id_detalle ? (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <input
+                            type="text" autoFocus value={serieTexto}
+                            onChange={e => setSerieTexto(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
+                            placeholder="N° de serie"
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
+                          />
+                          <button
+                            onClick={() => handleGuardarSerie(d.id_detalle)}
+                            disabled={guardandoSerie === d.id_detalle}
+                            className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                            {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
+                          </button>
+                          <button
+                            onClick={() => { setEditandoSerie(null); setSerieTexto(''); }}
+                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                            cancelar
+                          </button>
+                        </div>
                       ) : (
-                        <p className="text-[10px] text-zinc-300 dark:text-zinc-600 mt-0.5 italic">Sin serie</p>
+                        <button
+                          onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); }}
+                          className="text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 mt-0.5 italic underline">
+                          + agregar serie
+                        </button>
                       )}
                     </td>
                     <td className="px-4 py-3 font-mono text-zinc-600 dark:text-zinc-400">{fmtMonto(d.cantidad)}</td>
@@ -523,6 +563,36 @@ export default function VentaDetalle() {
                   )}
                 </div>
                 {/* Serie en mobile */}
+                {!d.numero_serie && (
+                  editandoSerie === d.id_detalle ? (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <input
+                        type="text" autoFocus value={serieTexto}
+                        onChange={e => setSerieTexto(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
+                        placeholder="N° de serie"
+                        className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
+                      />
+                      <button
+                        onClick={() => handleGuardarSerie(d.id_detalle)}
+                        disabled={guardandoSerie === d.id_detalle}
+                        className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                        {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
+                      </button>
+                      <button
+                        onClick={() => { setEditandoSerie(null); setSerieTexto(''); }}
+                        className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                        cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); }}
+                      className="mt-1.5 text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 italic underline">
+                      + agregar serie
+                    </button>
+                  )
+                )}
                 {d.numero_serie && (
                   <div className="mt-1.5 flex items-center gap-2">
                     <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded">
@@ -788,7 +858,7 @@ export default function VentaDetalle() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Monto *</label>
-                <input type="number" min={0.01} step="0.01" value={cobro.monto}
+                <input type="number" min={0.01} max={venta.saldo_pendiente} step="0.01" value={cobro.monto}
                   onChange={e => setCobro(p => ({ ...p, monto: e.target.value }))}
                   className={inputCls} />
                 <p className="text-xs text-zinc-400 mt-1">Saldo: Bs {fmtMonto(venta.saldo_pendiente)}</p>

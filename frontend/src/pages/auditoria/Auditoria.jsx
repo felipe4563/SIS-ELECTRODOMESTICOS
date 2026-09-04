@@ -178,6 +178,9 @@ function TabAuditoria() {
   const [usuarios, setUsuarios]     = useState([]);
   const [cargando, setCargando]     = useState(false);
   const [detalleRow, setDetalleRow] = useState(null);
+  const [total, setTotal]           = useState(0);
+  const [page, setPage]             = useState(1);
+  const LIMIT = 20;
   const [filtros, setFiltros]       = useState({
     fecha_desde: inicioMes(),
     fecha_hasta: hoy(),
@@ -191,15 +194,22 @@ function TabAuditoria() {
     auditoriaService.getUsuarios().then(r => setUsuarios(r.data));
   }, []);
 
-  const buscar = useCallback(() => {
+  const buscar = useCallback((p = 1) => {
     setCargando(true);
     const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== ''));
-    auditoriaService.getAuditoria(params)
-      .then(r => { setFilas(r.data); setCargando(false); })
+    auditoriaService.getAuditoria({ ...params, page: p, limit: LIMIT })
+      .then(r => {
+        setFilas(r.data.auditoria ?? []);
+        setTotal(r.data.total ?? 0);
+        setPage(p);
+        setCargando(false);
+      })
       .catch(() => setCargando(false));
   }, [filtros]);
 
-  useEffect(() => { buscar(); }, []);
+  useEffect(() => { buscar(1); }, [filtros]);
+
+  const totalPages = Math.ceil(total / LIMIT);
 
   const f = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
@@ -242,7 +252,7 @@ function TabAuditoria() {
             {ACCIONES.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
-        <button onClick={buscar}
+        <button onClick={() => buscar(1)}
           className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 font-semibold text-sm rounded-xl transition-colors">
           Consultar
         </button>
@@ -252,11 +262,8 @@ function TabAuditoria() {
       <div className="flex items-center gap-x-5 gap-y-2 flex-wrap bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 rounded-xl px-4 py-3">
         <div className="flex items-center gap-1.5 text-sm">
           <span className="text-zinc-400 dark:text-zinc-500">Registros:</span>
-          <span className="font-semibold text-zinc-900 dark:text-white">{cargando ? '…' : filas.length.toLocaleString('es-BO')}</span>
+          <span className="font-semibold text-zinc-900 dark:text-white">{cargando ? '…' : total.toLocaleString('es-BO')}</span>
         </div>
-        {!cargando && filas.length >= 500 && (
-          <span className="text-xs text-orange-500 dark:text-orange-400">Límite 500 — afine los filtros</span>
-        )}
       </div>
 
       {/* Contenido */}
@@ -337,7 +344,48 @@ function TabAuditoria() {
                 ))}
               </tbody>
             </table>
+
+            {/* Paginación desktop */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => buscar(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => buscar(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Paginación mobile */}
+          {totalPages > 1 && (
+            <div className="md:hidden flex items-center justify-between gap-3">
+              <button
+                disabled={page === 1}
+                onClick={() => buscar(page - 1)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >← Anterior</button>
+              <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => buscar(page + 1)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >Siguiente →</button>
+            </div>
+          )}
         </>
       )}
     </div>

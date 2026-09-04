@@ -490,7 +490,7 @@ function ModalPagar({ cuotas, monedas, saldoPendiente, onConfirm, onClose, loadi
           </div>
           <div>
             <label className={labelCls}>Monto (saldo: {fmtMonto(saldoPendiente)})</label>
-            <input type="number" min="0.01" step="0.01" value={form.monto}
+            <input type="number" min="0.01" max={saldoPendiente} step="0.01" value={form.monto}
               onChange={e => setF('monto', e.target.value)} className={fieldCls} />
           </div>
         </div>

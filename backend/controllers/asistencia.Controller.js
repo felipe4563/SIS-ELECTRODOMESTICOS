@@ -172,7 +172,7 @@ const marcarSalida = async (req, res) => {
 
 // GET /api/asistencia?fecha_desde=&fecha_hasta=&id_usuario=&id_sucursal=&estado=
 const getAsistencias = async (req, res) => {
-  const { fecha_desde, fecha_hasta, id_usuario, id_sucursal, estado } = req.query;
+  const { fecha_desde, fecha_hasta, id_usuario, id_sucursal, estado, page = 1, limit = 20 } = req.query;
   const cond = [];
   const params = [];
   if (fecha_desde) { cond.push('a.fecha >= ?'); params.push(fecha_desde); }
@@ -182,7 +182,19 @@ const getAsistencias = async (req, res) => {
   if (estado)      { cond.push('a.estado = ?'); params.push(estado); }
   const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
 
+  const limitNum = Math.min(Number(limit) || 20, 200);
+  const offset = (Number(page) - 1) * limitNum;
+
   try {
+    const [[{ total }]] = await db.promise().query(
+      `SELECT COUNT(*) AS total
+       FROM asistencias a
+       JOIN usuarios u ON u.id_usuario = a.id_usuario
+       LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
+       ${where}`,
+      params
+    );
+
     const [rows] = await db.promise().query(
       `SELECT a.id_asistencia, DATE_FORMAT(a.fecha, '%Y-%m-%d') AS fecha, a.hora_entrada, a.hora_salida, a.estado, a.motivo_falta,
               CONCAT(u.nombres, ' ', u.apellidos) AS empleado, u.id_usuario,
@@ -192,12 +204,11 @@ const getAsistencias = async (req, res) => {
        LEFT JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
        ${where}
        ORDER BY a.fecha DESC, empleado ASC
-       LIMIT 501`,
-      params
+       LIMIT ? OFFSET ?`,
+      [...params, limitNum, offset]
     );
-    const truncated = rows.length > 500;
-    if (truncated) rows.length = 500;
-    res.json({ asistencias: rows, truncated });
+
+    res.json({ asistencias: rows, total: Number(total), page: Number(page), limit: limitNum });
   } catch (err) {
     console.error('[getAsistencias]', err);
     res.status(500).json({ error: 'Error al obtener asistencias' });

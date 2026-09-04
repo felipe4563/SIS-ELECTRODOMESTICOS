@@ -3,7 +3,8 @@ import api from '../api/axios';
 export const inventarioService = {
   getFormData:         ()          => api.get('/inventario/form-data'),
   getStockDeposito:    (id)        => api.get(`/inventario/stock-deposito/${id}`),
-  getStockConsolidado: ()          => api.get('/inventario/stock'),
+  getStockConsolidado: (params)    => api.get('/inventario/stock', { params }),
+  exportarStockConsolidado: (params) => api.get('/inventario/stock/exportar', { params }),
   editarStockMinimo:   (id, data)  => api.put(`/inventario/stock-minimo/${id}`, data),
   getKardex:           (params)    => api.get('/inventario/kardex', { params }),
   getAlertas:          (params)    => api.get('/inventario/alertas', { params }),

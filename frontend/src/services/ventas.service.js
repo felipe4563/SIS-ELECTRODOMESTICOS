@@ -21,6 +21,8 @@ export const ventasService = {
 
   anularCobro:     (id_pago)       => api.delete(`/ventas/cobros/${id_pago}`),
 
+  actualizarSerie: (id_detalle, numero_serie) => api.put(`/ventas/detalle/${id_detalle}/serie`, { numero_serie }),
+
   subirImagenSerie: (id_detalle, file) => {
     const form = new FormData();
     form.append('imagen_serie', file);

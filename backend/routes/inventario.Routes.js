@@ -29,6 +29,13 @@ router.get('/stock',
   ctrl.getStockConsolidado
 );
 
+// Exportar TODO el stock filtrado (sin paginar) — para impresión/PDF
+router.get('/stock/exportar',
+  authMiddleware,
+  checkAnyPermission([['ver', 'inventario'], ['ver_todos_depositos', 'inventario']]),
+  ctrl.exportarStockConsolidado
+);
+
 // Editar stock mínimo de un producto
 router.put('/stock-minimo/:id',
   authMiddleware,

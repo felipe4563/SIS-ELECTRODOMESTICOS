@@ -34,6 +34,98 @@ async function tipoMov(codigo) {
   return tm ?? null;
 }
 
+// Cierra la cuota tocada al monto efectivamente pagado y traslada la diferencia
+// (a favor o en contra) a la siguiente cuota pendiente. Si no hay siguiente y
+// quedó saldo por cobrar, genera una cuota nueva con el mismo intervalo de días
+// que las cuotas anteriores. Misma lógica que cascadaCuota en compras.Controller.js.
+async function cascadaCuotaVenta(id_cuota, montoPagoNuevo) {
+  const [[cuota]] = await db.promise().query(
+    `SELECT id_cuota, id_venta, numero_cuota, monto, monto_pagado FROM venta_cuotas WHERE id_cuota = ?`,
+    [id_cuota]
+  );
+  if (!cuota) return;
+
+  const pagadoAcumulado = +(Number(cuota.monto_pagado) + montoPagoNuevo).toFixed(2);
+  let diferencia        = +(pagadoAcumulado - Number(cuota.monto)).toFixed(2);
+
+  // Si pagó de menos, la cuota tocada se achica al monto realmente recibido
+  // (el faltante se traslada a la siguiente). Si pagó igual o de más, conserva
+  // su monto original -queda completamente cubierta- y el excedente se
+  // traslada intacto; inflarla al monto pagado lo contaría dos veces al
+  // cascadear (una vez acá, otra vez al cubrir la siguiente cuota).
+  const montoCuotaTocada = diferencia < 0 ? pagadoAcumulado : Number(cuota.monto);
+  await db.promise().query(
+    `UPDATE venta_cuotas SET monto = ?, monto_pagado = ?, estado = 'PAGADA' WHERE id_cuota = ?`,
+    [montoCuotaTocada, montoCuotaTocada, id_cuota]
+  );
+
+  if (diferencia === 0) return;
+
+  let numeroActual = cuota.numero_cuota;
+
+  // Excedente (pagó de más): sigue cubriendo cuotas completas hasta agotarlo,
+  // no se detiene en la primera siguiente si esta no alcanza a absorberlo todo.
+  while (diferencia > 0) {
+    const [[siguiente]] = await db.promise().query(
+      `SELECT id_cuota, numero_cuota, monto FROM venta_cuotas
+       WHERE id_venta = ? AND numero_cuota > ? AND estado != 'PAGADA'
+       ORDER BY numero_cuota ASC LIMIT 1`,
+      [cuota.id_venta, numeroActual]
+    );
+    if (!siguiente) return; // no hay más cuotas (el pago ya no puede superar el saldo total, validado antes)
+
+    if (diferencia >= Number(siguiente.monto)) {
+      diferencia = +(diferencia - Number(siguiente.monto)).toFixed(2);
+      await db.promise().query(
+        `UPDATE venta_cuotas SET monto_pagado = monto, estado = 'PAGADA' WHERE id_cuota = ?`,
+        [siguiente.id_cuota]
+      );
+      numeroActual = siguiente.numero_cuota;
+      continue;
+    }
+
+    const nuevoMonto = +(Number(siguiente.monto) - diferencia).toFixed(2);
+    await db.promise().query(`UPDATE venta_cuotas SET monto = ? WHERE id_cuota = ?`, [nuevoMonto, siguiente.id_cuota]);
+    return;
+  }
+
+  if (diferencia === 0) return;
+
+  // Faltante (pagó de menos): se traslada solo a la siguiente cuota pendiente.
+  const [[siguiente]] = await db.promise().query(
+    `SELECT id_cuota, monto FROM venta_cuotas
+     WHERE id_venta = ? AND numero_cuota > ? AND estado != 'PAGADA'
+     ORDER BY numero_cuota ASC LIMIT 1`,
+    [cuota.id_venta, numeroActual]
+  );
+
+  if (siguiente) {
+    const nuevoMonto = +(Number(siguiente.monto) - diferencia).toFixed(2);
+    await db.promise().query(`UPDATE venta_cuotas SET monto = ? WHERE id_cuota = ?`, [nuevoMonto, siguiente.id_cuota]);
+    return;
+  }
+
+  // No hay siguiente cuota (era la última) y quedó saldo por cobrar: se genera una nueva.
+  const [cuotasPrevias] = await db.promise().query(
+    `SELECT numero_cuota, fecha_vencimiento FROM venta_cuotas WHERE id_venta = ? ORDER BY numero_cuota DESC LIMIT 2`,
+    [cuota.id_venta]
+  );
+  const ultima = cuotasPrevias[0];
+  let intervaloDias = 30;
+  if (cuotasPrevias.length === 2) {
+    const msPorDia = 24 * 60 * 60 * 1000;
+    intervaloDias = Math.max(1, Math.round((new Date(cuotasPrevias[0].fecha_vencimiento) - new Date(cuotasPrevias[1].fecha_vencimiento)) / msPorDia));
+  }
+  const nuevaFecha = new Date(ultima.fecha_vencimiento);
+  nuevaFecha.setDate(nuevaFecha.getDate() + intervaloDias);
+
+  await db.promise().query(
+    `INSERT INTO venta_cuotas (id_venta, numero_cuota, fecha_vencimiento, monto)
+     VALUES (?, ?, ?, ?)`,
+    [cuota.id_venta, ultima.numero_cuota + 1, nuevaFecha.toISOString().slice(0, 10), -diferencia]
+  );
+}
+
 // Expande los ítems de tipo combo (id_combo + cantidad de combos) en líneas de
 // producto individuales (una por cada producto del combo), repartiendo el
 // precio_combo proporcionalmente al precio publicado de cada producto. El
@@ -144,7 +236,9 @@ async function recalcularAlertas(detalle, id_deposito) {
 
 const getVentas = async (req, res) => {
   try {
-    const { estado, tipo_venta, id_cliente, id_sucursal, id_vendedor, fecha_desde, fecha_hasta, q } = req.query;
+    const { estado, tipo_venta, id_cliente, id_sucursal, id_vendedor, fecha_desde, fecha_hasta, q, page = 1, limit = 20 } = req.query;
+    const limitNum = Math.min(Number(limit) || 20, 200);
+    const offset = (Number(page) - 1) * limitNum;
     const conds = [], vals = [];
 
     // ── Filtro por alcance del permiso ────────────────────────────────────
@@ -176,6 +270,16 @@ const getVentas = async (req, res) => {
 
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
+    const [[{ total }]] = await db.promise().query(
+      `SELECT COUNT(*) AS total
+       FROM ventas v
+       JOIN clientes  c ON c.id_cliente  = v.id_cliente
+       JOIN sucursales s ON s.id_sucursal = v.id_sucursal
+       JOIN depositos  d ON d.id_deposito = v.id_deposito
+       JOIN usuarios   u ON u.id_usuario  = v.id_vendedor
+       ${where}`, vals
+    );
+
     const [rows] = await db.promise().query(
       `SELECT v.id_venta, v.numero, v.numero_factura, v.tipo_venta, v.estado,
               v.condicion_pago, v.fecha, v.total, v.saldo_pendiente,
@@ -191,9 +295,9 @@ const getVentas = async (req, res) => {
        JOIN usuarios   u ON u.id_usuario  = v.id_vendedor
        ${where}
        ORDER BY v.fecha DESC
-       LIMIT 500`, vals
+       LIMIT ? OFFSET ?`, [...vals, limitNum, offset]
     );
-    res.json({ ventas: rows });
+    res.json({ ventas: rows, total: Number(total), page: Number(page), limit: limitNum });
   } catch (err) {
     console.error('[getVentas]', err);
     res.status(500).json({ error: 'Error al obtener ventas' });
@@ -328,6 +432,13 @@ const createVenta = async (req, res) => {
       );
       if (!cli?.permite_credito) {
         return res.status(400).json({ mensaje: 'El cliente no tiene habilitado el crédito' });
+      }
+      const { total: totalPreview } = calcTotalesVenta(items, { descuento_porc, impuesto });
+      const nuevoSaldo = Number(cli.saldo_actual) + totalPreview;
+      if (nuevoSaldo > Number(cli.limite_credito)) {
+        return res.status(400).json({
+          mensaje: `Excede el límite de crédito del cliente (Límite: ${cli.limite_credito}, Saldo: ${cli.saldo_actual}, Venta: ${totalPreview.toFixed(2)})`,
+        });
       }
     }
 
@@ -601,12 +712,9 @@ const emitirVenta = async (req, res) => {
       if (!venta.permite_credito) return res.status(400).json({ mensaje: 'El cliente no tiene crédito habilitado' });
       const nuevoSaldo = Number(venta.cliente_saldo) + Number(venta.total);
       if (nuevoSaldo > Number(venta.limite_credito)) {
-        if (!puedeAprobarCredito) {
-          return res.status(403).json({
-            mensaje: `Excede el límite de crédito del cliente (Límite: ${venta.limite_credito}, Saldo: ${venta.cliente_saldo}, Venta: ${venta.total}). Requiere aprobación de crédito`,
-            requiere_aprobacion: true,
-          });
-        }
+        return res.status(400).json({
+          mensaje: `Excede el límite de crédito del cliente (Límite: ${venta.limite_credito}, Saldo: ${venta.cliente_saldo}, Venta: ${venta.total})`,
+        });
       }
     }
 
@@ -739,17 +847,7 @@ const registrarCobro = async (req, res) => {
     );
 
     if (id_cuota) {
-      await db.promise().query(
-        `UPDATE venta_cuotas
-         SET monto_pagado = monto_pagado + ?,
-             estado = CASE
-               WHEN monto_pagado + ? >= monto THEN 'PAGADA'
-               WHEN monto_pagado + ? > 0       THEN 'PARCIAL'
-               ELSE estado
-             END
-         WHERE id_cuota = ?`,
-        [montoNum, montoNum, montoNum, id_cuota]
-      );
+      await cascadaCuotaVenta(id_cuota, montoNum);
     }
 
     const nuevoSaldo = +(Number(venta.saldo_pendiente) - montoNum).toFixed(2);
@@ -1261,8 +1359,9 @@ const getFormData = async (req, res) => {
       );
     }
 
-    // Productos activos con precios — limitado para evitar transfers masivos
-    // El frontend debe complementar con GET /api/productos?q=...&limit=20 para búsqueda lazy
+    // Productos activos con precios. El buscador/filtros de VentaForm operan
+    // sobre esta lista completa en el navegador (no hacen búsqueda lazy al
+    // servidor), así que el límite debe cubrir todo el catálogo activo.
     const [productos] = await db.promise().query(
       `SELECT p.id_producto, p.codigo_interno, p.codigo_barras,
               p.producto, p.precio_publico, p.precio_mayor, p.precio_real,
@@ -1273,7 +1372,7 @@ const getFormData = async (req, res) => {
        JOIN marcas m ON m.id_marca = p.id_marca
        WHERE p.activo = 1
        ORDER BY p.producto
-       LIMIT 200`
+       LIMIT 1000`
     );
 
     // Monedas activas
@@ -1391,6 +1490,29 @@ const getStockDeposito = async (req, res) => {
 };
 
 
+// ── Actualizar número de serie ────────────────────────────────────────────────
+
+const actualizarSerie = async (req, res) => {
+  try {
+    const { id_detalle } = req.params;
+    const { numero_serie } = req.body;
+    if (!numero_serie?.trim()) return res.status(400).json({ mensaje: 'El número de serie es requerido' });
+
+    const [[det]] = await db.promise().query(`SELECT id_detalle FROM venta_detalle WHERE id_detalle = ?`, [id_detalle]);
+    if (!det) return res.status(404).json({ mensaje: 'Detalle no encontrado' });
+
+    await db.promise().query(
+      `UPDATE venta_detalle SET numero_serie = ? WHERE id_detalle = ?`,
+      [numero_serie.trim(), id_detalle]
+    );
+    await auditLog(req.user.id_usuario, 'venta_detalle', id_detalle, 'UPDATE', getIp(req));
+    res.json({ numero_serie: numero_serie.trim(), mensaje: 'Número de serie guardado correctamente' });
+  } catch (err) {
+    console.error('[actualizarSerie]', err);
+    res.status(500).json({ error: 'Error al guardar el número de serie' });
+  }
+};
+
 // ── Subir imagen de número de serie ──────────────────────────────────────────
 
 const subirImagenSerie = async (req, res) => {
@@ -1427,6 +1549,7 @@ module.exports = {
   crearDevolucion, aprobarDevolucion, rechazarDevolucion,
   agregarProductoRapido,
   getTicket,
+  actualizarSerie,
   subirImagenSerie,
   generarCuotasVenta,
 };

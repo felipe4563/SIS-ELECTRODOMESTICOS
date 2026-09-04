@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { inventarioService } from '../../services/inventario.service';
 import { usePermission }     from '../../hooks/usePermission';
 import { useEmpresa }        from '../../contexts/EmpresaContext';
@@ -8,6 +8,10 @@ import StockImprimirBoton from './StockImprimirBoton';
 const toNum  = n => { const v = Number(n ?? 0); return isNaN(v) ? 0 : v; };
 const fmtNum = n => toNum(n).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const specLinea = p => [p.modelo && `Mod: ${p.modelo}`, p.color && `Color: ${p.color}`, p.capacidad && `Cap: ${p.capacidad}`].filter(Boolean).join('  ·  ');
+
+const RESUMEN_VACIO = { total: 0, unidades: 0, sinStock: 0, bajoMin: 0, ok: 0 };
+const FACETAS_VACIAS = { marcas: [], productos: [], modelos: [], colores: [], capacidades: [] };
+const LIMIT = 20;
 
 // ── Celda inline editable de stock mínimo ────────────────────────────────────
 function StockMinCell({ id_producto, value, editable, onSave }) {
@@ -90,7 +94,13 @@ export default function StockConsolidado() {
   const puedeEditMin = puede('stock_minimo_editar', 'inventario');
   const { empresa, logoUrl } = useEmpresa() ?? {};
 
-  const [data,      setData]      = useState({ depositos: [], productos: [] });
+  const [depositos, setDepositos] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [total,     setTotal]     = useState(0);
+  const [page,      setPage]      = useState(1);
+  const [resumen,   setResumen]   = useState(RESUMEN_VACIO);
+  const [facetas,   setFacetas]   = useState(FACETAS_VACIAS);
+
   const [cargando,  setCargando]  = useState(true);
   const [error,     setError]     = useState(null);
   const [busqueda,  setBusqueda]  = useState('');
@@ -101,15 +111,48 @@ export default function StockConsolidado() {
   const [filCapacidad, setFilCapacidad] = useState('');
   const [filEstado, setFilEstado] = useState('');
   const [descargando, setDescargando] = useState(false);
-  const [depositosVisibles, setDepositosVisibles] = useState(null); // null = aún no inicializado (todos)
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [productosExport, setProductosExport] = useState([]);
+  const [depositosVisibles, setDepositosVisibles] = useState(null); // null = todos (default backend)
 
-  const cargar = async () => {
+  // Mismos filtros que usa `cargar`, sin page/limit — para el listado paginado
+  // y para la exportación completa (impresión/PDF) comparten exactamente los
+  // mismos criterios de búsqueda.
+  const construirFiltros = () => {
+    const params = {};
+    if (busqueda)     params.busqueda  = busqueda;
+    if (filMarca)     params.marca     = filMarca;
+    if (filProducto)  params.producto  = filProducto;
+    if (filModelo)    params.modelo    = filModelo;
+    if (filColor)     params.color     = filColor;
+    if (filCapacidad) params.capacidad = filCapacidad;
+    if (filEstado)    params.estado    = filEstado;
+    if (depositosVisibles !== null) params.depositos = [...depositosVisibles].join(',');
+    return params;
+  };
+
+  // Trae TODOS los productos que matchean los filtros actuales (sin paginar,
+  // con tope de seguridad en el backend) — solo se usa al imprimir/exportar,
+  // ya que la tabla en pantalla solo mantiene la página actual en memoria.
+  const cargarExport = async () => {
+    const res = await inventarioService.exportarStockConsolidado(construirFiltros());
+    setProductosExport(res.data.productos ?? []);
+    return res.data;
+  };
+
+  const cargar = async (p = page) => {
     setCargando(true);
     setError(null);
     try {
-      const res = await inventarioService.getStockConsolidado();
-      setData(res.data);
-      setDepositosVisibles(new Set((res.data.depositos ?? []).map(d => d.id_deposito)));
+      const params = { ...construirFiltros(), page: p, limit: LIMIT };
+
+      const res = await inventarioService.getStockConsolidado(params);
+      setDepositos(res.data.depositos ?? []);
+      setProductos(res.data.productos ?? []);
+      setTotal(res.data.total ?? 0);
+      setPage(res.data.page ?? p);
+      setResumen(res.data.resumen ?? RESUMEN_VACIO);
+      setFacetas(res.data.facetas ?? FACETAS_VACIAS);
     } catch (err) {
       const msg = err?.response?.data?.mensaje || err?.response?.data?.error || 'Error al cargar el inventario';
       setError(msg);
@@ -118,62 +161,27 @@ export default function StockConsolidado() {
 
   const handleStockMinimo = async (id_producto, nuevoMin) => {
     await inventarioService.editarStockMinimo(id_producto, { stock_minimo: nuevoMin });
-    setData(prev => ({
-      ...prev,
-      productos: prev.productos.map(p =>
-        p.id_producto === id_producto ? { ...p, stock_minimo: nuevoMin } : p
-      ),
-    }));
+    setProductos(prev => prev.map(p =>
+      p.id_producto === id_producto ? { ...p, stock_minimo: nuevoMin } : p
+    ));
   };
 
-  useEffect(() => { cargar(); }, []);
+  // Búsqueda automática: al entrar y cada vez que cambian los filtros (con debounce),
+  // resetea a la página 1. También se dispara al alternar los depósitos visibles.
+  useEffect(() => {
+    const t = setTimeout(() => { cargar(1); }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busqueda, filMarca, filProducto, filModelo, filColor, filCapacidad, filEstado, depositosVisibles]);
 
-  const marcas = useMemo(() => [...new Set(data.productos.map(p => p.marca_nombre))].sort(), [data.productos]);
+  const { marcas, productos: productosDisponibles, modelos: modelosDisponibles, colores: coloresDisponibles, capacidades: capacidadesDisponibles } = facetas;
 
   const cambiarFilMarca    = v => { setFilMarca(v); setFilProducto(''); setFilModelo(''); setFilColor(''); setFilCapacidad(''); };
   const cambiarFilProducto = v => { setFilProducto(v); setFilModelo(''); setFilColor(''); setFilCapacidad(''); };
   const cambiarFilModelo   = v => { setFilModelo(v); setFilColor(''); setFilCapacidad(''); };
   const cambiarFilColor    = v => { setFilColor(v); setFilCapacidad(''); };
 
-  const productosDisponibles = useMemo(
-    () => [...new Set(
-      data.productos.filter(p => !filMarca || p.marca_nombre === filMarca).map(p => p.producto).filter(Boolean)
-    )].sort(),
-    [data.productos, filMarca]
-  );
-  const modelosDisponibles = useMemo(
-    () => [...new Set(
-      data.productos
-        .filter(p => (!filMarca || p.marca_nombre === filMarca) && (!filProducto || p.producto === filProducto))
-        .map(p => p.modelo)
-        .filter(Boolean)
-    )].sort(),
-    [data.productos, filMarca, filProducto]
-  );
-  const coloresDisponibles = useMemo(
-    () => [...new Set(
-      data.productos
-        .filter(p => (!filMarca || p.marca_nombre === filMarca) && (!filProducto || p.producto === filProducto) && (!filModelo || p.modelo === filModelo))
-        .map(p => p.color)
-        .filter(Boolean)
-    )].sort(),
-    [data.productos, filMarca, filProducto, filModelo]
-  );
-  const capacidadesDisponibles = useMemo(
-    () => [...new Set(
-      data.productos
-        .filter(p => (!filMarca || p.marca_nombre === filMarca) && (!filProducto || p.producto === filProducto) && (!filModelo || p.modelo === filModelo) && (!filColor || p.color === filColor))
-        .map(p => p.capacidad)
-        .filter(Boolean)
-    )].sort(),
-    [data.productos, filMarca, filProducto, filModelo, filColor]
-  );
-
-  const { depositos } = data;
-  const depositosMostrados = useMemo(
-    () => depositos.filter(d => !depositosVisibles || depositosVisibles.has(d.id_deposito)),
-    [depositos, depositosVisibles]
-  );
+  const depositosMostrados = depositos.filter(d => !depositosVisibles || depositosVisibles.has(d.id_deposito));
   const toggleDeposito = (id_deposito) => setDepositosVisibles(prev => {
     const next = new Set(prev ?? depositos.map(d => d.id_deposito));
     next.has(id_deposito) ? next.delete(id_deposito) : next.add(id_deposito);
@@ -182,40 +190,10 @@ export default function StockConsolidado() {
   const mostrarTodosDepositos  = () => setDepositosVisibles(new Set(depositos.map(d => d.id_deposito)));
   const mostrarNingunDeposito  = () => setDepositosVisibles(new Set());
 
-  const productosFiltrados = useMemo(() => {
-    const q = busqueda.toLowerCase();
-    return data.productos.filter(p => {
-      if (q && !p.producto.toLowerCase().includes(q) &&
-               !p.codigo_interno.toLowerCase().includes(q) &&
-               !(p.codigo_barras ?? '').toLowerCase().includes(q) &&
-               !(p.marca_nombre ?? '').toLowerCase().includes(q) &&
-               !(p.modelo ?? '').toLowerCase().includes(q)) return false;
-      if (filMarca    && p.marca_nombre !== filMarca)    return false;
-      if (filProducto && p.producto     !== filProducto) return false;
-      if (filModelo   && p.modelo       !== filModelo)   return false;
-      if (filColor     && p.color     !== filColor)     return false;
-      if (filCapacidad && p.capacidad !== filCapacidad) return false;
-      if (filEstado) {
-        const total = depositosMostrados.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
-        if (filEstado === 'sin'  && total !== 0)                                     return false;
-        if (filEstado === 'bajo' && !(total > 0 && total <= Number(p.stock_minimo))) return false;
-        if (filEstado === 'ok'   && !(total > Number(p.stock_minimo)))               return false;
-      }
-      return true;
-    });
-  }, [data, busqueda, filMarca, filProducto, filModelo, filColor, filCapacidad, filEstado, depositosMostrados]);
+  // Ya vienen filtrados + paginados desde el backend — esta es la página actual.
+  const productosFiltrados = productos;
 
-  const resumen = useMemo(() => {
-    let sinStock = 0, bajoMin = 0, ok = 0, unidades = 0;
-    for (const p of data.productos) {
-      const total = depositosMostrados.reduce((s, d) => s + toNum(p.stock[d.id_deposito]?.cantidad_disponible), 0);
-      unidades += total;
-      if (total === 0)                          sinStock++;
-      else if (total <= Number(p.stock_minimo)) bajoMin++;
-      else                                      ok++;
-    }
-    return { total: data.productos.length, unidades, sinStock, bajoMin, ok };
-  }, [data, depositosMostrados]);
+  const totalPages = Math.max(Math.ceil(total / LIMIT), 1);
 
   const hayFiltros = busqueda || filMarca || filProducto || filModelo || filColor || filCapacidad || filEstado;
   const limpiar    = () => { setBusqueda(''); setFilMarca(''); setFilProducto(''); setFilModelo(''); setFilColor(''); setFilCapacidad(''); setFilEstado(''); };
@@ -255,9 +233,9 @@ export default function StockConsolidado() {
             {verTodos ? 'Stock Consolidado' : 'Mi Inventario'}
           </h1>
           {/* Depósitos — chips para elegir cuáles columnas mostrar en la tabla */}
-          {!cargando && data.depositos.length > 0 && (
+          {!cargando && depositos.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {data.depositos.map(d => {
+              {depositos.map(d => {
                 const visible = depositosVisibles?.has(d.id_deposito) ?? true;
                 return (
                   <button
@@ -284,7 +262,7 @@ export default function StockConsolidado() {
                   </button>
                 );
               })}
-              {data.depositos.length > 1 && (
+              {depositos.length > 1 && (
                 <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 ml-1">
                   <button type="button" onClick={mostrarTodosDepositos} className="hover:underline hover:text-zinc-600 dark:hover:text-zinc-300">Todos</button>
                   ·
@@ -294,7 +272,7 @@ export default function StockConsolidado() {
             </div>
           )}
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1.5">
-            {data.depositos.length} depósito{data.depositos.length !== 1 ? 's' : ''} · {data.productos.length} producto{data.productos.length !== 1 ? 's' : ''}
+            {depositos.length} depósito{depositos.length !== 1 ? 's' : ''} · {total} producto{total !== 1 ? 's' : ''}
             {puedeEditMin && (
               <span className="ml-1 text-amber-600 dark:text-amber-400 font-medium hidden sm:inline">
                 · Toca Stock Mín. para editar
@@ -306,18 +284,21 @@ export default function StockConsolidado() {
           {!cargando && productosFiltrados.length > 0 && (
             <>
               <StockImprimirBoton
-                productos={productosFiltrados}
+                productos={productosExport}
                 depositos={depositos}
                 empresa={empresa}
                 logoUrl={logoUrl}
                 filtros={{ busqueda, marca: filMarca, producto: filProducto, modelo: filModelo, estado: filEstado }}
+                preparando={imprimiendo}
+                onAntesDeImprimir={async () => { setImprimiendo(true); try { await cargarExport(); } finally { setImprimiendo(false); } }}
               />
               <button
                 disabled={descargando}
                 onClick={async () => {
                   setDescargando(true);
                   try {
-                    await descargarStockReportePDF(productosFiltrados, depositos, empresa, logoUrl);
+                    const { productos: todos } = await cargarExport();
+                    await descargarStockReportePDF(todos, depositos, empresa, logoUrl);
                   } finally { setDescargando(false); }
                 }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all disabled:opacity-50"
@@ -328,7 +309,7 @@ export default function StockConsolidado() {
             </>
           )}
           <button
-            onClick={cargar}
+            onClick={() => cargar(page)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all"
           >
             <span className={cargando ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
@@ -428,7 +409,7 @@ export default function StockConsolidado() {
           <span className="text-red-500 text-lg leading-none mt-0.5 shrink-0">⚠</span>
           <div>
             <p className="text-red-700 dark:text-red-400 text-sm font-medium">{error}</p>
-            <button onClick={cargar} className="text-red-600 dark:text-red-500 text-xs underline mt-1">Reintentar</button>
+            <button onClick={() => cargar(page)} className="text-red-600 dark:text-red-500 text-xs underline mt-1">Reintentar</button>
           </div>
         </div>
       )}
@@ -521,6 +502,23 @@ export default function StockConsolidado() {
                   </div>
                 );
               })
+            )}
+
+            {/* Paginación móvil */}
+            {!cargando && productosFiltrados.length > 0 && totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 px-1 py-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => cargar(page - 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >← Anterior</button>
+                <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => cargar(page + 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >Siguiente →</button>
+              </div>
             )}
           </div>
 
@@ -626,6 +624,30 @@ export default function StockConsolidado() {
               </div>
             )}
 
+            {/* Paginación desktop */}
+            {!cargando && productosFiltrados.length > 0 && totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => cargar(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => cargar(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
+
             {/* Footer tabla */}
             {!cargando && productosFiltrados.length > 0 && (
               <div className="px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-600">
@@ -633,7 +655,7 @@ export default function StockConsolidado() {
                   Mostrando{' '}
                   <span className="font-semibold text-zinc-600 dark:text-zinc-400">{productosFiltrados.length}</span>
                   {' '}de{' '}
-                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">{data.productos.length}</span>
+                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">{total}</span>
                   {' '}productos
                 </span>
                 {hayFiltros && (
@@ -648,7 +670,7 @@ export default function StockConsolidado() {
           {/* Footer móvil */}
           {!cargando && productosFiltrados.length > 0 && (
             <p className="md:hidden text-center text-xs text-zinc-400 dark:text-zinc-600 pb-2">
-              {productosFiltrados.length} de {data.productos.length} productos
+              {productosFiltrados.length} de {total} productos
               {hayFiltros && (
                 <button onClick={limpiar} className="ml-2 text-amber-600 dark:text-amber-400 underline">
                   Limpiar

@@ -3,7 +3,11 @@ const db = require('../config/db');
 // ── Log de auditoría ───────────────────────────────────────────────────────
 async function getAuditoria(req, res) {
   try {
-    const { id_usuario, tabla, accion, fecha_desde, fecha_hasta, buscar } = req.query;
+    const { id_usuario, tabla, accion, fecha_desde, fecha_hasta, buscar, page = 1, limit = 20 } = req.query;
+
+    const pageNum  = Number(page)  || 1;
+    const limitNum = Math.min(Number(limit) || 20, 200);
+    const offset   = (pageNum - 1) * limitNum;
 
     const where  = [];
     const params = [];
@@ -18,6 +22,13 @@ async function getAuditoria(req, res) {
 
     const whereStr = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
+    const [[{ total }]] = await db.promise().query(`
+      SELECT COUNT(*) AS total
+      FROM auditoria a
+      LEFT JOIN usuarios u ON u.id_usuario = a.id_usuario
+      ${whereStr}
+    `, params);
+
     const [rows] = await db.promise().query(`
       SELECT a.id_auditoria, a.tabla, a.id_registro, a.accion,
         a.datos_antes, a.datos_despues, a.ip_origen,
@@ -29,10 +40,10 @@ async function getAuditoria(req, res) {
       LEFT JOIN usuarios u ON u.id_usuario = a.id_usuario
       ${whereStr}
       ORDER BY a.fecha DESC
-      LIMIT 500
-    `, params);
+      LIMIT ? OFFSET ?
+    `, [...params, limitNum, offset]);
 
-    res.json(rows);
+    res.json({ auditoria: rows, total: Number(total), page: pageNum, limit: limitNum });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

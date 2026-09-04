@@ -529,10 +529,14 @@ exports.importarProductos = async (req, res) => {
             if (cantidad <= 0) continue;
             const idDeposito = await resolverDeposito(col);
             if (!idDeposito) continue;
+            // costo_promedio: se completa con el MCM del Excel (costo total = REAL + LOG),
+            // pero nunca pisa un costo ya cargado por una compra/ajuste real (costo_promedio > 0).
             await conn.query(
-              `INSERT INTO stock (id_producto, id_deposito, cantidad) VALUES (?,?,?)
-               ON DUPLICATE KEY UPDATE cantidad = ?`,
-              [idProducto, idDeposito, cantidad, cantidad]
+              `INSERT INTO stock (id_producto, id_deposito, cantidad, costo_promedio) VALUES (?,?,?,?)
+               ON DUPLICATE KEY UPDATE
+                 cantidad       = VALUES(cantidad),
+                 costo_promedio = IF(costo_promedio = 0, VALUES(costo_promedio), costo_promedio)`,
+              [idProducto, idDeposito, cantidad, precioMayor]
             );
             stockActualizados++;
           }

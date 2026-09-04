@@ -39,23 +39,29 @@ export default function Compras() {
   const [compras,    setCompras]    = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [cargando,   setCargando]   = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage]   = useState(1);
+  const [resumen, setResumen] = useState({ byEstado: {}, saldoTotal: 0, total: 0 });
+  const LIMIT = 20;
   const [filtros,    setFiltros]    = useState({
     q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '',
   });
 
-  const ejecutarBusqueda = async (overrideFiltros) => {
+  const ejecutarBusqueda = async (p = 1, overrideFiltros) => {
     setCargando(true);
     try {
       const f = overrideFiltros ?? filtros;
       const params = Object.fromEntries(Object.entries(f).filter(([, v]) => v !== ''));
-      const res = await comprasService.getAll(params);
+      const res = await comprasService.getAll({ ...params, page: p, limit: LIMIT });
       setCompras(res.data.compras ?? []);
+      setTotal(res.data.total ?? 0);
+      setResumen(res.data.resumen ?? { byEstado: {}, saldoTotal: 0, total: 0 });
+      setPage(p);
     } catch { /* silencioso */ }
     finally { setCargando(false); }
   };
 
   useEffect(() => {
-    ejecutarBusqueda();
     if (puedeVerTodas) {
       comprasService.getFormData()
         .then(({ data }) => setSucursales(data.sucursales ?? []))
@@ -63,22 +69,27 @@ export default function Compras() {
     }
   }, []); // eslint-disable-line
 
+  useEffect(() => { ejecutarBusqueda(1); }, [filtros]); // eslint-disable-line
+
+  const totalPages = Math.ceil(total / LIMIT);
+
   const setF = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
   const handlePipeline = (key) => {
     const newEstado = filtros.estado === key ? '' : key;
     const next = { ...filtros, estado: newEstado };
     setFiltros(next);
-    ejecutarBusqueda(next);
   };
 
+  // El resumen del pipeline (conteo por estado + saldo total "por pagar") viene
+  // del backend calculado sobre TODAS las compras que matchean los filtros
+  // (sin importar la página actual) — no se puede derivar del array `compras`
+  // en memoria, que solo trae la página visible.
   const stats = useMemo(() => {
     const byEstado = {};
-    PIPELINE.forEach(s => { byEstado[s.key] = 0; });
-    compras.forEach(c => { if (byEstado[c.estado] !== undefined) byEstado[c.estado]++; });
-    const saldoTotal = compras.reduce((s, c) => s + Number(c.saldo_pendiente ?? 0), 0);
-    return { byEstado, saldoTotal, total: compras.length };
-  }, [compras]);
+    PIPELINE.forEach(s => { byEstado[s.key] = resumen.byEstado[s.key] ?? 0; });
+    return { byEstado, saldoTotal: resumen.saldoTotal, total: resumen.total };
+  }, [resumen]);
 
   return (
     <div className="space-y-5">
@@ -152,7 +163,7 @@ export default function Compras() {
           placeholder="Número, proveedor…"
           value={filtros.q}
           onChange={e => setF('q', e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && ejecutarBusqueda()}
+          onKeyDown={e => e.key === 'Enter' && ejecutarBusqueda(1)}
           className={`${inputCls} min-w-[160px] flex-1 sm:flex-none`}
         />
         <select
@@ -182,7 +193,7 @@ export default function Compras() {
         <input type="date" value={filtros.fecha_hasta}
           onChange={e => setF('fecha_hasta', e.target.value)} className={inputCls} />
         <button
-          onClick={() => ejecutarBusqueda()}
+          onClick={() => ejecutarBusqueda(1)}
           className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-zinc-900 font-semibold text-sm transition-colors"
         >
           Buscar
@@ -204,7 +215,6 @@ export default function Compras() {
               onClick={() => {
                 const limpios = { q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '' };
                 setFiltros(limpios);
-                ejecutarBusqueda(limpios);
               }}
               className="text-xs text-amber-500 hover:text-amber-600 underline underline-offset-2 transition-colors"
             >
@@ -293,6 +303,30 @@ export default function Compras() {
               </table>
             </div>
 
+            {/* Paginación desktop */}
+            {totalPages > 1 && (
+              <div className="hidden md:flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => ejecutarBusqueda(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => ejecutarBusqueda(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
+
             {/* Cards — móvil */}
             <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
               {compras.map(c => {
@@ -330,9 +364,25 @@ export default function Compras() {
               })}
             </div>
 
-            <div className="px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-zinc-400 dark:text-zinc-600">
-              {compras.length} orden{compras.length !== 1 ? 'es' : ''}
-            </div>
+            {totalPages > 1 ? (
+              <div className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  disabled={page === 1}
+                  onClick={() => ejecutarBusqueda(page - 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >← Anterior</button>
+                <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => ejecutarBusqueda(page + 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >Siguiente →</button>
+              </div>
+            ) : (
+              <div className="px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800 text-[11px] text-zinc-400 dark:text-zinc-600">
+                {total} orden{total !== 1 ? 'es' : ''}
+              </div>
+            )}
           </>
         )}
       </div>

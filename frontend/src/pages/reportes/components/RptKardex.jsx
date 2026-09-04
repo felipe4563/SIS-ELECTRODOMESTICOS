@@ -26,9 +26,9 @@ export default function RptKardex() {
 
   const consultar = () => {
     setCargando(true);
-    inventarioService.getKardex({})
+    inventarioService.getKardex({ limit: 200 })
       .then(r => {
-        const movs = r.data ?? [];
+        const movs = r.data?.kardex ?? [];
         setRawMovs(movs);
 
         // Derivar listas únicas de productos y depósitos presentes en el kardex

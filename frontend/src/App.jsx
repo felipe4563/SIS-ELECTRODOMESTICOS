@@ -65,6 +65,7 @@ import Gastos from './pages/gastos/Gastos';
 // ── Caja ─────────────────────────────────────────────────────────────────────
 import Caja          from './pages/caja/Caja';
 import ArqueoDetalle from './pages/caja/ArqueoDetalle';
+import ArqueoImprimirDirecto from './pages/caja/ArqueoImprimirDirecto';
 import LibroCaja     from './pages/caja/LibroCaja';
 
 // ── Reportes ──────────────────────────────────────────────────────────────────
@@ -456,6 +457,9 @@ export default function App() {
               } />
               <Route path="/caja/arqueos/:id" element={
                 <PageRoute action="ver_arqueo_propio" subject="caja"><ArqueoDetalle /></PageRoute>
+              } />
+              <Route path="/caja/arqueos/:id/imprimir" element={
+                <PageRoute action="ver_arqueo_propio" subject="caja"><ArqueoImprimirDirecto /></PageRoute>
               } />
               <Route path="/caja/libro" element={
                 <PageRoute action="ver_libro" subject="caja"><LibroCaja /></PageRoute>

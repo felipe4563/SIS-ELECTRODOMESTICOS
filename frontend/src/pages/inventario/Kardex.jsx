@@ -36,6 +36,9 @@ export default function Kardex() {
   const [filas,    setFilas]    = useState([]);
   const [cargando, setCargando] = useState(false);
   const [buscado,  setBuscado]  = useState(false);
+  const [total,    setTotal]    = useState(0);
+  const [page,     setPage]     = useState(1);
+  const LIMIT = 20;
 
   // Buscador de producto (autocompletar)
   const [buscProd,   setBuscProd]   = useState('');
@@ -55,7 +58,7 @@ export default function Kardex() {
       .catch(() => {});
   }, []);
 
-  const buscar = async () => {
+  const buscar = async (p = 1) => {
     setCargando(true);
     try {
       // Solo enviar params no vacíos
@@ -67,10 +70,14 @@ export default function Kardex() {
           modelo: filtroModelo,
           color: filtroColor,
           capacidad: filtroCapacidad,
+          page: p,
+          limit: LIMIT,
         }).filter(([, v]) => v !== '')
       );
       const res = await inventarioService.getKardex(params);
-      setFilas(res.data);
+      setFilas(res.data.kardex ?? []);
+      setTotal(res.data.total ?? 0);
+      setPage(p);
       setBuscado(true);
     } catch { /* silencioso */ }
     finally  { setCargando(false); }
@@ -78,9 +85,11 @@ export default function Kardex() {
 
   // Búsqueda automática: al entrar y cada vez que cambian los filtros (con debounce)
   useEffect(() => {
-    const t = setTimeout(() => { buscar(); }, 400);
+    const t = setTimeout(() => { buscar(1); }, 400);
     return () => clearTimeout(t);
   }, [filtros, filtroMarca, filtroProducto, filtroModelo, filtroColor, filtroCapacidad]); // eslint-disable-line
+
+  const totalPages = Math.ceil(total / LIMIT);
 
   const set = (k, v) => setFiltros(prev => ({ ...prev, [k]: v }));
 
@@ -356,7 +365,7 @@ export default function Kardex() {
           {/* Botón buscar */}
           <div className="flex items-end">
             <button
-              onClick={buscar}
+              onClick={() => buscar(1)}
               disabled={cargando}
               className="w-full px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm disabled:opacity-50 transition-colors"
             >
@@ -519,8 +528,49 @@ export default function Kardex() {
               })}
             </div>
 
+            {/* Paginación desktop */}
+            {totalPages > 1 && (
+              <div className="hidden md:flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => buscar(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => buscar(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Paginación mobile */}
+            {totalPages > 1 && (
+              <div className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  disabled={page === 1}
+                  onClick={() => buscar(page - 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >← Anterior</button>
+                <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => buscar(page + 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >Siguiente →</button>
+              </div>
+            )}
+
             <div className="px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-400 dark:text-zinc-600">
-              {filas.length} movimiento{filas.length !== 1 ? 's' : ''} {filas.length >= 500 && '(máx. 500 — afina los filtros para ver más)'}
+              {total} movimiento{total !== 1 ? 's' : ''} en total
             </div>
           </>
         )}

@@ -29,7 +29,9 @@ async function tipoMov(codigo) {
 
 const getTransferencias = async (req, res) => {
   try {
-    const { estado, id_deposito_origen, id_deposito_destino, fecha_desde, fecha_hasta, q } = req.query;
+    const { estado, id_deposito_origen, id_deposito_destino, fecha_desde, fecha_hasta, q, page = 1, limit = 20 } = req.query;
+    const limitNum = Math.min(Number(limit) || 20, 200);
+    const offset = (Number(page) - 1) * limitNum;
     const where = [], params = [];
 
     if (estado)              { where.push('t.estado = ?');                  params.push(estado); }
@@ -42,6 +44,18 @@ const getTransferencias = async (req, res) => {
       params.push(`%${q}%`, `%${q}%`, `%${q}%`);
     }
 
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+    const [[{ total }]] = await db.promise().query(
+      `SELECT COUNT(*) AS total
+       FROM transferencias t
+       JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
+       JOIN depositos dde ON dde.id_deposito = t.id_deposito_destino
+       LEFT JOIN usuarios u1 ON u1.id_usuario = t.id_usuario_solicita
+       ${whereSql}`,
+      params
+    );
+
     const [rows] = await db.promise().query(
       `SELECT t.id_transferencia, t.numero, t.estado,
               t.fecha_solicitud, t.fecha_envio, t.fecha_recepcion,
@@ -52,13 +66,13 @@ const getTransferencias = async (req, res) => {
        JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
        JOIN depositos dde ON dde.id_deposito = t.id_deposito_destino
        LEFT JOIN usuarios u1 ON u1.id_usuario = t.id_usuario_solicita
-       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+       ${whereSql}
        ORDER BY t.fecha_solicitud DESC
-       LIMIT 200`,
-      params
+       LIMIT ? OFFSET ?`,
+      [...params, limitNum, offset]
     );
 
-    res.json({ transferencias: rows });
+    res.json({ transferencias: rows, total: Number(total), page: Number(page), limit: limitNum });
   } catch (err) {
     console.error(err);
     res.status(500).json({ mensaje: 'Error al obtener transferencias' });
@@ -459,13 +473,26 @@ const anularTransferencia = async (req, res) => {
 
 const getAjustes = async (req, res) => {
   try {
-    const { estado, id_deposito, fecha_desde, fecha_hasta } = req.query;
+    const { estado, id_deposito, fecha_desde, fecha_hasta, page = 1, limit = 20 } = req.query;
+    const limitNum = Math.min(Number(limit) || 20, 200);
+    const offset = (Number(page) - 1) * limitNum;
     const where = [], params = [];
 
     if (estado)      { where.push('a.estado = ?');         params.push(estado); }
     if (id_deposito) { where.push('a.id_deposito = ?');    params.push(id_deposito); }
     if (fecha_desde) { where.push('DATE(a.fecha) >= ?');   params.push(fecha_desde); }
     if (fecha_hasta) { where.push('DATE(a.fecha) <= ?');   params.push(fecha_hasta); }
+
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+    const [[{ total }]] = await db.promise().query(
+      `SELECT COUNT(*) AS total
+       FROM ajustes_inventario a
+       JOIN depositos d ON d.id_deposito = a.id_deposito
+       JOIN usuarios  u ON u.id_usuario  = a.id_usuario
+       ${whereSql}`,
+      params
+    );
 
     const [rows] = await db.promise().query(
       `SELECT a.id_ajuste, a.numero, a.estado, a.fecha, a.motivo,
@@ -475,13 +502,13 @@ const getAjustes = async (req, res) => {
        FROM ajustes_inventario a
        JOIN depositos d ON d.id_deposito = a.id_deposito
        JOIN usuarios  u ON u.id_usuario  = a.id_usuario
-       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+       ${whereSql}
        ORDER BY a.fecha DESC
-       LIMIT 200`,
-      params
+       LIMIT ? OFFSET ?`,
+      [...params, limitNum, offset]
     );
 
-    res.json({ ajustes: rows });
+    res.json({ ajustes: rows, total: Number(total), page: Number(page), limit: limitNum });
   } catch (err) {
     console.error(err);
     res.status(500).json({ mensaje: 'Error al obtener ajustes' });

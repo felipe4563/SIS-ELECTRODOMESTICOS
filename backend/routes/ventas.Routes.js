@@ -59,6 +59,7 @@ router.post('/devoluciones/:id_devolucion/rechazar', authMiddleware, checkPermis
 
 router.delete('/cobros/:id_pago', authMiddleware, checkPermission('anular_cobro', 'ventas'), ctrl.anularCobro);
 
+router.put('/detalle/:id_detalle/serie', authMiddleware, checkAnyPermission([['crear','ventas'],['editar_borrador','ventas']]), ctrl.actualizarSerie);
 router.post('/detalle/:id_detalle/imagen-serie', authMiddleware, checkAnyPermission([['crear','ventas'],['editar_borrador','ventas']]), uploadSerie.single('imagen_serie'), ctrl.subirImagenSerie);
 
 module.exports = router;

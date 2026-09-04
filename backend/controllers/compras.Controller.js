@@ -10,6 +10,97 @@ const auditLog = (userId, tabla, id, accion, ip) =>
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Cierra la cuota pagada al monto efectivamente pagado y traslada la
+// diferencia (de más o de menos) a la siguiente cuota pendiente. Si la cuota
+// pagada es la última y queda saldo por trasladar, genera una cuota nueva.
+async function cascadaCuota(id_cuota, montoPagoNuevo) {
+  const [[cuota]] = await db.promise().query(
+    `SELECT id_cuota, id_compra, numero_cuota, monto, monto_pagado FROM compra_cuotas WHERE id_cuota = ?`,
+    [id_cuota]
+  );
+  if (!cuota) return;
+
+  const pagadoAcumulado = +(Number(cuota.monto_pagado) + montoPagoNuevo).toFixed(2);
+  let diferencia        = +(pagadoAcumulado - Number(cuota.monto)).toFixed(2);
+
+  // Si pagó de menos, la cuota tocada se achica al monto realmente recibido
+  // (el faltante se traslada a la siguiente). Si pagó igual o de más, conserva
+  // su monto original -queda completamente cubierta- y el excedente se
+  // traslada intacto; inflarla al monto pagado lo contaría dos veces al
+  // cascadear (una vez acá, otra vez al cubrir la siguiente cuota).
+  const montoCuotaTocada = diferencia < 0 ? pagadoAcumulado : Number(cuota.monto);
+  await db.promise().query(
+    `UPDATE compra_cuotas SET monto = ?, monto_pagado = ?, estado = 'PAGADA' WHERE id_cuota = ?`,
+    [montoCuotaTocada, montoCuotaTocada, id_cuota]
+  );
+
+  if (diferencia === 0) return;
+
+  let numeroActual = cuota.numero_cuota;
+
+  // Excedente (pagó de más): sigue cubriendo cuotas completas hasta agotarlo,
+  // no se detiene en la primera siguiente si esta no alcanza a absorberlo todo.
+  while (diferencia > 0) {
+    const [[siguiente]] = await db.promise().query(
+      `SELECT id_cuota, numero_cuota, monto FROM compra_cuotas
+       WHERE id_compra = ? AND numero_cuota > ? AND estado != 'PAGADA'
+       ORDER BY numero_cuota ASC LIMIT 1`,
+      [cuota.id_compra, numeroActual]
+    );
+    if (!siguiente) return; // no hay más cuotas (el pago ya no puede superar el saldo total, validado antes)
+
+    if (diferencia >= Number(siguiente.monto)) {
+      diferencia = +(diferencia - Number(siguiente.monto)).toFixed(2);
+      await db.promise().query(
+        `UPDATE compra_cuotas SET monto_pagado = monto, estado = 'PAGADA' WHERE id_cuota = ?`,
+        [siguiente.id_cuota]
+      );
+      numeroActual = siguiente.numero_cuota;
+      continue;
+    }
+
+    const nuevoMonto = +(Number(siguiente.monto) - diferencia).toFixed(2);
+    await db.promise().query(`UPDATE compra_cuotas SET monto = ? WHERE id_cuota = ?`, [nuevoMonto, siguiente.id_cuota]);
+    return;
+  }
+
+  if (diferencia === 0) return;
+
+  // Faltante (pagó de menos): se traslada solo a la siguiente cuota pendiente.
+  const [[siguiente]] = await db.promise().query(
+    `SELECT id_cuota, monto FROM compra_cuotas
+     WHERE id_compra = ? AND numero_cuota > ? AND estado != 'PAGADA'
+     ORDER BY numero_cuota ASC LIMIT 1`,
+    [cuota.id_compra, numeroActual]
+  );
+
+  if (siguiente) {
+    const nuevoMonto = +(Number(siguiente.monto) - diferencia).toFixed(2);
+    await db.promise().query(`UPDATE compra_cuotas SET monto = ? WHERE id_cuota = ?`, [nuevoMonto, siguiente.id_cuota]);
+    return;
+  }
+
+  // No hay siguiente cuota (era la última) y quedó saldo por cobrar: se genera una nueva.
+  const [cuotasPrevias] = await db.promise().query(
+    `SELECT numero_cuota, fecha_vencimiento FROM compra_cuotas WHERE id_compra = ? ORDER BY numero_cuota DESC LIMIT 2`,
+    [cuota.id_compra]
+  );
+  const ultima = cuotasPrevias[0];
+  let intervaloDias = 30;
+  if (cuotasPrevias.length === 2) {
+    const msPorDia = 24 * 60 * 60 * 1000;
+    intervaloDias = Math.max(1, Math.round((new Date(cuotasPrevias[0].fecha_vencimiento) - new Date(cuotasPrevias[1].fecha_vencimiento)) / msPorDia));
+  }
+  const nuevaFecha = new Date(ultima.fecha_vencimiento);
+  nuevaFecha.setDate(nuevaFecha.getDate() + intervaloDias);
+
+  await db.promise().query(
+    `INSERT INTO compra_cuotas (id_compra, numero_cuota, fecha_vencimiento, monto)
+     VALUES (?, ?, ?, ?)`,
+    [cuota.id_compra, ultima.numero_cuota + 1, nuevaFecha.toISOString().slice(0, 10), -diferencia]
+  );
+}
+
 async function generarNumero(prefijo) {
   const hoy = new Date();
   const ym  = `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}`;
@@ -104,29 +195,74 @@ const getFormData = async (req, res) => {
 
 const getCompras = async (req, res) => {
   try {
-    const { estado, id_proveedor, id_sucursal, fecha_desde, fecha_hasta, q } = req.query;
+    const { estado, id_proveedor, id_sucursal, fecha_desde, fecha_hasta, q, page = 1, limit = 20 } = req.query;
+    const limitNum = Math.min(Number(limit) || 20, 200);
+    const offset = (Number(page) - 1) * limitNum;
     const conds = [], vals = [];
 
     const puedeVerTodas = req.ability?.can('ver_todas', 'compras') ?? false;
+
+    // condsBase/valsBase: los mismos filtros pero SIN el estado — se usan para
+    // el resumen del pipeline, que debe mostrar el conteo de TODOS los estados
+    // a la vez (si aplicáramos el filtro de estado acá, las demás etapas
+    // siempre mostrarían 0 en vez de su conteo real).
+    const condsBase = [], valsBase = [];
 
     if (!puedeVerTodas) {
       // Solo ve compras de su propia sucursal
       conds.push('c.id_sucursal = ?');
       vals.push(req.user.id_sucursal);
+      condsBase.push('c.id_sucursal = ?');
+      valsBase.push(req.user.id_sucursal);
     } else if (id_sucursal) {
       // Tiene ver_todas pero eligió filtrar por una sucursal
       conds.push('c.id_sucursal = ?');
       vals.push(id_sucursal);
+      condsBase.push('c.id_sucursal = ?');
+      valsBase.push(id_sucursal);
     }
 
-    if (estado)       { conds.push('c.estado = ?');                         vals.push(estado); }
-    if (id_proveedor) { conds.push('c.id_proveedor = ?');                   vals.push(id_proveedor); }
-    if (fecha_desde)  { conds.push('DATE(c.fecha_pedido) >= ?');            vals.push(fecha_desde); }
-    if (fecha_hasta)  { conds.push('DATE(c.fecha_pedido) <= ?');            vals.push(fecha_hasta); }
-    if (q)            { conds.push('(c.numero LIKE ? OR p.razon_social LIKE ? OR c.numero_factura LIKE ?)');
-                        vals.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+    if (id_proveedor) { conds.push('c.id_proveedor = ?'); vals.push(id_proveedor); condsBase.push('c.id_proveedor = ?'); valsBase.push(id_proveedor); }
+    if (fecha_desde)  { conds.push('DATE(c.fecha_pedido) >= ?'); vals.push(fecha_desde); condsBase.push('DATE(c.fecha_pedido) >= ?'); valsBase.push(fecha_desde); }
+    if (fecha_hasta)  { conds.push('DATE(c.fecha_pedido) <= ?'); vals.push(fecha_hasta); condsBase.push('DATE(c.fecha_pedido) <= ?'); valsBase.push(fecha_hasta); }
+    if (q) {
+      conds.push('(c.numero LIKE ? OR p.razon_social LIKE ? OR c.numero_factura LIKE ?)');
+      vals.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      condsBase.push('(c.numero LIKE ? OR p.razon_social LIKE ? OR c.numero_factura LIKE ?)');
+      valsBase.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
 
-    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    if (estado) { conds.push('c.estado = ?'); vals.push(estado); }
+
+    const where     = conds.length     ? `WHERE ${conds.join(' AND ')}`     : '';
+    const whereBase = condsBase.length ? `WHERE ${condsBase.join(' AND ')}` : '';
+
+    const [[{ total }]] = await db.promise().query(
+      `SELECT COUNT(*) AS total
+       FROM compras c
+       JOIN proveedores p ON p.id_proveedor = c.id_proveedor
+       JOIN sucursales  s ON s.id_sucursal  = c.id_sucursal
+       JOIN depositos   d ON d.id_deposito  = c.id_deposito_destino
+       JOIN usuarios    u ON u.id_usuario   = c.id_usuario_crea
+       ${where}`, vals
+    );
+
+    const [resumenRows] = await db.promise().query(
+      `SELECT c.estado, COUNT(*) AS cnt, COALESCE(SUM(c.saldo_pendiente), 0) AS saldo
+       FROM compras c
+       JOIN proveedores p ON p.id_proveedor = c.id_proveedor
+       JOIN sucursales  s ON s.id_sucursal  = c.id_sucursal
+       JOIN depositos   d ON d.id_deposito  = c.id_deposito_destino
+       JOIN usuarios    u ON u.id_usuario   = c.id_usuario_crea
+       ${whereBase}
+       GROUP BY c.estado`, valsBase
+    );
+    const resumen = { byEstado: {}, saldoTotal: 0, total: 0 };
+    for (const r of resumenRows) {
+      resumen.byEstado[r.estado] = Number(r.cnt);
+      resumen.saldoTotal += Number(r.saldo);
+      resumen.total += Number(r.cnt);
+    }
 
     const [rows] = await db.promise().query(
       `SELECT c.id_compra, c.numero, c.numero_factura, c.estado, c.condicion_pago,
@@ -143,9 +279,9 @@ const getCompras = async (req, res) => {
        JOIN usuarios    u ON u.id_usuario   = c.id_usuario_crea
        ${where}
        ORDER BY c.fecha_creacion DESC
-       LIMIT 300`, vals
+       LIMIT ? OFFSET ?`, [...vals, limitNum, offset]
     );
-    res.json({ compras: rows });
+    res.json({ compras: rows, total: Number(total), page: Number(page), limit: limitNum, resumen });
   } catch (err) {
     console.error('[getCompras]', err);
     res.status(500).json({ error: 'Error al obtener compras' });
@@ -693,6 +829,8 @@ const createPago = async (req, res) => {
     const montoPago = +Number(monto).toFixed(2);
     if (montoPago <= 0)
       return res.status(400).json({ error: 'El monto debe ser mayor a cero' });
+    if (montoPago > Number(compra.saldo_pendiente))
+      return res.status(400).json({ error: `El monto no puede superar el saldo pendiente de la compra (${Number(compra.saldo_pendiente).toFixed(2)})` });
 
     const numeroPago = await generarNumeroPago();
 
@@ -728,16 +866,7 @@ const createPago = async (req, res) => {
     }
 
     if (id_cuota) {
-      await db.promise().query(
-        `UPDATE compra_cuotas SET
-           monto_pagado = monto_pagado + ?,
-           estado = CASE
-             WHEN (monto_pagado + ?) >= monto THEN 'PAGADA'
-             WHEN (monto_pagado + ?)  > 0     THEN 'PARCIAL'
-             ELSE estado END
-         WHERE id_cuota = ?`,
-        [montoPago, montoPago, montoPago, id_cuota]
-      );
+      await cascadaCuota(id_cuota, montoPago);
     }
 
     await auditLog(req.user.id_usuario, 'pagos_compra', r.insertId, 'INSERT', getIp(req));

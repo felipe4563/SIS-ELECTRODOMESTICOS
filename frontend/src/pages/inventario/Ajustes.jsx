@@ -23,6 +23,9 @@ export default function Ajustes() {
   const [ajustes,   setAjustes]   = useState([]);
   const [depositos, setDepositos] = useState([]);
   const [cargando,  setCargando]  = useState(true);
+  const [total,     setTotal]     = useState(0);
+  const [page,      setPage]      = useState(1);
+  const LIMIT = 20;
   const [filtros,   setFiltros]   = useState({
     estado: '', id_deposito: '', fecha_desde: HACE30, fecha_hasta: HOY,
   });
@@ -33,17 +36,21 @@ export default function Ajustes() {
       .catch(() => {});
   }, []);
 
-  const cargar = async () => {
+  const cargar = async (p = 1) => {
     setCargando(true);
     try {
       const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== ''));
-      const res = await ajustesService.getAll(params);
+      const res = await ajustesService.getAll({ ...params, page: p, limit: LIMIT });
       setAjustes(res.data.ajustes ?? []);
+      setTotal(res.data.total ?? 0);
+      setPage(p);
     } catch { /* silencioso */ }
     finally { setCargando(false); }
   };
 
-  useEffect(() => { cargar(); }, []); // eslint-disable-line
+  useEffect(() => { cargar(1); }, []); // eslint-disable-line
+
+  const totalPages = Math.ceil(total / LIMIT);
 
   const setF = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
@@ -102,7 +109,7 @@ export default function Ajustes() {
           <input type="date" value={filtros.fecha_desde} onChange={e => setF('fecha_desde', e.target.value)} className={inputCls} />
           <div className="flex gap-2">
             <input type="date" value={filtros.fecha_hasta} onChange={e => setF('fecha_hasta', e.target.value)} className={`flex-1 ${inputCls}`} />
-            <button onClick={cargar} className="px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors">
+            <button onClick={() => cargar(1)} className="px-4 py-2 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-semibold text-sm transition-colors">
               Buscar
             </button>
           </div>
@@ -185,9 +192,51 @@ export default function Ajustes() {
                 </tbody>
               </table>
             </div>
+
+            {/* Paginación desktop */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => cargar(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => cargar(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
+
             <div className="px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-400 dark:text-zinc-600">
               {ajustes.length} ajuste{ajustes.length !== 1 ? 's' : ''}
             </div>
+
+            {/* Paginación mobile */}
+            {totalPages > 1 && (
+              <div className="md:hidden flex items-center justify-between gap-3 px-4 py-3">
+                <button
+                  disabled={page === 1}
+                  onClick={() => cargar(page - 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >← Anterior</button>
+                <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => cargar(page + 1)}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >Siguiente →</button>
+              </div>
+            )}
           </>
         )}
       </div>

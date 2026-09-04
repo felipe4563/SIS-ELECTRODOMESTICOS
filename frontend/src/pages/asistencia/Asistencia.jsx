@@ -64,7 +64,9 @@ function ModalJustificar({ row, onClose, onGuardado }) {
 
 export default function Asistencia() {
   const [filas, setFilas]       = useState([]);
-  const [truncado, setTruncado] = useState(false);
+  const [total, setTotal]       = useState(0);
+  const [page, setPage]         = useState(1);
+  const LIMIT = 20;
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState(null);
   const [justificarRow, setJustificarRow] = useState(null);
@@ -72,17 +74,19 @@ export default function Asistencia() {
     fecha_desde: inicioMes(), fecha_hasta: hoy(), estado: '',
   });
 
-  const buscar = useCallback(() => {
+  const buscar = useCallback((p = 1) => {
     setCargando(true);
     setError(null);
     const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== ''));
-    asistenciaService.getAsistencias(params)
-      .then(r => { setFilas(r.data.asistencias); setTruncado(!!r.data.truncated); })
+    asistenciaService.getAsistencias({ ...params, page: p, limit: LIMIT })
+      .then(r => { setFilas(r.data.asistencias); setTotal(r.data.total ?? 0); setPage(p); })
       .catch(() => setError('No se pudieron cargar las asistencias'))
       .finally(() => setCargando(false));
   }, [filtros]);
 
-  useEffect(() => { buscar(); }, []);
+  useEffect(() => { buscar(1); }, [filtros]);
+
+  const totalPages = Math.ceil(total / LIMIT);
 
   const f = (k, v) => setFiltros(p => ({ ...p, [k]: v }));
 
@@ -92,7 +96,7 @@ export default function Asistencia() {
     <div className="space-y-5">
       {justificarRow && (
         <ModalJustificar row={justificarRow} onClose={() => setJustificarRow(null)}
-          onGuardado={() => { setJustificarRow(null); buscar(); }} />
+          onGuardado={() => { setJustificarRow(null); buscar(page); }} />
       )}
 
       <div>
@@ -119,7 +123,7 @@ export default function Asistencia() {
             <option value="JUSTIFICADA">Justificada</option>
           </select>
         </div>
-        <button onClick={buscar} className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 font-semibold text-sm rounded-xl transition-colors">
+        <button onClick={() => buscar(1)} className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 font-semibold text-sm rounded-xl transition-colors">
           Consultar
         </button>
       </div>
@@ -136,48 +140,87 @@ export default function Asistencia() {
         <span>Justificadas: <strong>{resumen.JUSTIFICADA || 0}</strong></span>
       </div>
 
-      {truncado && (
-        <div className="px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs">
-          Mostrando los primeros 500 registros — afiná los filtros para ver el total exacto.
-        </div>
-      )}
-
       {cargando ? (
         <p className="text-center py-16 text-zinc-400 text-sm">Cargando…</p>
       ) : error ? null : filas.length === 0 ? (
         <p className="text-center py-16 text-zinc-400 text-sm">Sin registros en este período</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                {['Fecha', 'Empleado', 'Sucursal', 'Entrada', 'Salida', 'Estado', ''].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-left whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {filas.map(row => (
-                <tr key={row.id_asistencia} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                  <td className="px-3 py-2.5 text-xs font-mono text-zinc-500">{row.fecha}</td>
-                  <td className="px-3 py-2.5 font-medium text-zinc-800 dark:text-zinc-200">{row.empleado}</td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-500">{row.sucursal_nombre || '—'}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{row.hora_entrada || '—'}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{row.hora_salida || '—'}</td>
-                  <td className="px-3 py-2.5"><EstadoBadge estado={row.estado} /></td>
-                  <td className="px-3 py-2.5 text-right">
-                    {row.estado === 'FALTA' && (
-                      <button onClick={() => setJustificarRow(row)}
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors">
-                        Justificar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                    {['Fecha', 'Empleado', 'Sucursal', 'Entrada', 'Salida', 'Estado', ''].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-left whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {filas.map(row => (
+                    <tr key={row.id_asistencia} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="px-3 py-2.5 text-xs font-mono text-zinc-500">{row.fecha}</td>
+                      <td className="px-3 py-2.5 font-medium text-zinc-800 dark:text-zinc-200">{row.empleado}</td>
+                      <td className="px-3 py-2.5 text-xs text-zinc-500">{row.sucursal_nombre || '—'}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{row.hora_entrada || '—'}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{row.hora_salida || '—'}</td>
+                      <td className="px-3 py-2.5"><EstadoBadge estado={row.estado} /></td>
+                      <td className="px-3 py-2.5 text-right">
+                        {row.estado === 'FALTA' && (
+                          <button onClick={() => setJustificarRow(row)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors">
+                            Justificar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginación desktop */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-xs text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
+                  {' '}de{' '}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{total}</span>
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => buscar(page - 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >← Anterior</button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">{page} / {totalPages}</span>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => buscar(page + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Siguiente →</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Paginación mobile */}
+          {totalPages > 1 && (
+            <div className="md:hidden flex items-center justify-between gap-3">
+              <button
+                disabled={page === 1}
+                onClick={() => buscar(page - 1)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >← Anterior</button>
+              <span className="text-xs text-zinc-500 shrink-0 font-mono">{page}/{totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => buscar(page + 1)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-400 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >Siguiente →</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
