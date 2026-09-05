@@ -50,7 +50,12 @@ const getMiHistorial = async (req, res) => {
   }
 };
 
-async function validarUbicacion(id_usuario, lat, lng, id_sucursal) {
+// Tope al margen de tolerancia que se le suma al radio por la precisión del
+// GPS reportada por el teléfono (pos.coords.accuracy) — sin esto, un fix muy
+// impreciso (ej. ubicación por antena/WiFi) dejaría marcar desde cualquier lado.
+const TOLERANCIA_ACCURACY_MAX_M = 50;
+
+async function validarUbicacion(id_usuario, lat, lng, id_sucursal, accuracy) {
   const [rows] = await db.promise().query(
     id_sucursal
       ? `SELECT latitud, longitud, radio_metros, nombre AS sucursal_nombre
@@ -65,8 +70,10 @@ async function validarUbicacion(id_usuario, lat, lng, id_sucursal) {
   if (s.latitud === null || s.longitud === null) {
     return { ok: false, error: `La sucursal "${s.sucursal_nombre}" no tiene ubicación configurada. Contactá al administrador.` };
   }
-  const distancia = distanciaMetros(Number(s.latitud), Number(s.longitud), lat, lng);
-  if (distancia > s.radio_metros) {
+  const distancia  = distanciaMetros(Number(s.latitud), Number(s.longitud), lat, lng);
+  const tolerancia = Math.min(Math.max(Number(accuracy) || 0, 0), TOLERANCIA_ACCURACY_MAX_M);
+  const radioEfectivo = Number(s.radio_metros) + tolerancia;
+  if (distancia > radioEfectivo) {
     return { ok: false, error: `Estás a ${Math.round(distancia)} m de tu sucursal (máximo permitido: ${s.radio_metros} m).` };
   }
   return { ok: true };
@@ -79,9 +86,9 @@ const ESTADO_CASE_SQL = `CASE WHEN u.hora_entrada_esperada IS NOT NULL
                                 AND CURTIME() > ADDTIME(u.hora_entrada_esperada, '00:10:00')
                                THEN 'TARDANZA' ELSE 'PRESENTE' END`;
 
-// POST /api/asistencia/entrada  body: { lat, lng }
+// POST /api/asistencia/entrada  body: { lat, lng, accuracy }
 const marcarEntrada = async (req, res) => {
-  const { lat, lng } = req.body;
+  const { lat, lng, accuracy } = req.body;
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Ubicación GPS requerida' });
   }
@@ -101,7 +108,7 @@ const marcarEntrada = async (req, res) => {
       return res.status(400).json({ error: 'Ya marcaste entrada hoy' });
     }
 
-    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum, req.user.id_sucursal);
+    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum, req.user.id_sucursal, accuracy);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
     let idAsistencia;
@@ -140,9 +147,9 @@ const marcarEntrada = async (req, res) => {
   }
 };
 
-// POST /api/asistencia/salida  body: { lat, lng }
+// POST /api/asistencia/salida  body: { lat, lng, accuracy }
 const marcarSalida = async (req, res) => {
-  const { lat, lng } = req.body;
+  const { lat, lng, accuracy } = req.body;
   if (lat === undefined || lng === undefined) {
     return res.status(400).json({ error: 'Ubicación GPS requerida' });
   }
@@ -159,7 +166,7 @@ const marcarSalida = async (req, res) => {
     if (rows.length === 0) return res.status(400).json({ error: 'Todavía no marcaste entrada hoy' });
     if (rows[0].hora_salida) return res.status(400).json({ error: 'Ya marcaste salida hoy' });
 
-    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum, req.user.id_sucursal);
+    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum, req.user.id_sucursal, accuracy);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
     await db.promise().query(

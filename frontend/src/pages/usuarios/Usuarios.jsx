@@ -9,9 +9,35 @@ import { useAuth } from '../../contexts/AuthContext';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 import { isValidEmail, validatePassword } from '../../utils/validation';
+import { DatePickerField, TimePickerField } from '../../components/ui/DateTimePickers';
 
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
+const sectionCls = 'text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 pb-1 border-b border-gray-100 dark:border-zinc-800';
+
+// ── Generación automática de username / email / contraseña ─────────────────
+const soloLetras = s => (s || '')
+  .normalize('NFD').replace(new RegExp('[̀-ͯ]', 'g'), '')
+  .replace(/ñ/gi, 'n')
+  .toLowerCase()
+  .replace(/[^a-z]/g, '');
+
+function generarUsername(nombres, apellidos, existentes = []) {
+  const primerNombre   = soloLetras((nombres   || '').trim().split(/\s+/)[0]);
+  const primerApellido = soloLetras((apellidos || '').trim().split(/\s+/)[0]);
+  if (!primerNombre || !primerApellido) return '';
+  const base = `${primerNombre[0]}${primerApellido}`;
+  const usados = new Set(existentes.map(u => (u.username || '').toLowerCase()));
+  let candidato = base;
+  let i = 2;
+  while (usados.has(candidato)) { candidato = `${base}${i}`; i++; }
+  return candidato;
+}
+
+function generarPassword() {
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `Mega${num}!`;
+}
 const EMPTY    = {
   username: '', password: '', nombres: '', apellidos: '', cargo: '', documento: '', email: '',
   telefono: '', celular: '', direccion: '', celular_emergencia: '', nombre_contacto_emergencia: '',
@@ -413,6 +439,9 @@ export default function Usuarios() {
   const [form,       setForm]       = useState(EMPTY);
   const [guardando,  setGuardando]  = useState(false);
   const [formError,  setFormError]  = useState(null);
+  // Username/email/contraseña se autogeneran a partir de nombres+apellidos
+  // mientras el admin no los edite a mano.
+  const [tocado, setTocado] = useState({ username: false, email: false, password: false });
 
   const [confirm,      setConfirm]      = useState(null);
   const [resetModal,   setResetModal]   = useState(null);
@@ -430,8 +459,39 @@ export default function Usuarios() {
   };
   useEffect(cargar, []);
 
+  // Autogenera username/email/contraseña al crear un usuario nuevo, en base
+  // a nombres+apellidos, sin pisar lo que el admin haya editado a mano.
+  useEffect(() => {
+    if (editando) return;
+    if (!form.nombres && !form.apellidos) return;
+    setForm(prev => {
+      const next = { ...prev };
+      let cambio = false;
+      if (!tocado.username) {
+        const u = generarUsername(prev.nombres, prev.apellidos, lista);
+        if (u && u !== prev.username) { next.username = u; cambio = true; }
+      }
+      if (!tocado.email) {
+        const base = next.username || prev.username;
+        const correo = base ? `${base}@megaelectra.com` : '';
+        if (correo !== prev.email) { next.email = correo; cambio = true; }
+      }
+      if (!tocado.password && !prev.password) {
+        next.password = generarPassword(); cambio = true;
+      }
+      return cambio ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.nombres, form.apellidos, editando]);
+
+  const regenerarPassword = () => {
+    setForm(prev => ({ ...prev, password: generarPassword() }));
+    setTocado(prev => ({ ...prev, password: true }));
+  };
+
   const abrirModal = (u = null) => {
     setEditando(u);
+    setTocado({ username: false, email: false, password: false });
     setForm(u ? {
       ...u, password: '', activo: !!u.activo,
       fecha_nacimiento: u.fecha_nacimiento ? String(u.fecha_nacimiento).slice(0, 10) : '',
@@ -454,6 +514,9 @@ export default function Usuarios() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (name === 'username' || name === 'email' || name === 'password') {
+      setTocado(prev => ({ ...prev, [name]: true }));
+    }
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
@@ -560,113 +623,150 @@ export default function Usuarios() {
       )}
 
       {/* Modal crear/editar */}
-      <Modal open={modal} onClose={cerrarModal} title={editando ? 'Editar usuario' : 'Nuevo usuario'} maxWidth="max-w-lg">
+      <Modal open={modal} onClose={cerrarModal} title={editando ? 'Editar usuario' : 'Nuevo usuario'} maxWidth="max-w-4xl">
         {formError && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{formError}</div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Nombres *</label>
-              <input name="nombres" value={form.nombres} onChange={handleChange} required className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Apellidos *</label>
-              <input name="apellidos" value={form.apellidos} onChange={handleChange} required className={inputCls} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Cargo</label>
-              <input name="cargo" value={form.cargo ?? ''} onChange={handleChange} className={inputCls} placeholder="Ej: Ejecutivo de Ventas" />
-            </div>
-            {!editando && (<>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* ── Identificación ── */}
+          <div>
+            <p className={sectionCls}>Identificación</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label className={labelCls}>Username *</label>
-                <input name="username" value={form.username} onChange={handleChange} required className={inputCls} autoComplete="off" />
+                <label className={labelCls}>Nombres *</label>
+                <input name="nombres" value={form.nombres} onChange={handleChange} required className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Contraseña temporal *</label>
-                <PasswordField name="password" value={form.password} onChange={handleChange} required minLength={6} autoComplete="new-password" />
+                <label className={labelCls}>Apellidos *</label>
+                <input name="apellidos" value={form.apellidos} onChange={handleChange} required className={inputCls} />
               </div>
-            </>)}
-            <div>
-              <label className={labelCls}>Documento (CI)</label>
-              <input name="documento" value={form.documento ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Teléfono</label>
-              <input name="telefono" value={form.telefono ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Celular</label>
-              <input name="celular" value={form.celular ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Celular de emergencia</label>
-              <input name="celular_emergencia" value={form.celular_emergencia ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Nombre contacto de emergencia</label>
-              <input name="nombre_contacto_emergencia" value={form.nombre_contacto_emergencia ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Fecha de nacimiento</label>
-              <input name="fecha_nacimiento" type="date" value={form.fecha_nacimiento ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Fecha de ingreso</label>
-              <input name="fecha_ingreso" type="date" value={form.fecha_ingreso ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Hora de entrada esperada</label>
-              <input name="hora_entrada_esperada" type="time" value={form.hora_entrada_esperada ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Hora de salida esperada</label>
-              <input name="hora_salida_esperada" type="time" value={form.hora_salida_esperada ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Email</label>
-              <input name="email" type="email" value={form.email ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Dirección</label>
-              <input name="direccion" value={form.direccion ?? ''} onChange={handleChange} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Rol *</label>
-              <select name="id_rol" value={form.id_rol} onChange={handleChange} required className={inputCls}>
-                <option value="">Seleccionar</option>
-                {roles.map(r => <option key={r.id_rol} value={r.id_rol}>{r.nombre}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Sucursal principal</label>
-              <select name="id_sucursal_default" value={form.id_sucursal_default ?? ''} onChange={handleChange} className={inputCls}>
-                <option value="">Sin asignar</option>
-                {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Comisión sobreprecio (%)</label>
-              <input
-                name="porcentaje_comision"
-                type="number" min="0" max="100" step="0.01"
-                value={form.porcentaje_comision ?? 0}
-                onChange={handleChange}
-                className={inputCls}
-                placeholder="0.00"
-              />
-              <p className="mt-1 text-xs text-gray-400 dark:text-zinc-500">
-                % que recibe el vendedor sobre el precio por encima del precio publicado
-              </p>
+              <div>
+                <label className={labelCls}>Cargo</label>
+                <input name="cargo" value={form.cargo ?? ''} onChange={handleChange} className={inputCls} placeholder="Ej: Ejecutivo de Ventas" />
+              </div>
+              <div>
+                <label className={labelCls}>Rol *</label>
+                <select name="id_rol" value={form.id_rol} onChange={handleChange} required className={inputCls}>
+                  <option value="">Seleccionar</option>
+                  {roles.map(r => <option key={r.id_rol} value={r.id_rol}>{r.nombre}</option>)}
+                </select>
+              </div>
             </div>
           </div>
-          {editando && (
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" name="activo" checked={form.activo ?? true} onChange={handleChange} className="rounded accent-amber-500" />
-              <span className="text-sm text-gray-700 dark:text-zinc-300">Usuario activo</span>
-            </label>
-          )}
+
+          {/* ── Acceso ── */}
+          <div>
+            <p className={sectionCls}>Acceso</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {!editando && (<>
+                <div>
+                  <label className={labelCls}>Username *</label>
+                  <input name="username" value={form.username} onChange={handleChange} required className={inputCls} autoComplete="off" />
+                </div>
+                <div>
+                  <label className={labelCls}>Contraseña temporal *</label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <PasswordField name="password" value={form.password} onChange={handleChange} required minLength={6} autoComplete="new-password" />
+                    </div>
+                    <button
+                      type="button" onClick={regenerarPassword} title="Regenerar contraseña"
+                      className="shrink-0 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      🎲
+                    </button>
+                  </div>
+                </div>
+              </>)}
+              <div>
+                <label className={labelCls}>Sucursal principal</label>
+                <select name="id_sucursal_default" value={form.id_sucursal_default ?? ''} onChange={handleChange} className={inputCls}>
+                  <option value="">Sin asignar</option>
+                  {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Contacto ── */}
+          <div>
+            <p className={sectionCls}>Contacto</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className={labelCls}>Documento (CI)</label>
+                <input name="documento" value={form.documento ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Teléfono</label>
+                <input name="telefono" value={form.telefono ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Celular</label>
+                <input name="celular" value={form.celular ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Email</label>
+                <input name="email" type="email" value={form.email ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Celular de emergencia</label>
+                <input name="celular_emergencia" value={form.celular_emergencia ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-2">
+                <label className={labelCls}>Nombre contacto de emergencia</label>
+                <input name="nombre_contacto_emergencia" value={form.nombre_contacto_emergencia ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className={labelCls}>Dirección</label>
+                <input name="direccion" value={form.direccion ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Datos laborales ── */}
+          <div>
+            <p className={sectionCls}>Datos laborales</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className={labelCls}>Fecha de nacimiento</label>
+                <DatePickerField name="fecha_nacimiento" value={form.fecha_nacimiento ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Fecha de ingreso</label>
+                <DatePickerField name="fecha_ingreso" value={form.fecha_ingreso ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Comisión sobreprecio (%)</label>
+                <input
+                  name="porcentaje_comision"
+                  type="number" min="0" max="100" step="0.01"
+                  value={form.porcentaje_comision ?? 0}
+                  onChange={handleChange}
+                  className={inputCls}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Hora de entrada esperada</label>
+                <TimePickerField name="hora_entrada_esperada" value={form.hora_entrada_esperada ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Hora de salida esperada</label>
+                <TimePickerField name="hora_salida_esperada" value={form.hora_salida_esperada ?? ''} onChange={handleChange} className={inputCls} />
+              </div>
+              {editando && (
+                <div className="flex items-end pb-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" name="activo" checked={form.activo ?? true} onChange={handleChange} className="rounded accent-amber-500" />
+                    <span className="text-sm text-gray-700 dark:text-zinc-300">Usuario activo</span>
+                  </label>
+                </div>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs text-gray-400 dark:text-zinc-500">
+              Comisión: % que recibe el vendedor sobre el precio por encima del precio publicado.
+            </p>
+          </div>
           <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
             <button type="button" onClick={cerrarModal} className="w-full sm:w-auto px-4 py-2 rounded-xl text-sm text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">Cancelar</button>
             <button type="submit" disabled={guardando} className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 disabled:opacity-50 transition-all">

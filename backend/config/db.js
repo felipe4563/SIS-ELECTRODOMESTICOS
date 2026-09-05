@@ -10,6 +10,13 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
+// El servidor de MySQL puede correr con reloj en UTC (contenedor/VPS) mientras
+// el negocio opera en hora de Bolivia (UTC-4). Sin esto, NOW()/CURTIME()/
+// CURDATE() usados en asistencia, cierres de caja, etc. quedan 4h adelantados.
+db.on('connection', (connection) => {
+  connection.query("SET time_zone = '-04:00'");
+});
+
 db.getConnection((err, connection) => {
   if (err) {
     console.error('❌ Error al conectar a MySQL:', err.message);
