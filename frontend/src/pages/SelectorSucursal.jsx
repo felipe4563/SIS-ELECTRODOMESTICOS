@@ -3,6 +3,8 @@ import { FaBolt, FaBuilding, FaSpinner } from 'react-icons/fa';
 import logo from '/logo.png';
 import { useAuth }           from '../contexts/AuthContext';
 import { useAbilityUpdater } from '../contexts/AbilityContext';
+import { redirigirPostAuth } from '../utils/authRedirect';
+import { buildAbility }      from '../casl/ability';
 
 export default function SelectorSucursal() {
   const { usuario, seleccionarSucursal, cargando, error } = useAuth();
@@ -18,7 +20,7 @@ export default function SelectorSucursal() {
     try {
       const { permisos } = await seleccionarSucursal(id_sucursal);
       actualizar(permisos);
-      navigate(destino, { replace: true });
+      await redirigirPostAuth(buildAbility(permisos), navigate, destino);
     } catch { /* error manejado en AuthContext */ }
   };
 

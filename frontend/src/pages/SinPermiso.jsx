@@ -1,8 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import { FaShieldAlt, FaArrowLeft } from 'react-icons/fa';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SinPermiso() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const volver = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4">
@@ -23,7 +30,7 @@ export default function SinPermiso() {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
-            onClick={() => navigate(-1)}
+            onClick={volver}
             className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all border border-white/10"
           >
             <FaArrowLeft className="h-4 w-4" />

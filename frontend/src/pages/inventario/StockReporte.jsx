@@ -76,7 +76,7 @@ export function StockReporteHTML({ productos, depositos, empresa: e, logoUrl, fi
             const total = totalDe(p, depositos);
             const est   = estadoStock(total, p.stock_minimo);
             return (
-              <tr key={p.id_producto} style={{ backgroundColor: i % 2 === 0 ? '#fff' : '#f9fafb', borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' }}>
+              <tr key={p.id_producto} style={{ backgroundColor: i % 2 === 0 ? '#fff' : '#f9fafb', borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                 <td style={{ padding: '4px 5px' }}>
                   <div style={{ fontWeight: 'bold', fontSize: '8px', color: '#111827' }}>{p.producto}</div>
                   <div style={{ fontSize: '7px', color: '#9ca3af' }}>{p.codigo_interno}</div>
@@ -170,7 +170,7 @@ function StockReportePDFDoc({ productos, depositos, empresa: e, logoUrl }) {
           </View>
         </View>
 
-        <View style={S.tHead}>
+        <View style={S.tHead} fixed>
           <Text style={[S.th, S.cProd]}>Producto</Text>
           <Text style={[S.th, S.cMarca]}>Marca</Text>
           <Text style={[S.th, S.cMin]}>Mín.</Text>
@@ -184,7 +184,7 @@ function StockReportePDFDoc({ productos, depositos, empresa: e, logoUrl }) {
           const total = totalDe(p, depositos);
           const est   = estadoStock(total, p.stock_minimo);
           return (
-            <View key={p.id_producto} style={i % 2 === 0 ? S.tRow : S.tRowAlt}>
+            <View key={p.id_producto} style={i % 2 === 0 ? S.tRow : S.tRowAlt} wrap={false}>
               <View style={[S.cProd, { paddingVertical: 4, paddingHorizontal: 4 }]}>
                 <Text style={S.pNom}>{p.producto}</Text>
                 <Text style={S.pCod}>{p.codigo_interno}</Text>

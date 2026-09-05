@@ -50,12 +50,15 @@ const getMiHistorial = async (req, res) => {
   }
 };
 
-async function validarUbicacion(id_usuario, lat, lng) {
+async function validarUbicacion(id_usuario, lat, lng, id_sucursal) {
   const [rows] = await db.promise().query(
-    `SELECT s.latitud, s.longitud, s.radio_metros, s.nombre AS sucursal_nombre
-     FROM usuarios u JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
-     WHERE u.id_usuario = ?`,
-    [id_usuario]
+    id_sucursal
+      ? `SELECT latitud, longitud, radio_metros, nombre AS sucursal_nombre
+         FROM sucursales WHERE id_sucursal = ?`
+      : `SELECT s.latitud, s.longitud, s.radio_metros, s.nombre AS sucursal_nombre
+         FROM usuarios u JOIN sucursales s ON s.id_sucursal = u.id_sucursal_default
+         WHERE u.id_usuario = ?`,
+    [id_sucursal || id_usuario]
   );
   if (rows.length === 0) return { ok: false, error: 'El usuario no tiene sucursal asignada' };
   const s = rows[0];
@@ -98,7 +101,7 @@ const marcarEntrada = async (req, res) => {
       return res.status(400).json({ error: 'Ya marcaste entrada hoy' });
     }
 
-    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum);
+    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum, req.user.id_sucursal);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
     let idAsistencia;
@@ -156,7 +159,7 @@ const marcarSalida = async (req, res) => {
     if (rows.length === 0) return res.status(400).json({ error: 'Todavía no marcaste entrada hoy' });
     if (rows[0].hora_salida) return res.status(400).json({ error: 'Ya marcaste salida hoy' });
 
-    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum);
+    const val = await validarUbicacion(req.user.id_usuario, latNum, lngNum, req.user.id_sucursal);
     if (!val.ok) return res.status(400).json({ error: val.error });
 
     await db.promise().query(

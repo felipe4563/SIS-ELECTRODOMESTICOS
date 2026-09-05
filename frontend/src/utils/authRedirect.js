@@ -16,6 +16,7 @@ const RUTAS_PRIORITARIAS = [
   { path: '/configuracion/empresa', action: 'ver',          subject: 'empresa' },
   { path: '/herramientas',         action: 'ver',          subject: 'herramientas' },
   { path: '/auditoria',            action: 'ver',          subject: 'auditoria' },
+  { path: '/mi-asistencia',        action: 'marcar',       subject: 'asistencia' },
 ];
 
 function puedePath(ability, ruta) {

@@ -39,6 +39,22 @@ export default function StockImprimirBoton({ productos, depositos, empresa, logo
         @media print {
           body * { visibility: hidden !important; }
           #documento-stock, #documento-stock * { visibility: visible !important; }
+          /* El layout general de la app fija html/body/main con altura de pantalla
+             y overflow oculto — eso recorta el contenido a 1 sola hoja al imprimir.
+             Hay que liberarlo para que el documento pueda paginar de verdad. */
+          html, body, #root {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .overflow-hidden, .overflow-y-auto {
+            overflow: visible !important;
+          }
+          .h-screen {
+            height: auto !important;
+          }
+          .min-h-screen {
+            min-height: auto !important;
+          }
           #documento-stock {
             position: absolute !important;
             top: 0 !important;
