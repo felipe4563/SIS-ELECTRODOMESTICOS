@@ -89,7 +89,10 @@ const getStockConsolidado = async (req, res) => {
       JOIN unidades_medida u ON u.id_unidad = p.id_unidad
       WHERE ${filtrosBase}
     `;
-    const derivedParams = [...paramsBase, ...totalDispParams];
+    // totalDispExpr va en el SELECT (aparece primero en el texto SQL) y
+    // filtrosBase en el WHERE (aparece después) — los params deben ir en
+    // ese mismo orden para que mysql2 los ligue al placeholder correcto.
+    const derivedParams = [...totalDispParams, ...paramsBase];
 
     const estadoWhereArr = [];
     if (estado === 'sin')  estadoWhereArr.push('x.total_disp = 0');
@@ -298,7 +301,10 @@ const exportarStockConsolidado = async (req, res) => {
       JOIN unidades_medida u ON u.id_unidad = p.id_unidad
       WHERE ${filtrosBase}
     `;
-    const derivedParams = [...paramsBase, ...totalDispParams];
+    // totalDispExpr va en el SELECT (aparece primero en el texto SQL) y
+    // filtrosBase en el WHERE (aparece después) — los params deben ir en
+    // ese mismo orden para que mysql2 los ligue al placeholder correcto.
+    const derivedParams = [...totalDispParams, ...paramsBase];
 
     const estadoWhereArr = [];
     if (estado === 'sin')  estadoWhereArr.push('x.total_disp = 0');
