@@ -235,7 +235,10 @@ const enviarTransferencia = async (req, res) => {
     if (!tm) return res.status(500).json({ mensaje: "Falta tipo_movimiento con codigo='TRANSFERENCIA_SAL'" });
 
     const [detalle] = await db.promise().query(
-      `SELECT * FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
+      `SELECT td.*, p.producto, p.codigo_interno, p.modelo
+       FROM transferencia_detalle td
+       JOIN productos p ON p.id_producto = td.id_producto
+       WHERE td.id_transferencia = ?`, [id]
     );
 
     for (const item of detalle) {
@@ -245,8 +248,9 @@ const enviarTransferencia = async (req, res) => {
         [item.id_producto, t.id_deposito_origen]
       );
       if (Number(st?.qty ?? 0) < Number(item.cantidad_enviada)) {
+        const nombreProd = [item.producto, item.modelo].filter(Boolean).join(' ');
         return res.status(400).json({
-          mensaje: `Stock insuficiente para el producto con id ${item.id_producto}`
+          mensaje: `Stock insuficiente para "${nombreProd}" (${item.codigo_interno})`
         });
       }
     }
