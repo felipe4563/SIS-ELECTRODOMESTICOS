@@ -11,6 +11,11 @@ import Modal from '../../components/ui/Modal';
 import { isValidEmail, validatePassword } from '../../utils/validation';
 import { DatePickerField, TimePickerField } from '../../components/ui/DateTimePickers';
 
+// "2000-05-23T00:00:00.000Z" (Date/ISO) se parsearía como medianoche UTC y,
+// al formatear en hora local (Bolivia, UTC-4), retrocedería un día. Se ancla
+// al mediodía para evitar el cruce de día por el desfase horario.
+const fmtFechaSolo = (d) => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-BO') : '';
+
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';
 const sectionCls = 'text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 pb-1 border-b border-gray-100 dark:border-zinc-800';
@@ -374,8 +379,8 @@ function UserCard({ u, yo, puede, onEdit, onDelete, onReset, onSucursales, onCer
             <span className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
             <span className="truncate">
               {[
-                u.fecha_nacimiento && `Nac.: ${new Date(u.fecha_nacimiento).toLocaleDateString('es-BO')}`,
-                u.fecha_ingreso && `Ingreso: ${new Date(u.fecha_ingreso).toLocaleDateString('es-BO')}`,
+                u.fecha_nacimiento && `Nac.: ${fmtFechaSolo(u.fecha_nacimiento)}`,
+                u.fecha_ingreso && `Ingreso: ${fmtFechaSolo(u.fecha_ingreso)}`,
               ].filter(Boolean).join(' · ')}
             </span>
           </div>
