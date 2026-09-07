@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { comprasService } from '../../services/compras.service';
 import { usePermission }  from '../../hooks/usePermission';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -25,8 +26,8 @@ const PIPELINE = [
   { key: 'RECIBIDO',   label: 'Recibido',   dot: 'bg-green-500',  num: 'text-green-600 dark:text-green-400' },
 ];
 
-const HOY    = new Date().toISOString().slice(0, 10);
-const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+const HOY    = hoyLocal();
+const HACE30 = fechaHaceDiasLocal(30);
 
 const inputCls = 'px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-shadow placeholder:text-zinc-400';
 

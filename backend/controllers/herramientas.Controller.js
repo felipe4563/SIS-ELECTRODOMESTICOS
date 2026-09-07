@@ -4,6 +4,7 @@ const fs      = require('fs');
 const ExcelJS = require('exceljs');
 const PDFDoc  = require('pdfkit');
 const bwipjs  = require('bwip-js');
+const { fechaHoraSegundosLocal } = require('../utils/fechaLocal');
 
 const BACKUP_DIR = path.join(__dirname, '..', 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -67,7 +68,7 @@ async function generarSQLDump() {
         const vals = Object.values(row).map(v => {
           if (v === null || v === undefined) return 'NULL';
           if (typeof v === 'number') return v;
-          if (v instanceof Date) return `'${v.toISOString().slice(0, 19).replace('T', ' ')}'`;
+          if (v instanceof Date) return `'${fechaHoraSegundosLocal(v)}'`;
           if (Buffer.isBuffer(v)) return `'${v.toString('hex')}'`;
           return `'${String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
         }).join(', ');

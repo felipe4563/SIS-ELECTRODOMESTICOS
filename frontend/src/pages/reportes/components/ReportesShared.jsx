@@ -1,12 +1,10 @@
 import { reportesService } from '../../../services/reportes.service';
 import { usePermission } from '../../../hooks/usePermission';
+import { hoyLocal, primerDiaMesLocal } from '../../../utils/fechaLocal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-export const hoy = () => new Date().toISOString().slice(0, 10);
-export const inicioMes = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-};
+export const hoy = hoyLocal;
+export const inicioMes = primerDiaMesLocal;
 export const fmt  = (n) => Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const fmtN = (n) => Number(n || 0).toLocaleString('es-BO');
 

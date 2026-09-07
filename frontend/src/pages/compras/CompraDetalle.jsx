@@ -4,6 +4,7 @@ import { comprasService } from '../../services/compras.service';
 import { descargarCompraPDF } from './CompraImprimir';
 import { usePermission }   from '../../hooks/usePermission';
 import { useEmpresa }      from '../../contexts/EmpresaContext';
+import { hoyLocal }        from '../../utils/fechaLocal';
 
 const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 const buildFileUrl = url => !url ? null : (url.startsWith('http') ? url : BACKEND + url);
@@ -444,7 +445,7 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
 
 // ── Modal Pagar ───────────────────────────────────────────────────────────────
 function ModalPagar({ cuotas, monedas, saldoPendiente, onConfirm, onClose, loading, error }) {
-  const HOY = new Date().toISOString().slice(0, 10);
+  const HOY = hoyLocal();
   const cuotasPendientes = cuotas.filter(c => c.estado !== 'PAGADA').sort((a, b) => a.numero_cuota - b.numero_cuota);
   const cuotaSugerida = cuotasPendientes[0] ?? null;
   const [form, setForm] = useState({

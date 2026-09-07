@@ -4,8 +4,9 @@ import { tiposCambioService, monedasService } from '../../services/configuracion
 import { usePermission } from '../../hooks/usePermission';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
+import { hoyLocal } from '../../utils/fechaLocal';
 
-const hoy = () => new Date().toISOString().split('T')[0];
+const hoy = hoyLocal;
 const EMPTY = { id_moneda_origen: '', id_moneda_destino: '', fecha: hoy(), tipo: 'oficial', tasa_compra: '', tasa_venta: '' };
 const inputCls = 'block w-full px-3 py-2.5 rounded-xl text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 dark:focus:border-amber-500/50 transition-colors';
 const labelCls = 'block text-xs font-medium text-gray-600 dark:text-zinc-400 mb-1';

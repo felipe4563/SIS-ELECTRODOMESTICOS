@@ -1,6 +1,7 @@
 import {
   Document, Page, Text, View, StyleSheet, pdf, Image,
 } from '@react-pdf/renderer';
+import { hoyLocal } from '../../utils/fechaLocal';
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 const toNum  = n => { const v = Number(n ?? 0); return isNaN(v) ? 0 : v; };
@@ -223,7 +224,7 @@ export async function descargarStockReportePDF(productos, depositos, empresa, lo
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');
   a.href     = url;
-  a.download = `reporte-stock-${new Date().toISOString().slice(0, 10)}.pdf`;
+  a.download = `reporte-stock-${hoyLocal()}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }

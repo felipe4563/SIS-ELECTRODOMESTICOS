@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { asistenciaService } from '../../services/asistencia.service';
+import { hoyLocal, primerDiaMesLocal } from '../../utils/fechaLocal';
 
-const hoy       = () => new Date().toISOString().slice(0, 10);
-const inicioMes = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-};
+const hoy       = hoyLocal;
+const inicioMes = primerDiaMesLocal;
 
 const INPUT = 'w-full px-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-yellow-400';
 const LABEL = 'text-xs text-zinc-500 dark:text-zinc-400 font-medium block mb-1';

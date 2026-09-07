@@ -1,5 +1,6 @@
 const db    = require('../config/db');
 const https = require('https');
+const { hoyLocal } = require('../utils/fechaLocal');
 
 // Obtiene tasas de dolarbluebolivia.click (paralelo + oficial)
 const obtenerTasasDolar = () => new Promise((resolve, reject) => {
@@ -191,7 +192,7 @@ const updateTipoCambio = async (req, res) => {
 const getTasasDolar = async (req, res) => {
   try {
     const { paralelo, oficial, fetched_at } = await obtenerTasasDolar();
-    const fecha = (fetched_at || new Date().toISOString()).split('T')[0];
+    const fecha = fetched_at ? fetched_at.split('T')[0] : hoyLocal();
 
     // Buscar IDs de USD y BOB
     const [[usd]] = await db.promise().query(`SELECT id_moneda FROM monedas WHERE codigo = 'USD' AND activo = 1 LIMIT 1`);

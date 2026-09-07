@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { inventarioService } from '../../services/inventario.service';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -14,8 +15,8 @@ const EFECTO_BADGE = {
 
 const DOC_TIPOS = ['COMPRA', 'VENTA', 'TRANSFERENCIA', 'AJUSTE', 'DEVOLUCION', 'APERTURA', 'SERVICIO_TECNICO'];
 
-const HOY   = new Date().toISOString().slice(0, 10);
-const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+const HOY   = hoyLocal();
+const HACE30 = fechaHaceDiasLocal(30);
 
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Kardex() {

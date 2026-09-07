@@ -1,3 +1,5 @@
+import { hoyLocal } from './fechaLocal';
+
 export function exportarCSV(datos, nombreArchivo, columnas) {
   if (!datos || datos.length === 0) return;
   const cabecera = columnas.map(c => `"${c.label}"`).join(',');
@@ -13,7 +15,7 @@ export function exportarCSV(datos, nombreArchivo, columnas) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${nombreArchivo}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${nombreArchivo}_${hoyLocal()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ajustesService }   from '../../services/ajustes.service';
 import { depositosService } from '../../services/depositos.service';
 import { usePermission }    from '../../hooks/usePermission';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 
@@ -12,8 +13,8 @@ const ESTADO_BADGE = {
   ANULADO:  { label: 'Anulado',   cls: 'bg-red-100   text-red-700   dark:bg-red-900/30   dark:text-red-400' },
 };
 
-const HOY    = new Date().toISOString().slice(0, 10);
-const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+const HOY    = hoyLocal();
+const HACE30 = fechaHaceDiasLocal(30);
 
 export default function Ajustes() {
   const navigate = useNavigate();

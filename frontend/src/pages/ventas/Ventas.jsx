@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { cajaService } from '../../services/caja.service';
 import { usePermission } from '../../hooks/usePermission';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -36,8 +37,8 @@ const ESTADO_BADGE = {
   DEVUELTA:  { label: 'Devuelta',  cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', accent: 'bg-purple-400', chipOn: 'bg-purple-500 text-white' },
 };
 
-const HOY    = new Date().toISOString().slice(0, 10);
-const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+const HOY    = hoyLocal();
+const HACE30 = fechaHaceDiasLocal(30);
 
 /* ─── Chip de filtro de estado ────────────────────────────────────────────── */
 function ChipEstado({ label, activo, colorOn, onClick }) {

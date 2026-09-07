@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { promocionesService } from '../../services/combosPromos.service';
 import { usePermission } from '../../hooks/usePermission';
+import { soloFechaLocal, hoyLocal } from '../../utils/fechaLocal';
 
 const TIPOS_DESCUENTO = ['PORCENTAJE', 'MONTO_FIJO'];
 const APLICA_A        = ['PRODUCTO', 'CATEGORIA', 'MARCA', 'TODOS'];
@@ -22,7 +23,7 @@ const EMPTY_FORM = {
 
 const fmtFecha = (d) => {
   if (!d) return '—';
-  const solo = typeof d === 'string' ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10);
+  const solo = typeof d === 'string' ? d.slice(0, 10) : soloFechaLocal(new Date(d));
   return new Date(solo + 'T12:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
@@ -34,7 +35,7 @@ const Spinner = ({ sm }) => (
 );
 
 function EstadoBadge({ activo, fi, ff }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = hoyLocal();
   const fiS = fi ? String(fi).slice(0, 10) : null;
   const ffS = ff ? String(ff).slice(0, 10) : null;
 
@@ -276,7 +277,7 @@ export default function Promociones() {
       const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `promociones_${filtroActivo !== 'todos' ? filtroActivo + '_' : ''}${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `promociones_${filtroActivo !== 'todos' ? filtroActivo + '_' : ''}${hoyLocal()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {} finally { setExportando(false); }

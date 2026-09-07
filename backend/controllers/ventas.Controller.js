@@ -1,4 +1,5 @@
 const db    = require('../config/db');
+const { hoyLocal, fechaEnDiasLocal, soloFechaLocal } = require('../utils/fechaLocal');
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
 
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -122,7 +123,7 @@ async function cascadaCuotaVenta(id_cuota, montoPagoNuevo) {
   await db.promise().query(
     `INSERT INTO venta_cuotas (id_venta, numero_cuota, fecha_vencimiento, monto)
      VALUES (?, ?, ?, ?)`,
-    [cuota.id_venta, ultima.numero_cuota + 1, nuevaFecha.toISOString().slice(0, 10), -diferencia]
+    [cuota.id_venta, ultima.numero_cuota + 1, soloFechaLocal(nuevaFecha), -diferencia]
   );
 }
 
@@ -482,7 +483,7 @@ const createVenta = async (req, res) => {
         req.user.id_usuario,
         id_moneda, tipo_cambio, condicion_pago, dias_credito, Math.max(1, Number(num_cuotas) || 1),
         condicion_pago === 'CREDITO' && dias_credito > 0
-          ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
+          ? fechaEnDiasLocal(dias_credito)
           : null,
         subtotal, descuento_porc, descuento_monto, impuesto, total,
         requiere_entrega,
@@ -596,7 +597,7 @@ const updateVenta = async (req, res) => {
       [
         id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito, Math.max(1, Number(num_cuotas) || 1),
         condicion_pago === 'CREDITO' && dias_credito > 0
-          ? new Date(Date.now() + dias_credito * 864e5).toISOString().slice(0, 10)
+          ? fechaEnDiasLocal(dias_credito)
           : null,
         subtotal, descuento_porc, descuento_monto, impuesto, total,
         requiere_entrega ?? 0,
@@ -672,7 +673,7 @@ async function generarCuotasVenta(id_venta, total, dias_credito, num_cuotas) {
     const monto = n < numCuotas
       ? montoBase
       : +(Number(total) - montoBase * (numCuotas - 1)).toFixed(2);
-    const fechaVenc = new Date(Date.now() + dias_credito * n * 864e5).toISOString().slice(0, 10);
+    const fechaVenc = fechaEnDiasLocal(dias_credito * n);
     await db.promise().query(
       `INSERT INTO venta_cuotas (id_venta, numero_cuota, fecha_vencimiento, monto) VALUES (?,?,?,?)`,
       [id_venta, n, fechaVenc, monto]
@@ -1398,7 +1399,7 @@ const getFormData = async (req, res) => {
     );
 
     // Promociones vigentes (con sus aplicaciones)
-    const today = new Date().toISOString().slice(0, 10);
+    const today = hoyLocal();
     const [promoRows] = await db.promise().query(
       `SELECT id_promocion, nombre, tipo_descuento, valor_descuento, aplica_a, fecha_inicio, fecha_fin
        FROM promociones

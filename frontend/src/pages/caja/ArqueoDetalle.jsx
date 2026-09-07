@@ -8,6 +8,7 @@ import { cajaService } from '../../services/caja.service';
 import { gastosService } from '../../services/gastos.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useEmpresa } from '../../contexts/EmpresaContext';
+import { hoyLocal } from '../../utils/fechaLocal';
 
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -309,7 +310,7 @@ function ResumenCajaPDF({ arqueo, empresa, logoUrl, cobros, gastos, pagosCompra,
 
 // ── Modal gasto rápido (imprevistos durante el turno) ────────────────────
 function ModalGastoRapido({ arqueo, onClose, onSuccess }) {
-  const HOY = new Date().toISOString().slice(0, 10);
+  const HOY = hoyLocal();
 
   const [categorias, setCategorias] = useState([]);
   const [monedaBase, setMonedaBase] = useState(null);

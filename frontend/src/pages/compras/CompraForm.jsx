@@ -5,9 +5,10 @@ import { proveedoresService } from '../../services/proveedores.service';
 import { productosService }   from '../../services/productos.service';
 import { tiposCambioService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
+import { hoyLocal } from '../../utils/fechaLocal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const HOY      = new Date().toISOString().slice(0, 10);
+const HOY      = hoyLocal();
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
 
 const inputCls   = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors';

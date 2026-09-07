@@ -4,6 +4,7 @@ import { cajaService } from '../../services/caja.service';
 import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -264,8 +265,8 @@ export default function Caja() {
   const [filtros, setFiltros] = useState({
     id_caja:     '',
     estado:      '',
-    fecha_desde: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
-    fecha_hasta: new Date().toISOString().slice(0, 10),
+    fecha_desde: fechaHaceDiasLocal(30),
+    fecha_hasta: hoyLocal(),
   });
 
   const cargarTurnoActual = () => {

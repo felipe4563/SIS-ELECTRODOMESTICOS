@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { cajaService } from '../../services/caja.service';
 import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -13,8 +14,8 @@ const ORIGEN_BADGE = {
   GASTO:  { label: 'Gasto',   cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 };
 
-const HOY   = new Date().toISOString().slice(0, 10);
-const HACE30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+const HOY   = hoyLocal();
+const HACE30 = fechaHaceDiasLocal(30);
 
 const METODOS_PAGO = [
   'EFECTIVO', 'QR', 'TRANSFERENCIA', 'TARJETA', 'TARJETA_DEBITO', 'TARJETA_CREDITO', 'CHEQUE', 'OTRO',

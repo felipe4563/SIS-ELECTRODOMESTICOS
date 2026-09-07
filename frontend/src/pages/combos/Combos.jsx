@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { combosService } from '../../services/combosPromos.service';
 import { usePermission } from '../../hooks/usePermission';
+import { soloFechaLocal, hoyLocal } from '../../utils/fechaLocal';
 
 const BACKEND = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
@@ -23,7 +24,7 @@ function StatusBadge({ activo, fecha_fin }) {
 const fmtFecha = (d) => {
   if (!d) return null;
   // Normaliza a "YYYY-MM-DD" para evitar problemas de timezone con datetime completo
-  const solo = typeof d === 'string' ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10);
+  const solo = typeof d === 'string' ? d.slice(0, 10) : soloFechaLocal(new Date(d));
   return new Date(solo + 'T12:00:00').toLocaleDateString('es-BO', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
@@ -275,7 +276,7 @@ export default function Combos() {
       const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `combos_${filtroActivo !== 'todos' ? filtroActivo + '_' : ''}${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `combos_${filtroActivo !== 'todos' ? filtroActivo + '_' : ''}${hoyLocal()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {

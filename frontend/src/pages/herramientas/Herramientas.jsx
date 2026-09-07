@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { herramientasService as svc } from '../../services/herramientas.service';
 import { usePermission } from '../../hooks/usePermission';
+import { hoyLocal } from '../../utils/fechaLocal';
 
 const cls = (...c) => c.filter(Boolean).join(' ');
 
@@ -393,7 +394,7 @@ function SeccionCatalogo({ toast }) {
       const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `catalogo_${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `catalogo_${hoyLocal()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       toast('Catálogo generado');

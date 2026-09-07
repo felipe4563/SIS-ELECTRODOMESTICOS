@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate }          from 'react-router-dom';
 import { usePermission }        from '../../hooks/usePermission';
 import { servicioTecnicoService } from '../../services/servicioTecnico.service';
+import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 /* ── Constantes de UI ─────────────────────────────────────────────────────── */
 const ESTADO_META = {
@@ -26,11 +27,8 @@ const PRIORIDAD_META = {
 const ESTADOS_ACTIVOS = ['RECIBIDO', 'EN_DIAGNOSTICO', 'ESPERANDO_REPUESTO', 'EN_REPARACION', 'REPARADO', 'LISTO_ENTREGA'];
 const TODOS_LOS_ESTADOS = [...ESTADOS_ACTIVOS, 'ENTREGADO', 'SIN_REPARACION', 'ANULADO'];
 
-const hoy = () => new Date().toISOString().slice(0, 10);
-const hace30 = () => {
-  const d = new Date(); d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
-};
+const hoy    = hoyLocal;
+const hace30 = () => fechaHaceDiasLocal(30);
 
 /* ── Badges ──────────────────────────────────────────────────────────────── */
 function EstadoBadge({ estado }) {

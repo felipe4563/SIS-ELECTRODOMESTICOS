@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gastosService } from '../../services/gastos.service';
 import { usePermission } from '../../hooks/usePermission';
+import { hoyLocal } from '../../utils/fechaLocal';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const ESTADOS = ['REGISTRADO', 'APROBADO', 'PAGADO', 'ANULADO'];
@@ -143,7 +144,7 @@ function ModalCategoria({ item, onClose, onSave }) {
 
 // ── Modal Gasto ───────────────────────────────────────────────────────────────
 function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) {
-  const hoy        = new Date().toISOString().slice(0, 10);
+  const hoy        = hoyLocal();
   const monedaBase = monedas.find(m => m.es_moneda_base) || monedas[0] || {};
 
   const [form, setForm] = useState({

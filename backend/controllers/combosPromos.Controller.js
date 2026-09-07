@@ -2,6 +2,7 @@ const db        = require('../config/db');
 const PDFDocument = require('pdfkit');
 const path      = require('path');
 const fs        = require('fs');
+const { hoyLocal, soloFechaLocal } = require('../utils/fechaLocal');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -286,7 +287,7 @@ const getPromocion = async (req, res) => {
 
 const getPromocionesVigentes = async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = hoyLocal();
 
     const [promos] = await db.promise().query(
       `SELECT * FROM promociones
@@ -539,7 +540,7 @@ const exportarCombos = async (req, res) => {
     const rows = [...comboMap.values()];
 
     const empresa = empresaRows[0] ?? {};
-    const fecha   = new Date().toISOString().slice(0, 10);
+    const fecha   = hoyLocal();
 
     const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape', bufferPages: true });
 
@@ -611,7 +612,7 @@ const exportarCombos = async (req, res) => {
 
     const fmtD = d => {
       if (!d) return '—';
-      const iso = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+      const iso = d instanceof Date ? soloFechaLocal(d) : String(d).slice(0, 10);
       return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
     };
     const fmtN = v => parseFloat(v || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -900,7 +901,7 @@ const exportarPromociones = async (req, res) => {
     const rows = [...promoMap.values()];
 
     const empresa = empresaRows[0] ?? {};
-    const fecha   = new Date().toISOString().slice(0, 10);
+    const fecha   = hoyLocal();
 
     const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape', bufferPages: true });
     const chunks = [];
@@ -946,11 +947,11 @@ const exportarPromociones = async (req, res) => {
 
     let y = doc.y + 14;
     const startX = margin;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = hoyLocal();
 
     const fmtD = d => {
       if (!d) return '—';
-      const iso = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+      const iso = d instanceof Date ? soloFechaLocal(d) : String(d).slice(0, 10);
       return new Date(iso + 'T12:00:00').toLocaleDateString('es-BO', { day:'2-digit', month:'2-digit', year:'2-digit' });
     };
 
@@ -964,8 +965,8 @@ const exportarPromociones = async (req, res) => {
     };
 
     const getEstado = (r) => {
-      const fi = r.fecha_inicio ? (r.fecha_inicio instanceof Date ? r.fecha_inicio.toISOString().slice(0,10) : String(r.fecha_inicio).slice(0,10)) : null;
-      const ff = r.fecha_fin    ? (r.fecha_fin    instanceof Date ? r.fecha_fin.toISOString().slice(0,10)    : String(r.fecha_fin).slice(0,10))    : null;
+      const fi = r.fecha_inicio ? (r.fecha_inicio instanceof Date ? soloFechaLocal(r.fecha_inicio) : String(r.fecha_inicio).slice(0,10)) : null;
+      const ff = r.fecha_fin    ? (r.fecha_fin    instanceof Date ? soloFechaLocal(r.fecha_fin)    : String(r.fecha_fin).slice(0,10))    : null;
       if (!r.activo) return ff && ff < today ? { label: 'Vencida', color: AMBER } : { label: 'Inactiva', color: GRAY };
       if (fi && fi > today) return { label: 'Próxima', color: BLUE_D };
       if (ff && ff < today) return { label: 'Vencida',  color: AMBER };

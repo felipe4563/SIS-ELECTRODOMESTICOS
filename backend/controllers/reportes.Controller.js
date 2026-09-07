@@ -4,12 +4,10 @@ const fs   = require('fs');
 const PDFDocument = require('pdfkit');
 const { isValidDate } = require('../utils/validators');
 const { tiene_permiso } = require('../middlewares/authMiddleware');
+const { hoyLocal, primerDiaMesLocal } = require('../utils/fechaLocal');
 
-const hoy = () => new Date().toISOString().slice(0, 10);
-const inicioMes = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-};
+const hoy       = hoyLocal;
+const inicioMes = primerDiaMesLocal;
 const defaultDesde = (q) => q.fecha_desde || inicioMes();
 const defaultHasta = (q) => q.fecha_hasta || hoy();
 

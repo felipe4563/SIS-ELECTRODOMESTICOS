@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { reportesService } from '../services/reportes.service';
 import { AbilityContext } from '../contexts/AbilityContext';
+import { soloFechaLocal } from '../utils/fechaLocal';
 
 const fmt  = (n) => Number(n).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtN = (n) => Number(n).toLocaleString('es-BO');
@@ -91,7 +92,7 @@ function BarChart({ data }) {
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = soloFechaLocal(d);
     const found = (data || []).find(x => x.dia === iso);
     allDays.push({
       iso, label: dias[d.getDay()],

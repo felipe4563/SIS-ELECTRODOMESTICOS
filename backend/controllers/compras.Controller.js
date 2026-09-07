@@ -1,6 +1,7 @@
 const db    = require('../config/db');
 const fs    = require('fs');
 const path  = require('path');
+const { hoyLocal, soloFechaLocal } = require('../utils/fechaLocal');
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
@@ -97,7 +98,7 @@ async function cascadaCuota(id_cuota, montoPagoNuevo) {
   await db.promise().query(
     `INSERT INTO compra_cuotas (id_compra, numero_cuota, fecha_vencimiento, monto)
      VALUES (?, ?, ?, ?)`,
-    [cuota.id_compra, ultima.numero_cuota + 1, nuevaFecha.toISOString().slice(0, 10), -diferencia]
+    [cuota.id_compra, ultima.numero_cuota + 1, soloFechaLocal(nuevaFecha), -diferencia]
   );
 }
 
@@ -411,7 +412,7 @@ const createCompra = async (req, res) => {
           id_usuario_crea, observaciones, numero_factura, procedencia)
        VALUES (?,?,?,?,?,?, 'PRE_PEDIDO','CONTADO',0, ?,?, ?,?,?,?,?,?,?, ?,?,?,?)`,
       [numero, id_proveedor, id_sucursal, id_deposito_destino, id_moneda, tipo_cambio,
-       fecha_pedido || new Date().toISOString().slice(0, 10), fecha_estim_llegada || null,
+       fecha_pedido || hoyLocal(), fecha_estim_llegada || null,
        tots.subtotal, tots.descuento, tots.impuesto, tots.flete, tots.otros_costos,
        tots.total, tots.total,
        req.user.id_usuario, observaciones || null, numero_factura?.trim() || null, procedencia?.trim() || null]
@@ -611,7 +612,7 @@ const confirmarPedido = async (req, res) => {
         await db.promise().query(
           `INSERT INTO compra_cuotas (id_compra, numero_cuota, fecha_vencimiento, monto)
            VALUES (?,?,?,?)`,
-          [id, i, fVenc.toISOString().slice(0, 10), montoBase]
+          [id, i, soloFechaLocal(fVenc), montoBase]
         );
       }
     }
