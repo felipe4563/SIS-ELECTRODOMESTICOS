@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import api from '../../api/axios';
 import { ajustesService }    from '../../services/ajustes.service';
 import { inventarioService } from '../../services/inventario.service';
 
@@ -175,15 +174,16 @@ export default function AjusteForm() {
     }
   }, []); // eslint-disable-line
 
-  // Cargar stock del depósito seleccionado
+  // Cargar stock del depósito seleccionado (endpoint sin paginar: getStockConsolidado
+  // solo trae 20 productos por página y dejaba "Sistema: 0" en cualquier producto
+  // fuera de la primera página)
   useEffect(() => {
     if (!form.id_deposito) { setStockMap({}); return; }
-    api.get('/inventario/stock')
+    inventarioService.getStockDeposito(form.id_deposito)
       .then(r => {
         const map = {};
-        for (const prod of r.data.productos ?? []) {
-          const s = prod.stock?.[form.id_deposito];
-          map[prod.id_producto] = Number(s?.cantidad ?? 0);
+        for (const s of r.data.stock ?? []) {
+          map[s.id_producto] = Number(s.cantidad ?? 0);
         }
         setStockMap(map);
         setItems(prev => prev.map(it => ({

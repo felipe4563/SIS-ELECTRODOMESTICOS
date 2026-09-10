@@ -5,6 +5,7 @@ import { usePermission }  from '../../hooks/usePermission';
 
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO') : '—';
 const fmtCant  = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+const specLinea = d => [d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
 const ESTADO_BADGE = {
   BORRADOR: { label: 'Borrador',  cls: 'bg-zinc-100  text-zinc-600  dark:bg-zinc-800  dark:text-zinc-400' },
@@ -148,10 +149,18 @@ export default function AjusteDetalle() {
               <div key={d.id_detalle} className="px-4 py-3 space-y-2">
                 <div>
                   <p className="font-medium text-sm text-zinc-900 dark:text-white">{d.producto_nombre}</p>
-                  <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                  <p className="text-[11px] font-mono text-zinc-400">
+                    {d.codigo_interno}{d.codigo_barras ? ` · ${d.codigo_barras}` : ''}
+                  </p>
                 </div>
-                {d.unidad_nombre && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{d.unidad_nombre}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {d.marca_nombre}{d.unidad_nombre ? ` · ${d.unidad_nombre}${d.unidad_codigo ? ` (${d.unidad_codigo})` : ''}` : ''}
+                </p>
+                {d.producto_detalle && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
+                )}
+                {specLinea(d) && (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
                 )}
                 <div className="flex items-center gap-4 text-xs flex-wrap">
                   <div>
@@ -182,7 +191,7 @@ export default function AjusteDetalle() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800">
-                {['Producto', 'Unidad', 'Stock sistema', 'Conteo físico', 'Diferencia', 'Observación'].map(h => (
+                {['Producto', 'Stock sistema', 'Conteo físico', 'Diferencia', 'Observación'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -194,9 +203,19 @@ export default function AjusteDetalle() {
                   <tr key={d.id_detalle}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-zinc-900 dark:text-white">{d.producto_nombre}</p>
-                      <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                      <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                        {d.codigo_interno}{d.codigo_barras ? ` · ${d.codigo_barras}` : ''}
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        {d.marca_nombre}{d.unidad_nombre ? ` · ${d.unidad_nombre}${d.unidad_codigo ? ` (${d.unidad_codigo})` : ''}` : ''}
+                      </p>
+                      {d.producto_detalle && (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{d.producto_detalle}</p>
+                      )}
+                      {specLinea(d) && (
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{d.unidad_nombre}</td>
                     <td className="px-4 py-3 font-mono text-zinc-600 dark:text-zinc-400">{fmtCant(d.cantidad_sistema)}</td>
                     <td className="px-4 py-3 font-mono text-zinc-900 dark:text-white font-semibold">{fmtCant(d.cantidad_fisica)}</td>
                     <td className="px-4 py-3 font-mono font-semibold">

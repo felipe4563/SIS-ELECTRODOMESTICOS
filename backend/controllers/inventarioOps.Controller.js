@@ -536,10 +536,13 @@ const getAjuste = async (req, res) => {
     const [detalle] = await db.promise().query(
       `SELECT ad.id_detalle, ad.id_producto, ad.cantidad_sistema, ad.cantidad_fisica,
               ad.diferencia, ad.observacion,
-              p.producto AS producto_nombre, p.codigo_interno,
-              um.nombre AS unidad_nombre
+              p.producto AS producto_nombre, p.codigo_interno, p.codigo_barras,
+              p.detalle AS producto_detalle, p.modelo, p.color, p.capacidad,
+              m.nombre AS marca_nombre,
+              um.nombre AS unidad_nombre, um.codigo AS unidad_codigo
        FROM ajuste_inventario_detalle ad
        JOIN productos p        ON p.id_producto = ad.id_producto
+       JOIN marcas m           ON m.id_marca    = p.id_marca
        JOIN unidades_medida um ON um.id_unidad   = p.id_unidad
        WHERE ad.id_ajuste = ?
        ORDER BY ad.id_detalle`, [id]
