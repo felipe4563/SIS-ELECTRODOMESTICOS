@@ -100,7 +100,7 @@ const getTransferencia = async (req, res) => {
     if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
 
     const [detalle] = await db.promise().query(
-      `SELECT td.id_detalle, td.id_producto, td.cantidad_enviada, td.cantidad_recibida, td.observacion,
+      `SELECT td.id_detalle, td.id_producto, td.cantidad_enviada, td.cantidad_despachada, td.cantidad_recibida, td.observacion,
               p.producto AS producto_nombre, p.codigo_interno,
               p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca,
               um.nombre AS unidad_nombre
@@ -221,13 +221,13 @@ const enviarTransferencia = async (req, res) => {
   try {
     const userId = req.user.id_usuario;
     const { id } = req.params;
-    const { observaciones } = req.body ?? {};
+    const { items, observaciones } = req.body ?? {};
 
     const [[t]] = await db.promise().query(
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
     );
     if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
-    if (t.estado !== 'SOLICITADA') {
+    if (!['SOLICITADA', 'EN_TRANSITO'].includes(t.estado)) {
       return res.status(400).json({ mensaje: `No se puede enviar una transferencia en estado ${t.estado}` });
     }
 
@@ -241,13 +241,33 @@ const enviarTransferencia = async (req, res) => {
        WHERE td.id_transferencia = ?`, [id]
     );
 
-    for (const item of detalle) {
+    const detalleById = new Map(detalle.map(d => [String(d.id_detalle), d]));
+    const aEnviar = [];
+
+    if (items?.length) {
+      for (const it of items) {
+        const item = detalleById.get(String(it.id_detalle));
+        if (!item) continue;
+        const pendienteDespacho = Number(item.cantidad_enviada) - Number(item.cantidad_despachada);
+        const cant = Math.min(Number(it.cantidad_a_enviar ?? 0), pendienteDespacho);
+        if (cant > 0) aEnviar.push({ ...item, cantidad_a_enviar: cant });
+      }
+    } else {
+      for (const item of detalle) {
+        const pendienteDespacho = Number(item.cantidad_enviada) - Number(item.cantidad_despachada);
+        if (pendienteDespacho > 0) aEnviar.push({ ...item, cantidad_a_enviar: pendienteDespacho });
+      }
+    }
+
+    if (!aEnviar.length) return res.status(400).json({ mensaje: 'No hay cantidades pendientes de despacho' });
+
+    for (const item of aEnviar) {
       const [[st]] = await db.promise().query(
         `SELECT COALESCE(cantidad, 0) AS qty FROM stock
          WHERE id_producto = ? AND id_deposito = ?`,
         [item.id_producto, t.id_deposito_origen]
       );
-      if (Number(st?.qty ?? 0) < Number(item.cantidad_enviada)) {
+      if (Number(st?.qty ?? 0) < item.cantidad_a_enviar) {
         const nombreProd = [item.producto, item.modelo].filter(Boolean).join(' ');
         return res.status(400).json({
           mensaje: `Stock insuficiente para "${nombreProd}" (${item.codigo_interno})`
@@ -255,11 +275,11 @@ const enviarTransferencia = async (req, res) => {
       }
     }
 
-    for (const item of detalle) {
+    for (const item of aEnviar) {
       await db.promise().query(
         `UPDATE stock SET cantidad = cantidad - ?, fecha_ult_movimiento = NOW()
          WHERE id_producto = ? AND id_deposito = ?`,
-        [item.cantidad_enviada, item.id_producto, t.id_deposito_origen]
+        [item.cantidad_a_enviar, item.id_producto, t.id_deposito_origen]
       );
 
       const [[stPost]] = await db.promise().query(
@@ -275,7 +295,7 @@ const enviarTransferencia = async (req, res) => {
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           item.id_producto, t.id_deposito_origen, tm.id_tipo_movimiento,
-          -Number(item.cantidad_enviada),
+          -item.cantidad_a_enviar,
           Number(stPost?.costo ?? 0),
           Number(stPost?.qty ?? 0),
           Number(stPost?.costo ?? 0),
@@ -283,17 +303,30 @@ const enviarTransferencia = async (req, res) => {
           userId, observaciones ?? null
         ]
       );
+
+      await db.promise().query(
+        `UPDATE transferencia_detalle SET cantidad_despachada = cantidad_despachada + ? WHERE id_detalle = ?`,
+        [item.cantidad_a_enviar, item.id_detalle]
+      );
     }
+
+    const [detallesPost] = await db.promise().query(
+      `SELECT cantidad_enviada, cantidad_despachada FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
+    );
+    const todoDespachado = detallesPost.every(d => Number(d.cantidad_despachada) >= Number(d.cantidad_enviada));
 
     await db.promise().query(
       `UPDATE transferencias
-       SET estado = 'EN_TRANSITO', fecha_envio = NOW(), id_usuario_envia = ?, observaciones_envio = ?
+       SET estado = 'EN_TRANSITO',
+           fecha_envio = COALESCE(fecha_envio, NOW()),
+           id_usuario_envia = ?,
+           observaciones_envio = COALESCE(?, observaciones_envio)
        WHERE id_transferencia = ?`,
       [userId, observaciones ?? null, id]
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
-    res.json({ ok: true, mensaje: 'Transferencia enviada' });
+    res.json({ ok: true, mensaje: todoDespachado ? 'Transferencia enviada por completo' : 'Envío parcial registrado', completo: todoDespachado });
   } catch (err) {
     console.error(err);
     res.status(500).json({ mensaje: 'Error al enviar transferencia' });
@@ -328,7 +361,7 @@ const recibirTransferencia = async (req, res) => {
       );
       if (!det) continue;
 
-      const pendiente  = Number(det.cantidad_enviada) - Number(det.cantidad_recibida);
+      const pendiente  = Number(det.cantidad_despachada) - Number(det.cantidad_recibida);
       const cantFinal  = Math.min(cantRecibir, pendiente);
       if (cantFinal <= 0) continue;
 
@@ -414,6 +447,8 @@ const anularTransferencia = async (req, res) => {
   try {
     const userId = req.user.id_usuario;
     const { id } = req.params;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
 
     const [[t]] = await db.promise().query(
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
@@ -462,7 +497,8 @@ const anularTransferencia = async (req, res) => {
     }
 
     await db.promise().query(
-      `UPDATE transferencias SET estado = 'ANULADA' WHERE id_transferencia = ?`, [id]
+      `UPDATE transferencias SET estado = 'ANULADA', motivo_anulacion = ? WHERE id_transferencia = ?`,
+      [motivo, id]
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
@@ -709,6 +745,8 @@ const anularAjuste = async (req, res) => {
   try {
     const userId = req.user.id_usuario;
     const { id } = req.params;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
 
     const [[a]] = await db.promise().query(
       `SELECT * FROM ajustes_inventario WHERE id_ajuste = ?`, [id]
@@ -719,7 +757,8 @@ const anularAjuste = async (req, res) => {
     }
 
     await db.promise().query(
-      `UPDATE ajustes_inventario SET estado = 'ANULADO' WHERE id_ajuste = ?`, [id]
+      `UPDATE ajustes_inventario SET estado = 'ANULADO', motivo_anulacion = ? WHERE id_ajuste = ?`,
+      [motivo, id]
     );
 
     await auditLog(userId, 'ajustes_inventario', id, 'UPDATE', getIp(req));

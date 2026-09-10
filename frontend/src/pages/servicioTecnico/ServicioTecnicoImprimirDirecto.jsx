@@ -406,6 +406,14 @@ function TicketA4({ r, seguimiento, logoUrl }) {
         </div>
       )}
 
+      {/* ── Motivo de anulación ── */}
+      {r.estado === 'ANULADO' && v(r.motivo_anulacion) && (
+        <div style={{ marginBottom: '8px' }}>
+          <div style={{ fontSize: '7px', fontWeight: 'bold', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Motivo de anulación</div>
+          <div style={{ fontWeight: 'bold', color: '#dc2626', marginTop: '2px' }}>{r.motivo_anulacion}</div>
+        </div>
+      )}
+
       {/* ── Costo total ── */}
       {fmtM(r.costo_final) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>

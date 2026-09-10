@@ -275,17 +275,17 @@ const pagarGasto = async (req, res) => {
 const anularGasto = async (req, res) => {
   try {
     const { id } = req.params;
-    const { motivo } = req.body;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
+
     const [[gasto]] = await db.promise().query('SELECT estado FROM gastos WHERE id_gasto=?', [id]);
     if (!gasto) return res.status(404).json({ mensaje: 'Gasto no encontrado' });
     if (gasto.estado === 'ANULADO') return res.status(400).json({ mensaje: 'El gasto ya está anulado' });
     if (gasto.estado === 'PAGADO')  return res.status(400).json({ mensaje: 'No se puede anular un gasto pagado' });
 
     await db.promise().query(
-      `UPDATE gastos SET estado='ANULADO',
-        observaciones = CONCAT(COALESCE(observaciones,''), ' | ANULADO: ', ?)
-       WHERE id_gasto=?`,
-      [motivo || 'Sin motivo', id]
+      `UPDATE gastos SET estado='ANULADO', motivo_anulacion = ? WHERE id_gasto=?`,
+      [motivo, id]
     );
     await auditLog(req.user.id_usuario, 'gastos', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Gasto anulado' });

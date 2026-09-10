@@ -175,6 +175,14 @@ function CotizacionHoja({ c, e, logoUrl, clienteNombre, est, detalleHoja, pagina
         </div>
       )}
 
+      {/* Motivo de anulación */}
+      {c.estado === 'ANULADA' && c.motivo_anulacion && (
+        <div style={{ marginBottom: '14px' }}>
+          <div style={{ fontSize: '7px', fontWeight: 'bold', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Motivo de anulación</div>
+          <div style={{ fontSize: '8px', fontWeight: 'bold', color: '#dc2626', marginTop: '2px' }}>{c.motivo_anulacion}</div>
+        </div>
+      )}
+
       {/* Pie */}
       <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', textAlign: 'center' }}>
         <div style={{ fontSize: '7px', color: '#9ca3af', marginTop: '1px' }}>

@@ -8,7 +8,7 @@ export const ventasService = {
   update:   (id, data)       => api.put(`/ventas/${id}`, data),
   emitir:   (id, data)       => api.post(`/ventas/${id}/emitir`, data),
   cobrar:   (id, data)       => api.post(`/ventas/${id}/cobrar`, data),
-  anular:   (id)             => api.post(`/ventas/${id}/anular`),
+  anular:   (id, data)       => api.post(`/ventas/${id}/anular`, data),
   ticket:   (id)             => api.get(`/ventas/${id}/ticket`),
 
   formData:       ()          => api.get('/ventas/form-data'),

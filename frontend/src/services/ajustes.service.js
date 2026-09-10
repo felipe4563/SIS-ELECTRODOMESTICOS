@@ -5,5 +5,5 @@ export const ajustesService = {
   create:  (data)   => api.post('/inventario/ajustes', data),
   update:  (id, d)  => api.put(`/inventario/ajustes/${id}`, d),
   aprobar: (id)     => api.post(`/inventario/ajustes/${id}/aprobar`),
-  anular:  (id)     => api.post(`/inventario/ajustes/${id}/anular`),
+  anular:  (id, data) => api.post(`/inventario/ajustes/${id}/anular`, data),
 };

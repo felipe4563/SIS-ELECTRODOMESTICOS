@@ -787,6 +787,9 @@ const recibirMercaderia = async (req, res) => {
 const anularCompra = async (req, res) => {
   try {
     const { id } = req.params;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ error: 'Debe indicar el motivo de la anulación' });
+
     const [[compra]] = await db.promise().query(
       `SELECT estado, id_proveedor, condicion_pago FROM compras WHERE id_compra = ?`, [id]
     );
@@ -794,7 +797,10 @@ const anularCompra = async (req, res) => {
     if (['RECIBIDO', 'ANULADO'].includes(compra.estado))
       return res.status(409).json({ error: `No se puede anular una compra en estado ${compra.estado}` });
 
-    await db.promise().query(`UPDATE compras SET estado='ANULADO' WHERE id_compra = ?`, [id]);
+    await db.promise().query(
+      `UPDATE compras SET estado='ANULADO', motivo_anulacion = ? WHERE id_compra = ?`,
+      [motivo, id]
+    );
 
     // Recalcular saldo del proveedor si era crédito
     if (compra.condicion_pago === 'CREDITO') {

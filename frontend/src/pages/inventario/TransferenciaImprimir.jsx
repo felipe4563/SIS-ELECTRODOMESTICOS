@@ -69,12 +69,13 @@ const S = StyleSheet.create({
 
   // Columnas
   cN:     { width: 20 },
-  cCod:   { width: 70 },
+  cCod:   { width: 60 },
   cProd:  { flex: 1 },
-  cUm:    { width: 55 },
-  cEnv:   { width: 75, textAlign: 'right' },
-  cRec:   { width: 75, textAlign: 'right' },
-  cPend:  { width: 75, textAlign: 'right' },
+  cUm:    { width: 45 },
+  cSol:   { width: 62, textAlign: 'right' },
+  cEnv:   { width: 62, textAlign: 'right' },
+  cRec:   { width: 62, textAlign: 'right' },
+  cPend:  { width: 62, textAlign: 'right' },
   pNom:   { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#111827' },
   pDet:   { fontSize: 7, color: '#555555', marginTop: 1 },
   pSpec:  { fontSize: 7, color: '#6b7280', marginTop: 1 },
@@ -113,7 +114,7 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
   const est = ESTADO_COLOR[t.estado] ?? ESTADO_COLOR.ANULADA;
   const nombreCompleto = (n, a) => [n, a].filter(Boolean).join(' ') || '—';
   const specLinea = d => [d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
-  const totalEnviado  = detalle.reduce((s, d) => s + Number(d.cantidad_enviada  ?? 0), 0);
+  const totalEnviado  = detalle.reduce((s, d) => s + Number(d.cantidad_despachada ?? 0), 0);
   const totalRecibido = detalle.reduce((s, d) => s + Number(d.cantidad_recibida ?? 0), 0);
 
   return (
@@ -188,12 +189,13 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
           <Text style={[S.th, S.cCod]}>Código</Text>
           <Text style={[S.th, S.cProd]}>Producto</Text>
           <Text style={[S.th, S.cUm]}>U.M.</Text>
+          <Text style={[S.th, S.cSol, S.right]}>Solicitada</Text>
           <Text style={[S.th, S.cEnv, S.right]}>Enviada</Text>
           <Text style={[S.th, S.cRec, S.right]}>Recibida</Text>
           <Text style={[S.th, S.cPend, S.right]}>Pendiente</Text>
         </View>
         {detalle.map((d, i) => {
-          const pendiente = Number(d.cantidad_enviada ?? 0) - Number(d.cantidad_recibida ?? 0);
+          const pendiente = Number(d.cantidad_despachada ?? 0) - Number(d.cantidad_recibida ?? 0);
           const spec = specLinea(d);
           return (
             <View key={d.id_detalle} style={i % 2 === 0 ? S.tRow : S.tRowAlt}>
@@ -205,7 +207,10 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
                 {spec && <Text style={S.pSpec}>{spec}</Text>}
               </View>
               <Text style={[S.td, S.cUm, { fontSize: 7, color: '#9ca3af' }]}>{d.unidad_nombre}</Text>
-              <Text style={[S.td, S.cEnv, S.right, S.mono]}>{fmtN(d.cantidad_enviada)}</Text>
+              <Text style={[S.td, S.cSol, S.right, S.mono]}>{fmtN(d.cantidad_enviada)}</Text>
+              <Text style={[S.td, S.cEnv, S.right, S.mono]}>
+                {Number(d.cantidad_despachada ?? 0) > 0 ? fmtN(d.cantidad_despachada) : '—'}
+              </Text>
               <Text style={[S.td, S.cRec, S.right, S.mono, { color: '#15803d' }]}>{fmtN(d.cantidad_recibida)}</Text>
               <Text style={[S.td, S.cPend, S.right, S.mono, pendiente > 0 ? { color: '#c2410c' } : { color: '#9ca3af' }]}>
                 {fmtN(pendiente)}
@@ -256,6 +261,14 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
                 </View>
               </>
             )}
+          </>
+        )}
+
+        {t.estado === 'ANULADA' && t.motivo_anulacion && (
+          <>
+            <View style={[S.divider, { marginTop: 14 }]} />
+            <Text style={[S.secTitle, { color: '#dc2626' }]}>Motivo de anulación</Text>
+            <Text style={[S.obsText, { color: '#dc2626', fontFamily: 'Helvetica-Bold' }]}>{t.motivo_anulacion}</Text>
           </>
         )}
 

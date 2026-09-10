@@ -931,6 +931,8 @@ const anularCobro = async (req, res) => {
 const anularVenta = async (req, res) => {
   try {
     const { id } = req.params;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
 
     const [[venta]] = await db.promise().query(
       `SELECT v.*, d.id_deposito FROM ventas v JOIN depositos d ON d.id_deposito = v.id_deposito
@@ -942,7 +944,10 @@ const anularVenta = async (req, res) => {
     }
 
     if (venta.estado === 'BORRADOR') {
-      await db.promise().query(`UPDATE ventas SET estado = 'ANULADA' WHERE id_venta = ?`, [id]);
+      await db.promise().query(
+        `UPDATE ventas SET estado = 'ANULADA', motivo_anulacion = ? WHERE id_venta = ?`,
+        [motivo, id]
+      );
       return res.json({ mensaje: 'Venta borrador anulada' });
     }
 
@@ -1018,7 +1023,10 @@ const anularVenta = async (req, res) => {
       [venta.saldo_pendiente, venta.id_cliente]
     );
 
-    await db.promise().query(`UPDATE ventas SET estado = 'ANULADA' WHERE id_venta = ?`, [id]);
+    await db.promise().query(
+      `UPDATE ventas SET estado = 'ANULADA', motivo_anulacion = ? WHERE id_venta = ?`,
+      [motivo, id]
+    );
 
     await auditLog(req.user.id_usuario, 'ventas', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Venta anulada correctamente' });

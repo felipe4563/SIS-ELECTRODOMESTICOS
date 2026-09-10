@@ -6,7 +6,7 @@ import { useEmpresa }             from '../../contexts/EmpresaContext';
 import { descargarTransferenciaPDF } from './TransferenciaImprimir';
 
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO') : '—';
-const fmtCant  = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+const fmtCant  = n => Math.round(Number(n ?? 0)).toLocaleString('es-BO');
 const specLinea = d => [d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
 const ESTADO_BADGE = {
@@ -42,10 +42,12 @@ export default function TransferenciaDetalle() {
   const [cargando, setCargando] = useState(true);
   const [modal,    setModal]    = useState(null); // 'enviar' | 'recibir' | 'anular'
   const [obs,      setObs]      = useState('');
+  const [sendItems, setSendItems] = useState([]);
   const [recvItems, setRecvItems] = useState([]);
   const [procesando, setProcesando] = useState(false);
   const [error,    setError]    = useState('');
   const [descargando, setDescargando] = useState(false);
+  const [motivoAnular, setMotivoAnular] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -58,16 +60,30 @@ export default function TransferenciaDetalle() {
 
   useEffect(() => { cargar(); }, [id]); // eslint-disable-line
 
+  const abrirEnviar = () => {
+    const pendientes = (trf?.detalle ?? []).filter(
+      d => Number(d.cantidad_despachada) < Number(d.cantidad_enviada)
+    );
+    setSendItems(pendientes.map(d => ({
+      id_detalle: d.id_detalle,
+      producto_nombre: d.producto_nombre,
+      cantidad_enviada: d.cantidad_enviada,
+      cantidad_despachada: d.cantidad_despachada,
+      cantidad_a_enviar: Math.round(Number(d.cantidad_enviada) - Number(d.cantidad_despachada)),
+    })));
+    setModal('enviar');
+  };
+
   const abrirRecibir = () => {
     const pendientes = (trf?.detalle ?? []).filter(
-      d => Number(d.cantidad_recibida) < Number(d.cantidad_enviada)
+      d => Number(d.cantidad_recibida) < Number(d.cantidad_despachada)
     );
     setRecvItems(pendientes.map(d => ({
       id_detalle: d.id_detalle,
       producto_nombre: d.producto_nombre,
-      cantidad_enviada: d.cantidad_enviada,
+      cantidad_despachada: d.cantidad_despachada,
       cantidad_recibida: d.cantidad_recibida,
-      cantidad_a_recibir: Number(d.cantidad_enviada) - Number(d.cantidad_recibida),
+      cantidad_a_recibir: Math.round(Number(d.cantidad_despachada) - Number(d.cantidad_recibida)),
     })));
     setModal('recibir');
   };
@@ -77,14 +93,15 @@ export default function TransferenciaDetalle() {
     setProcesando(true);
     try {
       if (modal === 'enviar') {
-        await transferenciasService.enviar(id, { observaciones: obs });
+        await transferenciasService.enviar(id, { items: sendItems, observaciones: obs });
       } else if (modal === 'recibir') {
         await transferenciasService.recibir(id, { items: recvItems, observaciones: obs });
       } else if (modal === 'anular') {
-        await transferenciasService.anular(id);
+        await transferenciasService.anular(id, { motivo: motivoAnular });
       }
       setModal(null);
       setObs('');
+      setMotivoAnular('');
       await cargar();
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al procesar');
@@ -162,8 +179,9 @@ export default function TransferenciaDetalle() {
               {procesando ? 'Emitiendo…' : 'Emitir'}
             </button>
           )}
-          {trf.estado === 'SOLICITADA' && puedeEnviar && (
-            <button onClick={() => setModal('enviar')}
+          {['SOLICITADA', 'EN_TRANSITO'].includes(trf.estado) && puedeEnviar &&
+            (trf.detalle ?? []).some(d => Number(d.cantidad_despachada) < Number(d.cantidad_enviada)) && (
+            <button onClick={abrirEnviar}
               className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition-colors">
               Enviar mercadería
             </button>
@@ -229,6 +247,13 @@ export default function TransferenciaDetalle() {
         </div>
       )}
 
+      {trf.motivo_anulacion && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-0.5">Motivo de anulación</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{trf.motivo_anulacion}</p>
+        </div>
+      )}
+
       {/* Detalle */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
         <div className="px-5 py-3 border-b border-zinc-200 dark:border-zinc-800">
@@ -238,7 +263,7 @@ export default function TransferenciaDetalle() {
         {/* ── Tarjetas — móvil < md ── */}
         <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
           {(trf.detalle ?? []).map(d => {
-            const pendiente = Number(d.cantidad_enviada) - Number(d.cantidad_recibida);
+            const pendiente = Number(d.cantidad_despachada) - Number(d.cantidad_recibida);
             return (
               <div key={d.id_detalle} className="px-4 py-3 space-y-2">
                 <div>
@@ -256,8 +281,12 @@ export default function TransferenciaDetalle() {
                 )}
                 <div className="flex items-center gap-4 text-xs flex-wrap">
                   <div>
-                    <span className="text-zinc-400 dark:text-zinc-500">Enviado </span>
+                    <span className="text-zinc-400 dark:text-zinc-500">Solicitado </span>
                     <span className="font-mono font-semibold text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 dark:text-zinc-500">Despachado </span>
+                    <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">{fmtCant(d.cantidad_despachada)}</span>
                   </div>
                   <div>
                     <span className="text-zinc-400 dark:text-zinc-500">Recibido </span>
@@ -280,14 +309,14 @@ export default function TransferenciaDetalle() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800">
-                {['Producto', 'Unidad', 'Enviado', 'Recibido', 'Pendiente'].map(h => (
+                {['Producto', 'Unidad', 'Solicitado', 'Despachado', 'Recibido', 'Pendiente'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {(trf.detalle ?? []).map(d => {
-                const pendiente = Number(d.cantidad_enviada) - Number(d.cantidad_recibida);
+                const pendiente = Number(d.cantidad_despachada) - Number(d.cantidad_recibida);
                 return (
                   <tr key={d.id_detalle}>
                     <td className="px-4 py-3">
@@ -302,6 +331,7 @@ export default function TransferenciaDetalle() {
                     </td>
                     <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{d.unidad_nombre}</td>
                     <td className="px-4 py-3 font-mono text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</td>
+                    <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400">{fmtCant(d.cantidad_despachada)}</td>
                     <td className="px-4 py-3 font-mono text-green-600 dark:text-green-400">{fmtCant(d.cantidad_recibida)}</td>
                     <td className="px-4 py-3 font-mono">
                       <span className={pendiente > 0 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-zinc-400'}>
@@ -321,8 +351,34 @@ export default function TransferenciaDetalle() {
         <Modal titulo="Confirmar envío" onClose={() => setModal(null)}>
           <div className="space-y-4">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Al confirmar el envío, el stock saldrá del depósito <strong>{trf.deposito_origen_nombre}</strong>.
+              El stock saldrá del depósito <strong>{trf.deposito_origen_nombre}</strong>. Si no envía todo, puede completar el resto después con un nuevo envío.
             </p>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {sendItems.map((item, i) => (
+                <div key={item.id_detalle} className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.producto_nombre}</p>
+                    <p className="text-[11px] text-zinc-400">
+                      Solicitado: {fmtCant(item.cantidad_enviada)} · Despachado: {fmtCant(item.cantidad_despachada)}
+                    </p>
+                  </div>
+                  <div className="w-28">
+                    <label className="text-[10px] text-zinc-500 dark:text-zinc-400">A enviar</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={Math.round(Number(item.cantidad_enviada) - Number(item.cantidad_despachada))}
+                      step="1"
+                      value={item.cantidad_a_enviar}
+                      onChange={e => setSendItems(prev => prev.map((it, idx) =>
+                        idx === i ? { ...it, cantidad_a_enviar: e.target.value === '' ? '' : Math.round(Number(e.target.value)) } : it
+                      ))}
+                      className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
             <div>
               <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Observaciones</label>
               <textarea rows={2} value={obs} onChange={e => setObs(e.target.value)}
@@ -353,7 +409,7 @@ export default function TransferenciaDetalle() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.producto_nombre}</p>
                     <p className="text-[11px] text-zinc-400">
-                      Enviado: {fmtCant(item.cantidad_enviada)} · Recibido: {fmtCant(item.cantidad_recibida)}
+                      Despachado: {fmtCant(item.cantidad_despachada)} · Recibido: {fmtCant(item.cantidad_recibida)}
                     </p>
                   </div>
                   <div className="w-28">
@@ -361,11 +417,11 @@ export default function TransferenciaDetalle() {
                     <input
                       type="number"
                       min={0}
-                      max={Number(item.cantidad_enviada) - Number(item.cantidad_recibida)}
-                      step="0.01"
+                      max={Math.round(Number(item.cantidad_despachada) - Number(item.cantidad_recibida))}
+                      step="1"
                       value={item.cantidad_a_recibir}
                       onChange={e => setRecvItems(prev => prev.map((it, idx) =>
-                        idx === i ? { ...it, cantidad_a_recibir: e.target.value } : it
+                        idx === i ? { ...it, cantidad_a_recibir: e.target.value === '' ? '' : Math.round(Number(e.target.value)) } : it
                       ))}
                       className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right"
                     />
@@ -395,20 +451,30 @@ export default function TransferenciaDetalle() {
 
       {/* Modal Anular */}
       {modal === 'anular' && (
-        <Modal titulo="Anular transferencia" onClose={() => setModal(null)}>
+        <Modal titulo="Anular transferencia" onClose={() => { setModal(null); setMotivoAnular(''); }}>
           <div className="space-y-4">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               {trf.estado === 'EN_TRANSITO'
                 ? 'Al anular, el stock volverá al depósito origen. Esta acción no se puede revertir.'
                 : '¿Confirmás la anulación de esta transferencia?'}
             </p>
+            <div>
+              <label className="block text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Motivo de anulación</label>
+              <textarea
+                value={motivoAnular}
+                onChange={e => setMotivoAnular(e.target.value)}
+                rows={2}
+                placeholder="Describe el motivo..."
+                className="w-full border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+            </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <div className="flex gap-2">
-              <button onClick={accion} disabled={procesando}
+              <button onClick={accion} disabled={procesando || !motivoAnular.trim()}
                 className="flex-1 py-2 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white font-semibold text-sm transition-colors">
                 {procesando ? 'Anulando…' : 'Confirmar anulación'}
               </button>
-              <button onClick={() => setModal(null)}
+              <button onClick={() => { setModal(null); setMotivoAnular(''); }}
                 className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Cancelar
               </button>

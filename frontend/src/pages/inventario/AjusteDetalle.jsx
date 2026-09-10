@@ -37,6 +37,7 @@ export default function AjusteDetalle() {
   const [modal,     setModal]     = useState(null); // 'aprobar' | 'anular'
   const [procesando, setProcesando] = useState(false);
   const [error,     setError]     = useState('');
+  const [motivoAnular, setMotivoAnular] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -54,8 +55,9 @@ export default function AjusteDetalle() {
     setProcesando(true);
     try {
       if (modal === 'aprobar') await ajustesService.aprobar(id);
-      else                     await ajustesService.anular(id);
+      else                     await ajustesService.anular(id, { motivo: motivoAnular });
       setModal(null);
+      setMotivoAnular('');
       await cargar();
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al procesar');
@@ -133,6 +135,13 @@ export default function AjusteDetalle() {
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-3">
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-0.5">Motivo</p>
           <p className="text-sm text-zinc-700 dark:text-zinc-300">{ajuste.motivo}</p>
+        </div>
+      )}
+
+      {ajuste.motivo_anulacion && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-0.5">Motivo de anulación</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{ajuste.motivo_anulacion}</p>
         </div>
       )}
 
@@ -257,18 +266,28 @@ export default function AjusteDetalle() {
 
       {/* Modal Anular */}
       {modal === 'anular' && (
-        <Modal titulo="Anular ajuste" onClose={() => setModal(null)}>
+        <Modal titulo="Anular ajuste" onClose={() => { setModal(null); setMotivoAnular(''); }}>
           <div className="space-y-4">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               ¿Confirmás la anulación de este ajuste? Solo se puede anular si está en estado Borrador.
             </p>
+            <div>
+              <label className="block text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Motivo de anulación</label>
+              <textarea
+                value={motivoAnular}
+                onChange={e => setMotivoAnular(e.target.value)}
+                rows={2}
+                placeholder="Describe el motivo..."
+                className="w-full border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+            </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <div className="flex gap-2">
-              <button onClick={accion} disabled={procesando}
+              <button onClick={accion} disabled={procesando || !motivoAnular.trim()}
                 className="flex-1 py-2 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white font-semibold text-sm transition-colors">
                 {procesando ? 'Anulando…' : 'Confirmar anulación'}
               </button>
-              <button onClick={() => setModal(null)}
+              <button onClick={() => { setModal(null); setMotivoAnular(''); }}
                 className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Cancelar
               </button>

@@ -519,7 +519,9 @@ const getPDF = async (req, res) => {
 const anularCotizacion = async (req, res) => {
   try {
     const { id } = req.params;
-    const { motivo } = req.body;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
+
     const [[cot]] = await db.promise().query(
       `SELECT estado FROM cotizaciones WHERE id_cotizacion = ?`, [id]
     );
@@ -528,8 +530,8 @@ const anularCotizacion = async (req, res) => {
       return res.status(400).json({ mensaje: 'No se puede anular una cotización convertida o ya anulada' });
 
     await db.promise().query(
-      `UPDATE cotizaciones SET estado='ANULADA', observaciones=CONCAT(IFNULL(observaciones,''),' | ANULADA: ',?) WHERE id_cotizacion = ?`,
-      [motivo || 'Sin motivo', id]
+      `UPDATE cotizaciones SET estado='ANULADA', motivo_anulacion = ? WHERE id_cotizacion = ?`,
+      [motivo, id]
     );
     await auditLog(req.user.id_usuario, 'cotizaciones', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Cotización anulada' });

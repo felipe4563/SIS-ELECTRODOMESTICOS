@@ -23,8 +23,8 @@ const ESTADO_LABEL = {
 const specLinea = d => [d.marca && `Marca: ${d.marca}`, d.modelo && `Mod: ${d.modelo}`, d.color && `Color: ${d.color}`, d.capacidad && `Cap: ${d.capacidad}`].filter(Boolean).join('  ·  ');
 
 const sumarTotales = (detalle = []) => detalle.reduce((acc, d) => ({
-  enviada:  acc.enviada  + Number(d.cantidad_enviada  ?? 0),
-  recibida: acc.recibida + Number(d.cantidad_recibida ?? 0),
+  enviada:  acc.enviada  + Number(d.cantidad_despachada ?? 0),
+  recibida: acc.recibida + Number(d.cantidad_recibida   ?? 0),
 }), { enviada: 0, recibida: 0 });
 
 const PRODUCTOS_POR_HOJA_A4 = 13;
@@ -88,7 +88,7 @@ function Ticket80({ t, detalle, empresa: e, logoUrl }) {
       <Divisor />
 
       {/* Detalle */}
-      <DetalleProductos detalle={detalle} />
+      <DetalleProductos detalle={detalle} t={t} />
 
       <Divisor />
       <TotalesEnvRec detalle={detalle} />
@@ -168,29 +168,30 @@ function Ticket110({ t, detalle, empresa: e, logoUrl }) {
       {/* ── Detalle de productos — tabla ancha ── */}
       <div style={{ marginBottom: '4px' }}>
         <div style={{ fontWeight: 'bold', fontSize: '10px', letterSpacing: '0.5px', marginBottom: '4px' }}>DETALLE DE PRODUCTOS</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '18mm 1fr 14mm 16mm 16mm 16mm', gap: '0 3px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '3px' }}>
-          {['Código', 'Descripción', 'U.M.', 'Enviada', 'Recibida', 'Pendiente'].map((h, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '13mm 1fr 9mm 12mm 12mm 12mm 12mm', gap: '0 3px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '3px' }}>
+          {['Código', 'Descripción', 'U.M.', 'Solicitada', 'Enviada', 'Recibida', 'Pendiente'].map((h, i) => (
             <span key={i} style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: i >= 3 ? 'right' : 'left' }}>{h}</span>
           ))}
         </div>
         {detalle.map((d, i) => {
-          const pendiente = Number(d.cantidad_enviada ?? 0) - Number(d.cantidad_recibida ?? 0);
+          const pendiente = Number(d.cantidad_despachada ?? 0) - Number(d.cantidad_recibida ?? 0);
           const spec = specLinea(d);
           return (
             <div key={d.id_detalle} style={{ marginBottom: '3px', borderBottom: i < detalle.length - 1 ? '1px dotted #ccc' : 'none', paddingBottom: '3px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '18mm 1fr 14mm 16mm 16mm 16mm', gap: '0 3px', alignItems: 'start' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '13mm 1fr 9mm 12mm 12mm 12mm 12mm', gap: '0 3px', alignItems: 'start' }}>
                 <span style={{ fontSize: '7px', fontFamily: 'monospace', color: '#666' }}>{d.codigo_interno}</span>
-                <span style={{ fontSize: '9px', fontWeight: 'bold', wordBreak: 'break-word', lineHeight: '1.3' }}>{d.producto_nombre}</span>
+                <span style={{ fontSize: '9px', fontWeight: 'bold', wordBreak: 'normal', overflowWrap: 'break-word', lineHeight: '1.3' }}>{d.producto_nombre}</span>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>{d.unidad_nombre}</span>
                 <span style={{ fontSize: '9px', textAlign: 'right' }}>{fmtN(d.cantidad_enviada)}</span>
+                <span style={{ fontSize: '9px', textAlign: 'right' }}>{Number(d.cantidad_despachada ?? 0) > 0 ? fmtN(d.cantidad_despachada) : '—'}</span>
                 <span style={{ fontSize: '9px', textAlign: 'right', color: '#15803d' }}>{fmtN(d.cantidad_recibida)}</span>
                 <span style={{ fontSize: '9px', textAlign: 'right', color: pendiente > 0 ? '#c2410c' : '#9ca3af' }}>{fmtN(pendiente)}</span>
               </div>
               {d.producto_detalle && (
-                <div style={{ fontSize: '8px', color: '#555', paddingLeft: '20mm' }}>{d.producto_detalle}</div>
+                <div style={{ fontSize: '8px', color: '#555', paddingLeft: '14mm' }}>{d.producto_detalle}</div>
               )}
               {spec && (
-                <div style={{ fontSize: '8px', color: '#666', paddingLeft: '20mm' }}>{spec}</div>
+                <div style={{ fontSize: '8px', color: '#666', paddingLeft: '14mm' }}>{spec}</div>
               )}
             </div>
           );
@@ -309,14 +310,14 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '10px' }}>
         <thead>
           <tr style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1.5px solid #1a1a1a' }}>
-            {['Código', 'Producto', 'U.M.', 'Enviada', 'Recibida', 'Pendiente'].map((h, i) => (
+            {['Código', 'Producto', 'U.M.', 'Solicitada', 'Enviada', 'Recibida', 'Pendiente'].map((h, i) => (
               <th key={i} style={{ padding: '4px 6px', textAlign: i >= 3 ? 'right' : 'left', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {detalleHoja.map((d) => {
-            const pendiente = Number(d.cantidad_enviada ?? 0) - Number(d.cantidad_recibida ?? 0);
+            const pendiente = Number(d.cantidad_despachada ?? 0) - Number(d.cantidad_recibida ?? 0);
             const spec = specLinea(d);
             return (
               <tr key={d.id_detalle} style={{ borderBottom: '1px solid #ebebeb' }}>
@@ -332,6 +333,7 @@ function TicketA4({ t, detalle, empresa: e, logoUrl }) {
                 </td>
                 <td style={{ padding: '4px 6px', textAlign: 'left', verticalAlign: 'top', fontSize: '8px', color: '#9ca3af' }}>{d.unidad_nombre}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmtN(d.cantidad_enviada)}</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{Number(d.cantidad_despachada ?? 0) > 0 ? fmtN(d.cantidad_despachada) : '—'}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold', whiteSpace: 'nowrap', color: '#15803d' }}>{fmtN(d.cantidad_recibida)}</td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap', color: pendiente > 0 ? '#c2410c' : '#9ca3af' }}>{fmtN(pendiente)}</td>
               </tr>
@@ -426,17 +428,18 @@ const TotalesEnvRec = ({ detalle, fontSize = '10px' }) => {
 
 const ObservacionesTicket = ({ t, fontSize = '10px', tituloSolo = false }) => {
   const items = [
-    ['Observaciones (solicitud)',  t.observaciones],
-    ['Observaciones (envío)',      t.observaciones_envio],
-    ['Observaciones (recepción)',  t.observaciones_recepcion],
+    ['Observaciones (solicitud)',  t.observaciones,          false],
+    ['Observaciones (envío)',      t.observaciones_envio,    false],
+    ['Observaciones (recepción)',  t.observaciones_recepcion, false],
+    ['Motivo de anulación',        t.estado === 'ANULADA' ? t.motivo_anulacion : null, true],
   ].filter(([, v]) => v);
   if (!items.length) return null;
   return (
     <>
       {!tituloSolo && <Divisor />}
       <div style={{ fontSize }}>
-        {items.map(([label, val], i) => (
-          <div key={label} style={{ marginTop: i > 0 ? '4px' : 0 }}>
+        {items.map(([label, val, esAnulacion], i) => (
+          <div key={label} style={{ marginTop: i > 0 ? '4px' : 0, color: esAnulacion ? '#b91c1c' : undefined }}>
             <div style={{ fontWeight: 'bold' }}>{label.toUpperCase()}:</div>
             <div>{val}</div>
           </div>
@@ -453,22 +456,23 @@ const Pie = ({ fontSize = '11px' }) => (
   </div>
 );
 
-const DetalleProductos = ({ detalle }) => (
+const DetalleProductos = ({ detalle, t }) => (
   <div style={{ marginBottom: '4px' }}>
     <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '12px', letterSpacing: '0.5px' }}>DETALLE</div>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 16mm 16mm', gap: '0 2px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '2px' }}>
-      {['Descripción', 'Enviada', 'Recibida'].map((h, i) => (
-        <span key={i} style={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: i > 0 ? 'center' : 'left' }}>{h}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 14mm 14mm 14mm', gap: '0 2px', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '2px' }}>
+      {['Descripción', 'Solicitada', 'Enviada', 'Recibida'].map((h, i) => (
+        <span key={i} style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', textAlign: i > 0 ? 'center' : 'left' }}>{h}</span>
       ))}
     </div>
     {detalle.map((d, i) => {
-      const pendiente = Number(d.cantidad_enviada ?? 0) - Number(d.cantidad_recibida ?? 0);
+      const pendiente = Number(d.cantidad_despachada ?? 0) - Number(d.cantidad_recibida ?? 0);
       const spec = specLinea(d);
       return (
         <div key={d.id_detalle} style={{ marginBottom: '5px', borderBottom: i < detalle.length - 1 ? '1px dotted #ccc' : 'none', paddingBottom: '3px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 16mm 16mm', gap: '0 2px', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 14mm 14mm 14mm', gap: '0 2px', alignItems: 'start' }}>
             <span style={{ fontSize: '10px', fontWeight: 'bold', wordBreak: 'break-word', lineHeight: '1.3' }}>{d.producto_nombre}</span>
             <span style={{ fontSize: '10px', textAlign: 'center' }}>{fmtN(d.cantidad_enviada)}</span>
+            <span style={{ fontSize: '10px', textAlign: 'center' }}>{Number(d.cantidad_despachada ?? 0) > 0 ? fmtN(d.cantidad_despachada) : '—'}</span>
             <span style={{ fontSize: '10px', textAlign: 'center', color: '#15803d' }}>{fmtN(d.cantidad_recibida)}</span>
           </div>
           {d.producto_detalle && (

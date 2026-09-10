@@ -7,5 +7,5 @@ export const transferenciasService = {
   emitir:  (id)           => api.post(`/inventario/transferencias/${id}/emitir`),
   enviar:  (id, data)     => api.post(`/inventario/transferencias/${id}/enviar`, data),
   recibir: (id, data)     => api.post(`/inventario/transferencias/${id}/recibir`, data),
-  anular:  (id)           => api.post(`/inventario/transferencias/${id}/anular`),
+  anular:  (id, data)     => api.post(`/inventario/transferencias/${id}/anular`, data),
 };

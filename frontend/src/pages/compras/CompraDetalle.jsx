@@ -602,6 +602,7 @@ export default function CompraDetalle() {
   const [saving,       setSaving]      = useState(false);
   const [modalErr,     setModalErr]    = useState('');
   const [descargando,  setDescargando] = useState(false);
+  const [motivoAnular, setMotivoAnular] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -642,7 +643,7 @@ export default function CompraDetalle() {
   };
 
   const openModal  = m => { setModalErr(''); setModal(m); };
-  const closeModal = () => { setModal(null); setModalErr(''); };
+  const closeModal = () => { setModal(null); setModalErr(''); setMotivoAnular(''); };
 
   const runAction = async (fn) => {
     setSaving(true);
@@ -769,13 +770,21 @@ export default function CompraDetalle() {
             ¿Confirmas la anulación de <span className="font-mono font-semibold text-zinc-900 dark:text-white">{compra.numero}</span>?
             Esta acción no puede deshacerse.
           </p>
+          <label className="block text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Motivo de anulación</label>
+          <textarea
+            value={motivoAnular}
+            onChange={e => setMotivoAnular(e.target.value)}
+            rows={2}
+            placeholder="Describe el motivo..."
+            className="w-full border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none mb-3"
+          />
           {modalErr && <p className="text-sm text-red-500 mb-3">{modalErr}</p>}
           <div className="flex gap-3">
             <button onClick={closeModal} disabled={saving}
               className="flex-1 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50">
               Cancelar
             </button>
-            <button onClick={() => runAction(() => comprasService.anular(id))} disabled={saving}
+            <button onClick={() => runAction(() => comprasService.anular(id, { motivo: motivoAnular }))} disabled={saving || !motivoAnular.trim()}
               className="flex-1 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               {saving ? 'Anulando…' : 'Sí, anular'}
             </button>
@@ -878,6 +887,13 @@ export default function CompraDetalle() {
           </div>
         </div>
       </div>
+
+      {compra.motivo_anulacion && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-0.5">Motivo de anulación</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{compra.motivo_anulacion}</p>
+        </div>
+      )}
 
       {/* Info general + Totales */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">

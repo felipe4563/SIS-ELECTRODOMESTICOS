@@ -254,7 +254,7 @@ export default function CotizacionDetalle() {
                 </button>
                 <button
                   onClick={handleAnular}
-                  disabled={!!procesando}
+                  disabled={!!procesando || !motivoAnular.trim()}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors"
                 >
                   {procesando === 'Anulando' ? 'Anulando...' : 'Confirmar anulación'}
@@ -330,6 +330,13 @@ export default function CotizacionDetalle() {
           )}
         </div>
       </div>
+
+      {cot.motivo_anulacion && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-0.5">Motivo de anulación</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{cot.motivo_anulacion}</p>
+        </div>
+      )}
 
       {/* Detalle de productos */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">

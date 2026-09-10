@@ -218,6 +218,13 @@ function VentaDoc({ data: d, logoUrl }) {
                 {d.fecha_entrega && <Text style={S.entTxt}>Fecha: {fecha(d.fecha_entrega)}</Text>}
               </>
             )}
+
+            {d.estado === 'ANULADA' && d.motivo_anulacion && (
+              <>
+                <Text style={[S.entTitle, { color: '#dc2626' }]}>MOTIVO DE ANULACIÓN</Text>
+                <Text style={[S.entTxt, { color: '#dc2626' }]}>{d.motivo_anulacion}</Text>
+              </>
+            )}
           </View>
 
           <View style={S.totBox}>

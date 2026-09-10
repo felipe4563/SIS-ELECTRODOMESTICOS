@@ -374,6 +374,12 @@ function ModalDetalle({ id, onClose, onRefresh, puede }) {
                     <dd className="text-zinc-600 dark:text-zinc-300 text-sm">{gasto.observaciones}</dd>
                   </div>
                 )}
+                {gasto.motivo_anulacion && (
+                  <div className="col-span-2">
+                    <dt className="text-xs font-semibold text-red-500 dark:text-red-400 uppercase tracking-wide mb-0.5">Motivo de anulación</dt>
+                    <dd className="text-red-700 dark:text-red-300 text-sm">{gasto.motivo_anulacion}</dd>
+                  </div>
+                )}
               </dl>
             </div>
 
@@ -441,7 +447,7 @@ function ModalDetalle({ id, onClose, onRefresh, puede }) {
                   <button onClick={() => setAccion(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors">
                     Cancelar
                   </button>
-                  <button onClick={() => ejecutar('anular')} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors">
+                  <button onClick={() => ejecutar('anular')} disabled={!motivoAnular.trim()} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors">
                     Confirmar anulación
                   </button>
                 </div>

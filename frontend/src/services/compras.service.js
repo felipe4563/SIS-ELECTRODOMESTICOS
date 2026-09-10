@@ -33,7 +33,7 @@ export const comprasService = {
   aprobar:         (id)                 => api.post(`/compras/${id}/aprobar`),
   confirmar:       (id, data)           => api.post(`/compras/${id}/confirmar`, data),
   recibir:         (id, data)           => api.post(`/compras/${id}/recibir`, data),
-  anular:          (id)                 => api.post(`/compras/${id}/anular`),
+  anular:          (id, data)           => api.post(`/compras/${id}/anular`, data),
   createPago:      (id, data, comprobanteFile) => {
     if (!comprobanteFile) return api.post(`/compras/${id}/pagos`, data);
     const form = new FormData();

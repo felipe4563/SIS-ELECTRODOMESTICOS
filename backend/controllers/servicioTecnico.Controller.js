@@ -597,7 +597,8 @@ const entregarServicio = async (req, res) => {
 const anularServicio = async (req, res) => {
   try {
     const { id } = req.params;
-    const { motivo } = req.body;
+    const motivo = (req.body?.motivo ?? '').trim();
+    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
 
     const [[st]] = await db.promise().query(
       `SELECT id_servicio, estado, tipo_origen, id_producto, id_sucursal, numero
@@ -611,13 +612,14 @@ const anularServicio = async (req, res) => {
 
     const estadoAnterior = st.estado;
     await db.promise().query(
-      `UPDATE servicios_tecnicos SET estado = 'ANULADO' WHERE id_servicio = ?`, [id]
+      `UPDATE servicios_tecnicos SET estado = 'ANULADO', motivo_anulacion = ? WHERE id_servicio = ?`,
+      [motivo, id]
     );
     await db.promise().query(
       `INSERT INTO servicio_tecnico_seguimiento
          (id_servicio, estado_anterior, estado_nuevo, observacion, id_usuario)
        VALUES (?, ?, 'ANULADO', ?, ?)`,
-      [id, estadoAnterior, motivo ?? 'Anulado por el usuario', req.user.id_usuario]
+      [id, estadoAnterior, motivo, req.user.id_usuario]
     );
 
     // Revertir stock si el equipo era de inventario y ya había salido

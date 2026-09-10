@@ -100,6 +100,12 @@ const S = StyleSheet.create({
               padding: 8, marginBottom: 12 },
   obsText:  { fontSize: 8, color: '#374151', marginTop: 2 },
 
+  // Motivo de anulación — destacado (sin recuadro)
+  anulBox:   { marginBottom: 12 },
+  anulTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#dc2626',
+               textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  anulText:  { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#dc2626' },
+
   // Imagen de factura / comprobantes
   facturaImg: { width: '100%', objectFit: 'contain', borderWidth: 1,
                 borderColor: '#e5e7eb', borderRadius: 3, marginTop: 4 },
@@ -211,6 +217,14 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], recepcion
             )}
           </View>
         </View>
+
+        {/* ── Motivo de anulación — destacado, justo debajo de los datos ── */}
+        {c.estado === 'ANULADO' && c.motivo_anulacion && (
+          <View style={S.anulBox}>
+            <Text style={S.anulTitle}>MOTIVO DE ANULACIÓN</Text>
+            <Text style={S.anulText}>{c.motivo_anulacion}</Text>
+          </View>
+        )}
 
         <View style={S.divider} />
 

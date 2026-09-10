@@ -204,6 +204,7 @@ export default function ServicioTecnicoDetalle() {
   };
 
   const confirmarAnular = async () => {
+    if (!motivoAnular.trim()) return setError('Debe indicar el motivo de la anulación');
     setAccionando(true); setError('');
     try {
       await servicioTecnicoService.anular(id, { motivo: motivoAnular });
@@ -536,6 +537,13 @@ export default function ServicioTecnicoDetalle() {
               <p className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
                 {s.observaciones}
               </p>
+            </div>
+          )}
+
+          {s.motivo_anulacion && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-0.5">Motivo de anulación</p>
+              <p className="text-sm text-red-700 dark:text-red-300">{s.motivo_anulacion}</p>
             </div>
           )}
         </div>

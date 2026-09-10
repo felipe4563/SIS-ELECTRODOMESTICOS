@@ -93,6 +93,13 @@ function Ticket80({ data, logoUrl }) {
         </>
       )}
 
+      {data.estado === 'ANULADA' && data.motivo_anulacion && (
+        <>
+          <Divisor />
+          <MotivoAnulacionInfo data={data} />
+        </>
+      )}
+
       <Divisor />
       <Nota />
       <Divisor />
@@ -246,6 +253,13 @@ function Ticket110({ data, logoUrl }) {
         <>
           <Divisor />
           <ObservacionesInfo data={data} fontSize="9px" />
+        </>
+      )}
+
+      {data.estado === 'ANULADA' && data.motivo_anulacion && (
+        <>
+          <Divisor />
+          <MotivoAnulacionInfo data={data} fontSize="9px" />
         </>
       )}
 
@@ -413,6 +427,9 @@ function TicketA4({ data, logoUrl }) {
           {data.observaciones && (
             <ObservacionesInfo data={data} fontSize="10px" />
           )}
+          {data.estado === 'ANULADA' && data.motivo_anulacion && (
+            <MotivoAnulacionInfo data={data} fontSize="10px" />
+          )}
         </div>
 
         <table style={{ borderCollapse: 'collapse', minWidth: '70mm', fontSize: '10px' }}>
@@ -562,6 +579,15 @@ const ObservacionesInfo = ({ data, fontSize = '10px' }) => (
     <div style={{ fontWeight: 'bold' }}>OBSERVACIONES</div>
     <div style={{ wordBreak: 'break-word' }}>{data.observaciones}</div>
   </div>
+);
+
+const MotivoAnulacionInfo = ({ data, fontSize = '10px' }) => (
+  data.estado === 'ANULADA' && data.motivo_anulacion ? (
+    <div style={{ fontSize, color: '#b91c1c' }}>
+      <div style={{ fontWeight: 'bold' }}>MOTIVO DE ANULACIÓN</div>
+      <div style={{ wordBreak: 'break-word' }}>{data.motivo_anulacion}</div>
+    </div>
+  ) : null
 );
 
 const Nota = () => (

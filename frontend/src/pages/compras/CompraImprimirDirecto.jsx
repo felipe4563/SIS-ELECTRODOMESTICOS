@@ -86,6 +86,8 @@ function Ticket80({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM })
       <Totales c={c} fmtM={fmtM} />
       <PagosProveedor c={c} pagos={pagos} fmtM={fmtM} />
 
+      <MotivoAnulacion c={c} fontSize="10px" />
+
       {c.observaciones && (
         <>
           <Divisor />
@@ -203,6 +205,8 @@ function Ticket110({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM }
       <Divisor />
       <Totales c={c} fmtM={fmtM} fontSize="9px" />
       <PagosProveedor c={c} pagos={pagos} fmtM={fmtM} fontSize="9px" />
+
+      <MotivoAnulacion c={c} fontSize="9px" />
 
       {c.observaciones && (
         <>
@@ -394,6 +398,7 @@ function TicketA4({ c, detalle, cuotas, pagos, recepciones, empresa: e, logoUrl,
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'start', marginBottom: '12px' }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '9px' }}>
+          <MotivoAnulacion c={c} fontSize="10px" />
           {c.observaciones && (
             <div>
               <div style={{ fontWeight: 'bold', fontSize: '10px' }}>OBSERVACIONES</div>
@@ -492,6 +497,17 @@ function TicketA4({ c, detalle, cuotas, pagos, recepciones, empresa: e, logoUrl,
 
 /* ─── Componentes compartidos ─────────────────────────────────────────────── */
 const Divisor = () => <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />;
+
+const MotivoAnulacion = ({ c, fontSize = '10px' }) => (
+  c.estado === 'ANULADO' && c.motivo_anulacion ? (
+    <div style={{ fontSize, margin: '4px 0' }}>
+      <div style={{ fontWeight: 'bold', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        Motivo de anulación
+      </div>
+      <div style={{ fontWeight: 'bold', color: '#dc2626', marginTop: '2px' }}>{c.motivo_anulacion}</div>
+    </div>
+  ) : null
+);
 
 const Row = ({ label, value, bold }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '4px' }}>

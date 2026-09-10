@@ -83,6 +83,7 @@ export default function VentaDetalle() {
   const [procesando, setProcesando] = useState(false);
   const [error,      setError]      = useState('');
   const [descargando, setDescargando] = useState(false);
+  const [motivoAnular, setMotivoAnular] = useState('');
 
   const [cobro,            setCobro]           = useState({ metodo_pago: 'EFECTIVO', monto: '', numero_referencia: '', observaciones: '', id_cuota: '' });
   const [nroFactura,       setNroFactura]       = useState('');
@@ -193,8 +194,9 @@ export default function VentaDetalle() {
   const accionAnular = async () => {
     setError(''); setProcesando(true);
     try {
-      await ventasService.anular(id);
+      await ventasService.anular(id, { motivo: motivoAnular });
       setModal(null);
+      setMotivoAnular('');
       await cargar();
     } catch (err) {
       setError(err.response?.data?.mensaje ?? 'Error al anular');
@@ -375,6 +377,13 @@ export default function VentaDetalle() {
           ))}
         </div>
       </SectionCard>
+
+      {venta.motivo_anulacion && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 dark:text-red-400 mb-0.5">Motivo de anulación</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{venta.motivo_anulacion}</p>
+        </div>
+      )}
 
       {/* ── Productos ── */}
       <SectionCard title="Productos" badge={(venta.detalle ?? []).length}>
@@ -931,13 +940,23 @@ export default function VentaDetalle() {
                   : ''
               }
             </p>
+            <div>
+              <label className="block text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Motivo de anulación</label>
+              <textarea
+                value={motivoAnular}
+                onChange={e => setMotivoAnular(e.target.value)}
+                rows={2}
+                placeholder="Describe el motivo..."
+                className="w-full border border-red-200 dark:border-red-800/40 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+            </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <div className="flex gap-2">
-              <button onClick={accionAnular} disabled={procesando}
+              <button onClick={accionAnular} disabled={procesando || !motivoAnular.trim()}
                 className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white font-semibold text-sm transition-colors">
                 {procesando ? 'Anulando…' : 'Confirmar anulación'}
               </button>
-              <button onClick={() => setModal(null)}
+              <button onClick={() => { setModal(null); setMotivoAnular(''); }}
                 className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Cancelar
               </button>
