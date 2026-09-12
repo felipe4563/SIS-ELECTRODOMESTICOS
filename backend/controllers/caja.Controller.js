@@ -139,6 +139,139 @@ async function getArqueoActual(req, res) {
   }
 }
 
+// ── Caja Chica: saldo, reposición ────────────────────────────────────────
+
+async function _calcularSaldoCajaChica(id_caja) {
+  const [[caja]] = await db.promise().query(
+    `SELECT id_caja, tipo, monto_fondo_fijo FROM cajas WHERE id_caja = ?`, [id_caja]
+  );
+  if (!caja) return null;
+
+  const [[arqueo]] = await db.promise().query(
+    `SELECT id_arqueo, monto_apertura FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`,
+    [id_caja]
+  );
+  if (!arqueo) return { caja, arqueo: null, saldo: null };
+
+  const [[{ total_gastos }]] = await db.promise().query(
+    `SELECT COALESCE(SUM(monto), 0) AS total_gastos FROM gastos WHERE id_arqueo = ? AND estado != 'ANULADO'`,
+    [arqueo.id_arqueo]
+  );
+  const [[{ total_reposiciones }]] = await db.promise().query(
+    `SELECT COALESCE(SUM(monto), 0) AS total_reposiciones FROM movimientos_caja WHERE id_arqueo_destino = ?`,
+    [arqueo.id_arqueo]
+  );
+
+  const saldo = Number(arqueo.monto_apertura) + Number(total_reposiciones) - Number(total_gastos);
+  return { caja, arqueo, saldo: +saldo.toFixed(2) };
+}
+
+async function getSaldoActual(req, res) {
+  try {
+    const { id } = req.params;
+    const info = await _calcularSaldoCajaChica(id);
+    if (!info) return res.status(404).json({ mensaje: 'Caja no encontrada' });
+    if (info.caja.tipo !== 'CHICA') return res.status(400).json({ mensaje: 'Esta caja no es de tipo Chica' });
+
+    const montoFondo = Number(info.caja.monto_fondo_fijo ?? 0);
+    const sugerido = info.saldo === null ? null : +(montoFondo - info.saldo).toFixed(2);
+    res.json({
+      id_caja: info.caja.id_caja,
+      monto_fondo_fijo: montoFondo,
+      saldo_actual: info.saldo,
+      monto_sugerido_reposicion: sugerido !== null && sugerido > 0 ? sugerido : 0,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al calcular el saldo' });
+  }
+}
+
+async function crearMovimiento(req, res) {
+  try {
+    const { id_caja_origen, id_caja_destino, monto, observaciones } = req.body;
+    if (!id_caja_origen || !id_caja_destino || !monto || Number(monto) <= 0) {
+      return res.status(400).json({ mensaje: 'Caja origen, caja destino y monto (> 0) son requeridos' });
+    }
+    if (Number(id_caja_origen) === Number(id_caja_destino)) {
+      return res.status(400).json({ mensaje: 'La caja de origen y destino no pueden ser la misma' });
+    }
+
+    const [[origen]]  = await db.promise().query('SELECT * FROM cajas WHERE id_caja = ? AND activo = 1', [id_caja_origen]);
+    const [[destino]] = await db.promise().query('SELECT * FROM cajas WHERE id_caja = ? AND activo = 1', [id_caja_destino]);
+    if (!origen || !destino) return res.status(404).json({ mensaje: 'Caja origen o destino no encontrada' });
+    if (origen.tipo !== 'GENERAL') return res.status(400).json({ mensaje: 'La caja de origen debe ser tipo General' });
+    if (destino.tipo !== 'CHICA')  return res.status(400).json({ mensaje: 'La caja de destino debe ser tipo Chica' });
+
+    const [[aqOrigen]]  = await db.promise().query(`SELECT id_arqueo FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`, [id_caja_origen]);
+    const [[aqDestino]] = await db.promise().query(`SELECT id_arqueo FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`, [id_caja_destino]);
+
+    const [result] = await db.promise().query(
+      `INSERT INTO movimientos_caja
+         (id_caja_origen, id_caja_destino, id_arqueo_origen, id_arqueo_destino, monto, tipo, observaciones, id_usuario)
+       VALUES (?, ?, ?, ?, ?, 'REPOSICION', ?, ?)`,
+      [id_caja_origen, id_caja_destino, aqOrigen?.id_arqueo ?? null, aqDestino?.id_arqueo ?? null, monto, observaciones || null, req.user.id_usuario]
+    );
+
+    await auditLog(req.user.id_usuario, 'movimientos_caja', result.insertId, 'INSERT', getIp(req));
+    res.status(201).json({ id_movimiento: result.insertId, mensaje: 'Reposición registrada correctamente' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al registrar la reposición' });
+  }
+}
+
+// Turnos abiertos del usuario actual, sin importar si tiene ver_arqueo_todos —
+// lo usa el formulario de Gasto para dejar elegir explícitamente la caja
+// cuando el usuario tiene más de un turno abierto a la vez (General + Chica).
+async function getMisCajasAbiertas(req, res) {
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT aq.id_arqueo, c.id_caja, c.nombre AS caja, c.tipo, s.nombre AS sucursal
+      FROM arqueos_caja aq
+      JOIN cajas c ON c.id_caja = aq.id_caja
+      JOIN sucursales s ON s.id_sucursal = c.id_sucursal
+      WHERE aq.id_usuario = ? AND aq.estado = 'ABIERTA'
+      ORDER BY c.tipo, c.nombre
+    `, [req.user.id_usuario]);
+    res.json({ cajas: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al obtener tus cajas abiertas' });
+  }
+}
+
+async function getMovimientos(req, res) {
+  try {
+    const { id_caja, fecha_desde, fecha_hasta } = req.query;
+    const where = ['1=1'];
+    const params = [];
+    if (id_caja)      { where.push('(mc.id_caja_origen = ? OR mc.id_caja_destino = ?)'); params.push(id_caja, id_caja); }
+    if (fecha_desde)  { where.push('mc.fecha >= ?'); params.push(`${fecha_desde} 00:00:00`); }
+    if (fecha_hasta)  { where.push('mc.fecha <= ?'); params.push(`${fecha_hasta} 23:59:59`); }
+
+    const [rows] = await db.promise().query(`
+      SELECT mc.id_movimiento, mc.monto, mc.tipo, mc.observaciones, mc.fecha,
+        co.nombre AS caja_origen, cd.nombre AS caja_destino,
+        s.nombre AS sucursal,
+        CONCAT(u.nombres, ' ', u.apellidos) AS usuario
+      FROM movimientos_caja mc
+      JOIN cajas co ON co.id_caja = mc.id_caja_origen
+      JOIN cajas cd ON cd.id_caja = mc.id_caja_destino
+      JOIN sucursales s ON s.id_sucursal = cd.id_sucursal
+      JOIN usuarios u ON u.id_usuario = mc.id_usuario
+      WHERE ${where.join(' AND ')}
+      ORDER BY mc.fecha DESC
+      LIMIT 500
+    `, params);
+
+    res.json({ movimientos: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al obtener movimientos de caja' });
+  }
+}
+
 async function getArqueo(req, res) {
   try {
     const { id } = req.params;
@@ -440,4 +573,5 @@ module.exports = {
   getArqueos, getArqueoActual, getArqueo,
   abrirCaja, cerrarCaja,
   getLibroCaja,
+  getSaldoActual, crearMovimiento, getMovimientos, getMisCajasAbiertas,
 };

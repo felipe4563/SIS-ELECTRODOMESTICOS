@@ -13,6 +13,10 @@ router.get('/libro-caja',                  authMiddleware, checkPermission('ver_
 router.get('/arqueos/actual',              authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueoActual);
 router.get('/arqueos',                     authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueos);
 router.get('/arqueos/:id',                 authMiddleware, checkPermission('ver_arqueo_propio', 'caja'), ctrl.getArqueo);
+router.get('/mis-abiertas',                authMiddleware, checkPermission('ver_arqueo_propio',    'caja'), ctrl.getMisCajasAbiertas);
+router.get('/movimientos',                 authMiddleware, checkPermission('ver_arqueo_todos',    'caja'), ctrl.getMovimientos);
+router.post('/movimientos',                authMiddleware, checkPermission('reponer_caja_chica',   'caja'), ctrl.crearMovimiento);
+router.get('/:id/saldo-actual',            authMiddleware, checkPermission('ver_arqueo_propio',    'caja'), ctrl.getSaldoActual);
 router.post('/:id_caja/abrir',             authMiddleware, checkPermission('abrir',             'caja'), ctrl.abrirCaja);
 router.post('/arqueos/:id/cerrar',         authMiddleware, checkPermission('cerrar',            'caja'), ctrl.cerrarCaja);
 
