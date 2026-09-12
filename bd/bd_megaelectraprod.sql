@@ -654,7 +654,7 @@ INSERT INTO `monedas` (`id_moneda`, `codigo`, `nombre`, `simbolo`, `decimales`, 
 --
 
 CREATE TABLE `movimientos_caja` (
-  `id_movimiento`     bigint(20)     NOT NULL AUTO_INCREMENT,
+  `id_movimiento`     bigint(20)     NOT NULL,
   `id_caja_origen`    int(11)        NOT NULL,
   `id_caja_destino`   int(11)        NOT NULL,
   `id_arqueo_origen`  bigint(20)     DEFAULT NULL,
@@ -663,18 +663,7 @@ CREATE TABLE `movimientos_caja` (
   `tipo`              enum('REPOSICION') NOT NULL DEFAULT 'REPOSICION',
   `observaciones`     varchar(255)   DEFAULT NULL,
   `id_usuario`        int(11)        NOT NULL,
-  `fecha`             datetime       NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id_movimiento`),
-  KEY `fk_movcaja_origen`   (`id_caja_origen`),
-  KEY `fk_movcaja_destino`  (`id_caja_destino`),
-  KEY `fk_movcaja_aq_orig`  (`id_arqueo_origen`),
-  KEY `fk_movcaja_aq_dest`  (`id_arqueo_destino`),
-  KEY `fk_movcaja_usuario`  (`id_usuario`),
-  CONSTRAINT `fk_movcaja_origen`  FOREIGN KEY (`id_caja_origen`)  REFERENCES `cajas` (`id_caja`),
-  CONSTRAINT `fk_movcaja_destino` FOREIGN KEY (`id_caja_destino`) REFERENCES `cajas` (`id_caja`),
-  CONSTRAINT `fk_movcaja_aq_orig`  FOREIGN KEY (`id_arqueo_origen`)  REFERENCES `arqueos_caja` (`id_arqueo`) ON DELETE SET NULL,
-  CONSTRAINT `fk_movcaja_aq_dest`  FOREIGN KEY (`id_arqueo_destino`) REFERENCES `arqueos_caja` (`id_arqueo`) ON DELETE SET NULL,
-  CONSTRAINT `fk_movcaja_usuario`  FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`)
+  `fecha`             datetime       NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -2254,6 +2243,17 @@ ALTER TABLE `monedas`
   ADD UNIQUE KEY `codigo` (`codigo`);
 
 --
+-- Indices de la tabla `movimientos_caja`
+--
+ALTER TABLE `movimientos_caja`
+  ADD PRIMARY KEY (`id_movimiento`),
+  ADD KEY `fk_movcaja_origen` (`id_caja_origen`),
+  ADD KEY `fk_movcaja_destino` (`id_caja_destino`),
+  ADD KEY `fk_movcaja_aq_orig` (`id_arqueo_origen`),
+  ADD KEY `fk_movcaja_aq_dest` (`id_arqueo_destino`),
+  ADD KEY `fk_movcaja_usuario` (`id_usuario`);
+
+--
 -- Indices de la tabla `pagos_compra`
 --
 ALTER TABLE `pagos_compra`
@@ -2735,6 +2735,12 @@ ALTER TABLE `monedas`
   MODIFY `id_moneda` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
+-- AUTO_INCREMENT de la tabla `movimientos_caja`
+--
+ALTER TABLE `movimientos_caja`
+  MODIFY `id_movimiento` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `pagos_compra`
 --
 ALTER TABLE `pagos_compra`
@@ -3084,6 +3090,16 @@ ALTER TABLE `kardex`
   ADD CONSTRAINT `fk_kardex_producto` FOREIGN KEY (`id_producto`) REFERENCES `productos` (`id_producto`),
   ADD CONSTRAINT `fk_kardex_tipomov` FOREIGN KEY (`id_tipo_movimiento`) REFERENCES `tipos_movimiento` (`id_tipo_movimiento`),
   ADD CONSTRAINT `fk_kardex_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`);
+
+--
+-- Filtros para la tabla `movimientos_caja`
+--
+ALTER TABLE `movimientos_caja`
+  ADD CONSTRAINT `fk_movcaja_origen` FOREIGN KEY (`id_caja_origen`) REFERENCES `cajas` (`id_caja`),
+  ADD CONSTRAINT `fk_movcaja_destino` FOREIGN KEY (`id_caja_destino`) REFERENCES `cajas` (`id_caja`),
+  ADD CONSTRAINT `fk_movcaja_aq_orig` FOREIGN KEY (`id_arqueo_origen`) REFERENCES `arqueos_caja` (`id_arqueo`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_movcaja_aq_dest` FOREIGN KEY (`id_arqueo_destino`) REFERENCES `arqueos_caja` (`id_arqueo`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_movcaja_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuarios` (`id_usuario`);
 
 --
 -- Filtros para la tabla `pagos_compra`

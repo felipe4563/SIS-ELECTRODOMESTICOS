@@ -667,12 +667,17 @@ async function getGastosCategoria(req, res) {
     sql += ' GROUP BY cg.id_categoria_gasto, cg.nombre ORDER BY total_monto DESC';
 
     const [rows] = await db.promise().query(sql, params);
-    const [[tot]] = await db.promise().query(
-      `SELECT COALESCE(SUM(monto),0) AS total, COUNT(*) AS cantidad
-       FROM gastos WHERE fecha BETWEEN ? AND ? AND estado!='ANULADO'
-       ${id_sucursal ? ' AND id_sucursal=?' : ''}`,
-      id_sucursal ? [desde, hasta, id_sucursal] : [desde, hasta]
-    );
+
+    let totSql = `
+      SELECT COALESCE(SUM(g.monto),0) AS total, COUNT(*) AS cantidad
+      FROM gastos g
+      ${id_caja ? 'JOIN arqueos_caja aq ON aq.id_arqueo = g.id_arqueo' : ''}
+      WHERE g.fecha BETWEEN ? AND ? AND g.estado!='ANULADO'
+    `;
+    const totParams = [desde, hasta];
+    if (id_sucursal) { totSql += ' AND g.id_sucursal=?'; totParams.push(id_sucursal); }
+    if (id_caja)      { totSql += ' AND aq.id_caja=?';    totParams.push(id_caja); }
+    const [[tot]] = await db.promise().query(totSql, totParams);
     res.json({ categorias: rows, totales: tot });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -692,7 +697,8 @@ async function getCajaChica(req, res) {
 
     // Historial de reposiciones en el período
     const [historial] = await db.promise().query(`
-      SELECT mc.id_movimiento, mc.monto, mc.observaciones, mc.fecha,
+      SELECT mc.id_movimiento, mc.monto, mc.observaciones,
+        DATE_FORMAT(mc.fecha, '%Y-%m-%d %H:%i') AS fecha,
         co.nombre AS caja_origen, cd.nombre AS caja_destino,
         s.nombre AS sucursal,
         CONCAT(u.nombres, ' ', u.apellidos) AS usuario
@@ -748,7 +754,7 @@ async function _calcularSaldoCajaChicaReportes(id_caja) {
   if (!arqueo) return { ...caja, saldo_actual: null };
 
   const [[{ total_gastos }]] = await db.promise().query(
-    `SELECT COALESCE(SUM(monto), 0) AS total_gastos FROM gastos WHERE id_arqueo = ? AND estado != 'ANULADO'`, [arqueo.id_arqueo]
+    `SELECT COALESCE(SUM(monto), 0) AS total_gastos FROM gastos WHERE id_arqueo = ? AND estado != 'ANULADO' AND metodo_pago = 'EFECTIVO'`, [arqueo.id_arqueo]
   );
   const [[{ total_reposiciones }]] = await db.promise().query(
     `SELECT COALESCE(SUM(monto), 0) AS total_reposiciones FROM movimientos_caja WHERE id_arqueo_destino = ?`, [arqueo.id_arqueo]

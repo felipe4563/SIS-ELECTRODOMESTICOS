@@ -198,25 +198,37 @@ function ModalCaja({ caja, sucursales, onClose, onSuccess }) {
 }
 
 // ── Modal: Reponer Caja Chica ─────────────────────────────────────────────
-function ModalReponer({ cajaChica, cajaGeneral, onClose, onSuccess }) {
+function ModalReponer({ cajaChica, cajasGeneralPosibles, onClose, onSuccess }) {
+  const cajaGeneralDefault =
+    cajasGeneralPosibles.find(c => c.id_arqueo) ?? cajasGeneralPosibles[0];
+
+  const [idCajaOrigen, setIdCajaOrigen] = useState(cajaGeneralDefault?.id_caja ?? '');
   const [monto, setMonto]           = useState('');
   const [observaciones, setObs]     = useState('');
   const [saldoInfo, setSaldoInfo]   = useState(null);
   const [cargando, setCargando]     = useState(false);
   const [error, setError]           = useState('');
+  const [errorSaldo, setErrorSaldo] = useState('');
+
+  const cajaGeneral = cajasGeneralPosibles.find(c => c.id_caja === Number(idCajaOrigen))
+    ?? cajasGeneralPosibles.find(c => String(c.id_caja) === String(idCajaOrigen))
+    ?? cajaGeneralDefault;
 
   useEffect(() => {
+    setErrorSaldo('');
+    setSaldoInfo(null);
     cajaService.getSaldoActual(cajaChica.id_caja)
       .then(r => {
         setSaldoInfo(r.data);
         setMonto(String(r.data.monto_sugerido_reposicion || ''));
       })
-      .catch(() => {});
+      .catch(() => setErrorSaldo('No se pudo obtener el saldo actual de la caja chica. Intentá cerrar y reabrir el modal.'));
   }, [cajaChica.id_caja]);
 
   const handleReponer = async () => {
     setError('');
     if (!(Number(monto) > 0)) return setError('Ingresá un monto válido');
+    if (!cajaGeneral) return setError('Seleccioná la caja de origen');
     setCargando(true);
     try {
       await cajaService.crearMovimiento({
@@ -238,10 +250,33 @@ function ModalReponer({ cajaChica, cajaGeneral, onClose, onSuccess }) {
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl w-full max-w-sm p-6 space-y-4">
         <div>
           <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Reponer Caja Chica</h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-            De <strong>{cajaGeneral.nombre}</strong> hacia <strong>{cajaChica.nombre}</strong>
-          </p>
+          {cajasGeneralPosibles.length <= 1 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              De <strong>{cajaGeneral?.nombre ?? '—'}</strong> hacia <strong>{cajaChica.nombre}</strong>
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Hacia <strong>{cajaChica.nombre}</strong>
+            </p>
+          )}
         </div>
+
+        {cajasGeneralPosibles.length > 1 && (
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Caja de origen (General) *</label>
+            <select
+              value={idCajaOrigen}
+              onChange={e => setIdCajaOrigen(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              {cajasGeneralPosibles.map(c => (
+                <option key={c.id_caja} value={c.id_caja}>
+                  {c.nombre}{c.id_arqueo ? ' (turno abierto)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {saldoInfo && (
           <div className="text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
@@ -249,9 +284,9 @@ function ModalReponer({ cajaChica, cajaGeneral, onClose, onSuccess }) {
           </div>
         )}
 
-        {error && (
+        {(error || errorSaldo) && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
-            {error}
+            {error || errorSaldo}
           </div>
         )}
 
@@ -274,7 +309,7 @@ function ModalReponer({ cajaChica, cajaGeneral, onClose, onSuccess }) {
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button onClick={handleReponer} disabled={cargando}
+          <button onClick={handleReponer} disabled={cargando || !saldoInfo}
             className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
             {cargando ? 'Registrando…' : 'Reponer'}
           </button>
@@ -295,9 +330,9 @@ function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, puedeReponer, todasLasC
     ? Math.floor((Date.now() - new Date(caja.fecha_apertura)) / 60000)
     : null;
   const esChica = caja.tipo === 'CHICA';
-  const cajaGeneral = esChica
-    ? todasLasCajas.find(c => c.tipo === 'GENERAL' && c.id_sucursal === caja.id_sucursal)
-    : null;
+  const cajasGeneralPosibles = esChica
+    ? todasLasCajas.filter(c => c.tipo === 'GENERAL' && c.id_sucursal === caja.id_sucursal)
+    : [];
 
   return (
     <div className={`bg-white dark:bg-zinc-900 rounded-2xl border ${abierta ? 'border-green-400 dark:border-green-600' : 'border-zinc-200 dark:border-zinc-800'} p-5 space-y-3`}>
@@ -364,8 +399,8 @@ function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, puedeReponer, todasLasC
           >
             Ver arqueo
           </Link>
-          {esChica && puedeReponer && cajaGeneral && (
-            <button onClick={() => onReponer(caja, cajaGeneral)}
+          {esChica && puedeReponer && cajasGeneralPosibles.length > 0 && (
+            <button onClick={() => onReponer(caja, cajasGeneralPosibles)}
               className="w-full mt-1 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-semibold text-sm transition-colors">
               Reponer
             </button>
@@ -401,7 +436,7 @@ export default function Caja() {
   const [cargandoArqueos, setCargandoArqueos] = useState(true);
   const [modalAbrir, setModalAbrir] = useState(null);
   const [modalCaja,  setModalCaja]  = useState(null); // null | {} (nueva) | caja (editar)
-  const [modalReponer, setModalReponer] = useState(null); // null | { chica, general }
+  const [modalReponer, setModalReponer] = useState(null); // null | { chica, generales }
   const puedeReponer = puede('reponer_caja_chica', 'caja');
 
   const [filtros, setFiltros] = useState({
@@ -534,7 +569,7 @@ export default function Caja() {
                 todasLasCajas={cajas}
                 onAbrir={setModalAbrir}
                 onEditar={setModalCaja}
-                onReponer={(chica, general) => setModalReponer({ chica, general })}
+                onReponer={(chica, generales) => setModalReponer({ chica, generales })}
               />
             ))}
           </div>
@@ -698,7 +733,7 @@ export default function Caja() {
       {modalReponer && (
         <ModalReponer
           cajaChica={modalReponer.chica}
-          cajaGeneral={modalReponer.general}
+          cajasGeneralPosibles={modalReponer.generales}
           onClose={() => setModalReponer(null)}
           onSuccess={() => { setModalReponer(null); cargarCajas(); }}
         />

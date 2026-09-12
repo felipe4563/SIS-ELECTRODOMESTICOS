@@ -262,14 +262,15 @@ function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) 
             </select>
           </div>
         </div>
-          <div>
-            <label className={LABEL}>Sucursal *</label>
-            <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT} required>
-              {sucursales.map(s => (
-                <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
-              ))}
-            </select>
-          </div>
+
+        <div>
+          <label className={LABEL}>Sucursal *</label>
+          <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT} required>
+            {sucursales.map(s => (
+              <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+            ))}
+          </select>
+        </div>
 
         {cajasAbiertas.length > 1 && (
           <div>
