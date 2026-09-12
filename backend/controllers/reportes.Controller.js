@@ -646,7 +646,7 @@ async function getArqueosCaja(req, res) {
 async function getGastosCategoria(req, res) {
   if (!validarFechas(req.query, res)) return;
   try {
-    const { id_sucursal } = req.query;
+    const { id_sucursal, id_caja } = req.query;
     const desde = defaultDesde(req.query);
     const hasta = defaultHasta(req.query);
 
@@ -658,10 +658,12 @@ async function getGastosCategoria(req, res) {
         SUM(CASE WHEN g.metodo_pago!='EFECTIVO' THEN g.monto ELSE 0 END) AS otros_metodos
       FROM gastos g
       JOIN categorias_gasto cg ON cg.id_categoria_gasto=g.id_categoria_gasto
+      ${id_caja ? 'JOIN arqueos_caja aq ON aq.id_arqueo = g.id_arqueo' : ''}
       WHERE g.fecha BETWEEN ? AND ? AND g.estado != 'ANULADO'
     `;
     const params = [desde, hasta];
     if (id_sucursal) { sql += ' AND g.id_sucursal=?'; params.push(id_sucursal); }
+    if (id_caja)      { sql += ' AND aq.id_caja=?';    params.push(id_caja); }
     sql += ' GROUP BY cg.id_categoria_gasto, cg.nombre ORDER BY total_monto DESC';
 
     const [rows] = await db.promise().query(sql, params);
@@ -675,6 +677,84 @@ async function getGastosCategoria(req, res) {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+}
+
+// ── Caja Chica: historial, total por período, saldo vs. fondo fijo ─────────
+async function getCajaChica(req, res) {
+  if (!validarFechas(req.query, res)) return;
+  try {
+    const { id_sucursal } = req.query;
+    const desde = defaultDesde(req.query);
+    const hasta = defaultHasta(req.query);
+
+    const sucCond = alias => id_sucursal ? `AND ${alias}.id_sucursal = ?` : '';
+    const sucParam = id_sucursal ? [id_sucursal] : [];
+
+    // Historial de reposiciones en el período
+    const [historial] = await db.promise().query(`
+      SELECT mc.id_movimiento, mc.monto, mc.observaciones, mc.fecha,
+        co.nombre AS caja_origen, cd.nombre AS caja_destino,
+        s.nombre AS sucursal,
+        CONCAT(u.nombres, ' ', u.apellidos) AS usuario
+      FROM movimientos_caja mc
+      JOIN cajas co ON co.id_caja = mc.id_caja_origen
+      JOIN cajas cd ON cd.id_caja = mc.id_caja_destino
+      JOIN sucursales s ON s.id_sucursal = cd.id_sucursal
+      JOIN usuarios u ON u.id_usuario = mc.id_usuario
+      WHERE mc.fecha BETWEEN ? AND ? ${sucCond('cd')}
+      ORDER BY mc.fecha DESC
+    `, [desde, `${hasta} 23:59:59`, ...sucParam]);
+
+    // Total repuesto por caja destino en el período
+    const [totalPorCaja] = await db.promise().query(`
+      SELECT cd.id_caja, cd.nombre AS caja, s.nombre AS sucursal,
+        COUNT(*) AS num_reposiciones, SUM(mc.monto) AS total_repuesto
+      FROM movimientos_caja mc
+      JOIN cajas cd ON cd.id_caja = mc.id_caja_destino
+      JOIN sucursales s ON s.id_sucursal = cd.id_sucursal
+      WHERE mc.fecha BETWEEN ? AND ? ${sucCond('cd')}
+      GROUP BY cd.id_caja, cd.nombre, s.nombre
+      ORDER BY total_repuesto DESC
+    `, [desde, `${hasta} 23:59:59`, ...sucParam]);
+
+    // Saldo actual vs. fondo fijo de cada caja chica activa
+    const [cajasChicas] = await db.promise().query(`
+      SELECT c.id_caja FROM cajas c WHERE c.tipo = 'CHICA' AND c.activo = 1 ${sucCond('c')}
+    `, sucParam);
+    const saldos = [];
+    for (const { id_caja } of cajasChicas) {
+      const info = await _calcularSaldoCajaChicaReportes(id_caja);
+      if (info) saldos.push(info);
+    }
+
+    res.json({ historial, totalPorCaja, saldos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// Copia liviana de _calcularSaldoCajaChica (caja.Controller.js) con los
+// campos que necesita este reporte — se mantiene local para no crear un
+// acoplamiento cruzado entre controladores por una sola función pequeña.
+async function _calcularSaldoCajaChicaReportes(id_caja) {
+  const [[caja]] = await db.promise().query(
+    `SELECT c.id_caja, c.nombre AS caja, c.monto_fondo_fijo, s.nombre AS sucursal
+     FROM cajas c JOIN sucursales s ON s.id_sucursal = c.id_sucursal WHERE c.id_caja = ?`, [id_caja]
+  );
+  if (!caja) return null;
+  const [[arqueo]] = await db.promise().query(
+    `SELECT id_arqueo, monto_apertura FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`, [id_caja]
+  );
+  if (!arqueo) return { ...caja, saldo_actual: null };
+
+  const [[{ total_gastos }]] = await db.promise().query(
+    `SELECT COALESCE(SUM(monto), 0) AS total_gastos FROM gastos WHERE id_arqueo = ? AND estado != 'ANULADO'`, [arqueo.id_arqueo]
+  );
+  const [[{ total_reposiciones }]] = await db.promise().query(
+    `SELECT COALESCE(SUM(monto), 0) AS total_reposiciones FROM movimientos_caja WHERE id_arqueo_destino = ?`, [arqueo.id_arqueo]
+  );
+  const saldo = Number(arqueo.monto_apertura) + Number(total_reposiciones) - Number(total_gastos);
+  return { ...caja, saldo_actual: +saldo.toFixed(2) };
 }
 
 // ── Top productos ─────────────────────────────────────────────────────────
@@ -2710,6 +2790,7 @@ module.exports = {
   getKardexProducto,
   getArqueosCaja,
   getGastosCategoria,
+  getCajaChica,
   getTopProductos,
   getAlertasStock,
   getTransferencias,

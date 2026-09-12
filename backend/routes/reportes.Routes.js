@@ -16,6 +16,7 @@ router.get('/compras-proveedor',   authMiddleware, checkPermission('compras_prov
 router.get('/cuentas-cobrar',      authMiddleware, checkPermission('cuentas_cobrar',    'reportes'), ctrl.getCuentasCobrar);
 router.get('/cuentas-pagar',       authMiddleware, checkPermission('cuentas_pagar',     'reportes'), ctrl.getCuentasPagar);
 router.get('/gastos-categoria',    authMiddleware, checkPermission('gastos_categoria',  'reportes'), ctrl.getGastosCategoria);
+router.get('/caja-chica',          authMiddleware, checkPermission('caja_chica',        'reportes'), ctrl.getCajaChica);
 router.get('/rentabilidad',        authMiddleware, checkPermission('rentabilidad',       'reportes'), ctrl.getRentabilidad);
 router.get('/estado-resultados',   authMiddleware, checkPermission('estado_resultados', 'reportes'), ctrl.getEstadoResultados);
 router.get('/arqueos-caja',        authMiddleware, checkPermission('arqueos_caja',      'reportes'), ctrl.getArqueosCaja);
