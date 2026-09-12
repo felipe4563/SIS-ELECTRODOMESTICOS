@@ -5,6 +5,7 @@ export const cajaService = {
   getCajas:     ()           => api.get('/caja'),
   crearCaja:    (data)       => api.post('/caja', data),
   updateCaja:   (id, data)   => api.put(`/caja/${id}`, data),
+  getMisCajasAbiertas: () => api.get('/caja/mis-abiertas'),
 
   // Arqueos
   getArqueos:    (params)    => api.get('/caja/arqueos', { params }),
