@@ -16,4 +16,9 @@ export const cajaService = {
 
   // Libro Caja
   getLibroCaja: (params) => api.get('/caja/libro-caja', { params }),
+
+  // Caja Chica
+  getSaldoActual: (id)   => api.get(`/caja/${id}/saldo-actual`),
+  crearMovimiento: (data) => api.post('/caja/movimientos', data),
+  getMovimientos: (params) => api.get('/caja/movimientos', { params }),
 };
