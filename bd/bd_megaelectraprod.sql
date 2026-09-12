@@ -2049,7 +2049,8 @@ ALTER TABLE `categorias`
 --
 ALTER TABLE `categorias_gasto`
   ADD PRIMARY KEY (`id_categoria_gasto`),
-  ADD UNIQUE KEY `nombre` (`nombre`);
+  ADD UNIQUE KEY `nombre` (`nombre`),
+  ADD KEY `fk_catgasto_padre` (`id_categoria_gasto_padre`);
 
 --
 -- Indices de la tabla `clientes`
@@ -2958,6 +2959,12 @@ ALTER TABLE `cajas`
 --
 ALTER TABLE `categorias`
   ADD CONSTRAINT `fk_categoria_padre` FOREIGN KEY (`id_categoria_padre`) REFERENCES `categorias` (`id_categoria`);
+
+--
+-- Filtros para la tabla `categorias_gasto`
+--
+ALTER TABLE `categorias_gasto`
+  ADD CONSTRAINT `fk_catgasto_padre` FOREIGN KEY (`id_categoria_gasto_padre`) REFERENCES `categorias_gasto` (`id_categoria_gasto`) ON DELETE SET NULL;
 
 --
 -- Filtros para la tabla `cliente_direcciones`
