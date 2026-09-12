@@ -340,8 +340,15 @@ async function getArqueo(req, res) {
       const totalCobros    = cobros.filter(c => c.metodo_pago === 'EFECTIVO').reduce((s, c) => s + Number(c.monto), 0);
       const totalGastos    = gastos.filter(g => g.metodo_pago === 'EFECTIVO').reduce((s, g) => s + Number(g.monto), 0);
       const totalPagosComp = pagosCompra.filter(p => p.metodo_pago === 'EFECTIVO').reduce((s, p) => s + Number(p.monto), 0);
+      const [[{ total_mov_salida }]] = await db.promise().query(
+        `SELECT COALESCE(SUM(monto), 0) AS total_mov_salida FROM movimientos_caja WHERE id_arqueo_origen = ?`, [arqueo.id_arqueo]
+      );
+      const [[{ total_mov_entrada }]] = await db.promise().query(
+        `SELECT COALESCE(SUM(monto), 0) AS total_mov_entrada FROM movimientos_caja WHERE id_arqueo_destino = ?`, [arqueo.id_arqueo]
+      );
       monto_cierre_sistema_provisional =
-        Number(arqueo.monto_apertura) + totalCobros - totalGastos - totalPagosComp;
+        Number(arqueo.monto_apertura) + totalCobros - totalGastos - totalPagosComp
+        - Number(total_mov_salida) + Number(total_mov_entrada);
     }
 
     res.json({ arqueo, cobros, gastos, pagosCompra, monto_cierre_sistema_provisional });
@@ -434,11 +441,21 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
       WHERE id_sucursal = ? AND metodo_pago = 'EFECTIVO' AND fecha >= ?
     `, [arqueo.id_sucursal, arqueo.fecha_apertura]);
 
+    // Movimientos entre cajas (reposiciones de Caja Chica) del turno
+    const [[{ total_mov_salida }]] = await db.promise().query(
+      `SELECT COALESCE(SUM(monto), 0) AS total_mov_salida FROM movimientos_caja WHERE id_arqueo_origen = ?`, [arqueo.id_arqueo]
+    );
+    const [[{ total_mov_entrada }]] = await db.promise().query(
+      `SELECT COALESCE(SUM(monto), 0) AS total_mov_entrada FROM movimientos_caja WHERE id_arqueo_destino = ?`, [arqueo.id_arqueo]
+    );
+
     const monto_cierre_sistema =
       Number(arqueo.monto_apertura) +
       Number(total_cobros) -
       Number(total_gastos) -
-      Number(total_pagos_compra);
+      Number(total_pagos_compra) -
+      Number(total_mov_salida) +
+      Number(total_mov_entrada);
 
     await db.promise().query(`
       UPDATE arqueos_caja
