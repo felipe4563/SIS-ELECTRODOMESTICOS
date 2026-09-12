@@ -15,7 +15,7 @@ async function getCajas(req, res) {
     const params = verTodos ? [] : [req.user.id_sucursal];
 
     const [rows] = await db.promise().query(`
-      SELECT c.id_caja, c.nombre, c.activo, c.id_sucursal,
+      SELECT c.id_caja, c.nombre, c.tipo, c.monto_fondo_fijo, c.activo, c.id_sucursal,
         s.nombre AS sucursal,
         aq.id_arqueo,
         aq.id_usuario AS usuario_turno_id,
@@ -38,13 +38,16 @@ async function getCajas(req, res) {
 
 async function crearCaja(req, res) {
   try {
-    const { id_sucursal, nombre } = req.body;
+    const { id_sucursal, nombre, tipo = 'GENERAL', monto_fondo_fijo } = req.body;
     if (!id_sucursal || !nombre?.trim()) {
       return res.status(400).json({ mensaje: 'Sucursal y nombre son requeridos' });
     }
+    if (!['GENERAL', 'CHICA'].includes(tipo)) {
+      return res.status(400).json({ mensaje: 'Tipo de caja inválido' });
+    }
     const [result] = await db.promise().query(
-      'INSERT INTO cajas (id_sucursal, nombre) VALUES (?, ?)',
-      [id_sucursal, nombre.trim()]
+      'INSERT INTO cajas (id_sucursal, nombre, tipo, monto_fondo_fijo) VALUES (?, ?, ?, ?)',
+      [id_sucursal, nombre.trim(), tipo, tipo === 'CHICA' ? (monto_fondo_fijo || 0) : null]
     );
     await auditLog(req.user.id_usuario, 'cajas', result.insertId, 'INSERT', getIp(req));
     res.status(201).json({ id_caja: result.insertId, mensaje: 'Caja creada correctamente' });
@@ -57,11 +60,11 @@ async function crearCaja(req, res) {
 async function updateCaja(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, activo } = req.body;
+    const { nombre, activo, monto_fondo_fijo } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ mensaje: 'Nombre requerido' });
     await db.promise().query(
-      'UPDATE cajas SET nombre = ?, activo = ? WHERE id_caja = ?',
-      [nombre.trim(), activo ?? 1, id]
+      'UPDATE cajas SET nombre = ?, activo = ?, monto_fondo_fijo = ? WHERE id_caja = ?',
+      [nombre.trim(), activo ?? 1, monto_fondo_fijo ?? null, id]
     );
     await auditLog(req.user.id_usuario, 'cajas', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Caja actualizada correctamente' });
