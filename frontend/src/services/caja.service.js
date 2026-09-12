@@ -5,6 +5,7 @@ export const cajaService = {
   getCajas:     ()           => api.get('/caja'),
   crearCaja:    (data)       => api.post('/caja', data),
   updateCaja:   (id, data)   => api.put(`/caja/${id}`, data),
+  getMisCajasAbiertas: () => api.get('/caja/mis-abiertas'),
 
   // Arqueos
   getArqueos:    (params)    => api.get('/caja/arqueos', { params }),
@@ -15,4 +16,9 @@ export const cajaService = {
 
   // Libro Caja
   getLibroCaja: (params) => api.get('/caja/libro-caja', { params }),
+
+  // Caja Chica
+  getSaldoActual: (id)   => api.get(`/caja/${id}/saldo-actual`),
+  crearMovimiento: (data) => api.post('/caja/movimientos', data),
+  getMovimientos: (params) => api.get('/caja/movimientos', { params }),
 };

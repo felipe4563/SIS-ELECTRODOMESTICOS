@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gastosService } from '../../services/gastos.service';
+import { cajaService } from '../../services/caja.service';
 import { usePermission } from '../../hooks/usePermission';
 import { hoyLocal } from '../../utils/fechaLocal';
 
@@ -71,20 +72,29 @@ function ModalShell({ onClose, title, children, maxW = 'sm:max-w-md' }) {
 }
 
 // ── Modal Categoría ───────────────────────────────────────────────────────────
-function ModalCategoria({ item, onClose, onSave }) {
-  const [form, setForm]     = useState({ nombre: item?.nombre || '', descripcion: item?.descripcion || '', activo: item?.activo ?? 1 });
+function ModalCategoria({ item, categorias, onClose, onSave }) {
+  const [form, setForm] = useState({
+    nombre: item?.nombre || '',
+    descripcion: item?.descripcion || '',
+    id_categoria_gasto_padre: item?.id_categoria_gasto_padre || '',
+    activo: item?.activo ?? 1,
+  });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
   const esEdicion = !!item?.id_categoria_gasto;
+  // Solo categorías raíz (sin padre propio) pueden ser elegidas como padre,
+  // y una categoría no puede ser padre de sí misma.
+  const posiblesPadres = categorias.filter(c => !c.id_categoria_gasto_padre && c.id_categoria_gasto !== item?.id_categoria_gasto);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.nombre.trim()) { setError('Nombre requerido'); return; }
     setLoading(true);
     try {
-      if (esEdicion) await gastosService.updateCategoria(item.id_categoria_gasto, form);
-      else           await gastosService.crearCategoria(form);
+      const payload = { ...form, id_categoria_gasto_padre: form.id_categoria_gasto_padre || null };
+      if (esEdicion) await gastosService.updateCategoria(item.id_categoria_gasto, payload);
+      else           await gastosService.crearCategoria(payload);
       onSave();
     } catch (e) {
       setError(e.response?.data?.mensaje || 'Error al guardar');
@@ -104,6 +114,19 @@ function ModalCategoria({ item, onClose, onSave }) {
             className={INPUT}
             autoFocus
           />
+        </div>
+        <div>
+          <label className={LABEL}>Categoría padre</label>
+          <select
+            value={form.id_categoria_gasto_padre}
+            onChange={e => setForm(f => ({ ...f, id_categoria_gasto_padre: e.target.value }))}
+            className={INPUT}
+          >
+            <option value="">— Ninguna (categoría raíz) —</option>
+            {posiblesPadres.map(p => (
+              <option key={p.id_categoria_gasto} value={p.id_categoria_gasto}>{p.nombre}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={LABEL}>Descripción</label>
@@ -159,11 +182,30 @@ function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) 
     metodo_pago:        item?.metodo_pago || 'EFECTIVO',
     numero_comprobante: item?.numero_comprobante || '',
     observaciones:      item?.observaciones || '',
+    id_caja:            item?.id_caja || '',
   });
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const [categoriaRaizSeleccionada, setCategoriaRaizSeleccionada] = useState(() => {
+    if (!item?.id_categoria_gasto) return '';
+    const actual = categorias.find(c => c.id_categoria_gasto === item.id_categoria_gasto);
+    return actual?.id_categoria_gasto_padre ? String(actual.id_categoria_gasto_padre) : String(item.id_categoria_gasto);
+  });
+  const subcategorias = categorias.filter(c => c.activo && String(c.id_categoria_gasto_padre) === categoriaRaizSeleccionada);
+
+  const [cajasAbiertas, setCajasAbiertas] = useState([]);
+  useEffect(() => {
+    cajaService.getMisCajasAbiertas()
+      .then(r => {
+        const cajas = r.data.cajas || [];
+        setCajasAbiertas(cajas);
+        if (cajas.length === 1) setForm(f => ({ ...f, id_caja: cajas[0].id_caja }));
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,22 +228,61 @@ function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={LABEL}>Categoría *</label>
-            <select value={form.id_categoria_gasto} onChange={e => set('id_categoria_gasto', e.target.value)} className={INPUT} required>
+            <select
+              value={categoriaRaizSeleccionada}
+              onChange={e => {
+                const raizId = e.target.value;
+                setCategoriaRaizSeleccionada(raizId);
+                const raiz = categorias.find(c => String(c.id_categoria_gasto) === raizId);
+                const tieneHijos = categorias.some(c => String(c.id_categoria_gasto_padre) === raizId);
+                set('id_categoria_gasto', tieneHijos ? '' : (raiz?.id_categoria_gasto || ''));
+              }}
+              className={INPUT}
+              required
+            >
               <option value="">Seleccionar...</option>
-              {categorias.filter(c => c.activo).map(c => (
+              {categorias.filter(c => c.activo && !c.id_categoria_gasto_padre).map(c => (
                 <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className={LABEL}>Sucursal *</label>
-            <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT} required>
-              {sucursales.map(s => (
-                <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+            <label className={LABEL}>Subcategoría</label>
+            <select
+              value={form.id_categoria_gasto}
+              onChange={e => set('id_categoria_gasto', e.target.value)}
+              className={INPUT}
+              disabled={!categoriaRaizSeleccionada || subcategorias.length === 0}
+              required={subcategorias.length > 0}
+            >
+              <option value="">{subcategorias.length ? 'Seleccionar...' : '— Sin subcategorías —'}</option>
+              {subcategorias.map(c => (
+                <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
               ))}
             </select>
           </div>
         </div>
+
+        <div>
+          <label className={LABEL}>Sucursal *</label>
+          <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT} required>
+            {sucursales.map(s => (
+              <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+            ))}
+          </select>
+        </div>
+
+        {cajasAbiertas.length > 1 && (
+          <div>
+            <label className={LABEL}>Caja *</label>
+            <select value={form.id_caja} onChange={e => set('id_caja', e.target.value)} className={INPUT} required>
+              <option value="">Seleccionar...</option>
+              {cajasAbiertas.map(c => (
+                <option key={c.id_caja} value={c.id_caja}>{c.caja} ({c.tipo === 'CHICA' ? 'Chica' : 'General'}) — {c.sucursal}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className={LABEL}>Descripción *</label>
@@ -515,6 +596,7 @@ function TabCategorias({ puede }) {
       {modalCat !== undefined && modalCat !== false && (
         <ModalCategoria
           item={modalCat || null}
+          categorias={cats}
           onClose={() => setModalCat(false)}
           onSave={() => { setModalCat(false); cargar(); }}
         />
@@ -557,7 +639,17 @@ function TabCategorias({ puede }) {
                 <tr><td colSpan={4} className="text-center py-10 text-sm text-zinc-400">Sin categorías registradas</td></tr>
               ) : cats.map(c => (
                 <tr key={c.id_categoria_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-white">{c.nombre}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`font-medium text-zinc-900 dark:text-white ${c.id_categoria_gasto_padre ? 'pl-4 border-l-2 border-yellow-400/40' : ''}`}>
+                      {c.id_categoria_gasto_padre ? '↳ ' : ''}{c.nombre}
+                    </span>
+                    {c.padre_nombre && (
+                      <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">{c.padre_nombre}</span>
+                    )}
+                    {c.total_subcategorias > 0 && (
+                      <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{c.total_subcategorias} subcategoría{c.total_subcategorias !== 1 ? 's' : ''}</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">{c.descripcion || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</td>
                   <td className="px-5 py-3.5 text-center"><BadgeActivo activo={c.activo} /></td>
                   {puede('categorias_gestionar', 'gastos') && (
@@ -583,7 +675,17 @@ function TabCategorias({ puede }) {
           ) : cats.map(c => (
             <div key={c.id_categoria_gasto} className="flex items-center gap-3 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-900 dark:text-white">{c.nombre}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-sm font-medium text-zinc-900 dark:text-white ${c.id_categoria_gasto_padre ? 'pl-3 border-l-2 border-yellow-400/40' : ''}`}>
+                    {c.id_categoria_gasto_padre ? '↳ ' : ''}{c.nombre}
+                  </span>
+                  {c.padre_nombre && (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">{c.padre_nombre}</span>
+                  )}
+                  {c.total_subcategorias > 0 && (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{c.total_subcategorias} subcategoría{c.total_subcategorias !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
                 {c.descripcion && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{c.descripcion}</p>}
               </div>
               <BadgeActivo activo={c.activo} />

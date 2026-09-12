@@ -20,6 +20,7 @@ export const reportesService = {
   getKardexProducto:    (id, p) => api.get(`${R}/kardex/${id}`,  { params: p }),
   getArqueosCaja:       (p) => api.get(`${R}/arqueos-caja`,       { params: p }),
   getGastosCategoria:   (p) => api.get(`${R}/gastos-categoria`,   { params: p }),
+  getCajaChica:         (p) => api.get(`${R}/caja-chica`,        { params: p }),
   getTopProductos:      (p) => api.get(`${R}/top-productos`,      { params: p }),
   getAlertasStock:      (p) => api.get(`${R}/alertas-stock`,      { params: p }),
   getComprasProveedor:  (p) => api.get(`${R}/compras-proveedor`,  { params: p }),

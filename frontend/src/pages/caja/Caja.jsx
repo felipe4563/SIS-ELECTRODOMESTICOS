@@ -77,9 +77,11 @@ function ModalAbrirCaja({ caja, onClose, onSuccess }) {
 function ModalCaja({ caja, sucursales, onClose, onSuccess }) {
   const editando = Boolean(caja?.id_caja);
   const [form, setForm] = useState({
-    id_sucursal: caja?.id_sucursal ?? '',
-    nombre:      caja?.nombre      ?? '',
-    activo:      caja?.activo      ?? 1,
+    id_sucursal:      caja?.id_sucursal      ?? '',
+    nombre:           caja?.nombre           ?? '',
+    tipo:             caja?.tipo             ?? 'GENERAL',
+    monto_fondo_fijo: caja?.monto_fondo_fijo ?? '',
+    activo:           caja?.activo           ?? 1,
   });
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState('');
@@ -88,6 +90,9 @@ function ModalCaja({ caja, sucursales, onClose, onSuccess }) {
     setError('');
     if (!form.id_sucursal || !form.nombre.trim()) {
       return setError('Sucursal y nombre son requeridos');
+    }
+    if (form.tipo === 'CHICA' && !(Number(form.monto_fondo_fijo) > 0)) {
+      return setError('Ingresá el monto del fondo fijo para una Caja Chica');
     }
     setCargando(true);
     try {
@@ -142,6 +147,29 @@ function ModalCaja({ caja, sucursales, onClose, onSuccess }) {
               autoFocus
             />
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Tipo *</label>
+            <select
+              value={form.tipo}
+              onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+              disabled={editando}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:opacity-60"
+            >
+              <option value="GENERAL">General</option>
+              <option value="CHICA">Chica (fondo fijo)</option>
+            </select>
+          </div>
+          {form.tipo === 'CHICA' && (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Monto del fondo fijo (Bs) *</label>
+              <input
+                type="number" min={0} step="0.01" value={form.monto_fondo_fijo}
+                onChange={e => setForm(f => ({ ...f, monto_fondo_fijo: e.target.value }))}
+                placeholder="Ej: 500"
+                className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+            </div>
+          )}
           {editando && (
             <div className="flex items-center gap-2">
               <input
@@ -169,18 +197,155 @@ function ModalCaja({ caja, sucursales, onClose, onSuccess }) {
   );
 }
 
+// ── Modal: Reponer Caja Chica ─────────────────────────────────────────────
+function ModalReponer({ cajaChica, cajasGeneralPosibles, onClose, onSuccess }) {
+  const cajaGeneralDefault =
+    cajasGeneralPosibles.find(c => c.id_arqueo) ?? cajasGeneralPosibles[0];
+
+  const [idCajaOrigen, setIdCajaOrigen] = useState(cajaGeneralDefault?.id_caja ?? '');
+  const [monto, setMonto]           = useState('');
+  const [observaciones, setObs]     = useState('');
+  const [saldoInfo, setSaldoInfo]   = useState(null);
+  const [cargando, setCargando]     = useState(false);
+  const [error, setError]           = useState('');
+  const [errorSaldo, setErrorSaldo] = useState('');
+
+  const cajaGeneral = cajasGeneralPosibles.find(c => c.id_caja === Number(idCajaOrigen))
+    ?? cajasGeneralPosibles.find(c => String(c.id_caja) === String(idCajaOrigen))
+    ?? cajaGeneralDefault;
+
+  useEffect(() => {
+    setErrorSaldo('');
+    setSaldoInfo(null);
+    cajaService.getSaldoActual(cajaChica.id_caja)
+      .then(r => {
+        setSaldoInfo(r.data);
+        setMonto(String(r.data.monto_sugerido_reposicion || ''));
+      })
+      .catch(() => setErrorSaldo('No se pudo obtener el saldo actual de la caja chica. Intentá cerrar y reabrir el modal.'));
+  }, [cajaChica.id_caja]);
+
+  const handleReponer = async () => {
+    setError('');
+    if (!(Number(monto) > 0)) return setError('Ingresá un monto válido');
+    if (!cajaGeneral) return setError('Seleccioná la caja de origen');
+    setCargando(true);
+    try {
+      await cajaService.crearMovimiento({
+        id_caja_origen: cajaGeneral.id_caja,
+        id_caja_destino: cajaChica.id_caja,
+        monto,
+        observaciones: observaciones || null,
+      });
+      onSuccess();
+    } catch (e) {
+      setError(e.response?.data?.mensaje ?? 'Error al registrar la reposición');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl w-full max-w-sm p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Reponer Caja Chica</h2>
+          {cajasGeneralPosibles.length <= 1 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              De <strong>{cajaGeneral?.nombre ?? '—'}</strong> hacia <strong>{cajaChica.nombre}</strong>
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Hacia <strong>{cajaChica.nombre}</strong>
+            </p>
+          )}
+        </div>
+
+        {cajasGeneralPosibles.length > 1 && (
+          <div>
+            <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Caja de origen (General) *</label>
+            <select
+              value={idCajaOrigen}
+              onChange={e => setIdCajaOrigen(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              {cajasGeneralPosibles.map(c => (
+                <option key={c.id_caja} value={c.id_caja}>
+                  {c.nombre}{c.id_arqueo ? ' (turno abierto)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {saldoInfo && (
+          <div className="text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 rounded-xl px-3 py-2">
+            Fondo fijo: Bs {fmt(saldoInfo.monto_fondo_fijo)} · Saldo actual: Bs {saldoInfo.saldo_actual != null ? fmt(saldoInfo.saldo_actual) : '—'}
+          </div>
+        )}
+
+        {(error || errorSaldo) && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
+            {error || errorSaldo}
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Monto a reponer (Bs)</label>
+          <input
+            type="number" min={0} step="0.01" value={monto}
+            onChange={e => setMonto(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">Observaciones</label>
+          <textarea
+            rows={2} value={observaciones} onChange={e => setObs(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 resize-none"
+            placeholder="Opcional…"
+          />
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={handleReponer} disabled={cargando || !saldoInfo}
+            className="flex-1 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors">
+            {cargando ? 'Registrando…' : 'Reponer'}
+          </button>
+          <button onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-sm transition-colors">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Tarjeta de caja ───────────────────────────────────────────────────────
-function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, onAbrir, onEditar }) {
+function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, puedeReponer, todasLasCajas, onAbrir, onEditar, onReponer }) {
   const abierta = Boolean(caja.id_arqueo);
   const minutosAbierta = abierta
     ? Math.floor((Date.now() - new Date(caja.fecha_apertura)) / 60000)
     : null;
+  const esChica = caja.tipo === 'CHICA';
+  const cajasGeneralPosibles = esChica
+    ? todasLasCajas.filter(c => c.tipo === 'GENERAL' && c.id_sucursal === caja.id_sucursal)
+    : [];
 
   return (
     <div className={`bg-white dark:bg-zinc-900 rounded-2xl border ${abierta ? 'border-green-400 dark:border-green-600' : 'border-zinc-200 dark:border-zinc-800'} p-5 space-y-3`}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-bold text-zinc-900 dark:text-white">{caja.nombre}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-bold text-zinc-900 dark:text-white">{caja.nombre}</p>
+            {esChica && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                Caja Chica
+              </span>
+            )}
+          </div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{caja.sucursal}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -199,6 +364,10 @@ function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, onAbrir, onEditar }) {
           </span>
         </div>
       </div>
+
+      {esChica && (
+        <div className="text-xs text-zinc-500 dark:text-zinc-400">Fondo fijo: Bs {fmt(caja.monto_fondo_fijo)}</div>
+      )}
 
       {abierta ? (
         <div className="space-y-1.5 text-sm">
@@ -230,6 +399,12 @@ function TarjetaCaja({ caja, puedoAbrir, puedoGestionar, onAbrir, onEditar }) {
           >
             Ver arqueo
           </Link>
+          {esChica && puedeReponer && cajasGeneralPosibles.length > 0 && (
+            <button onClick={() => onReponer(caja, cajasGeneralPosibles)}
+              className="w-full mt-1 py-2 rounded-xl bg-purple-500 hover:bg-purple-600 text-white font-semibold text-sm transition-colors">
+              Reponer
+            </button>
+          )}
         </div>
       ) : (
         <div className="text-sm text-zinc-400 dark:text-zinc-500">Sin turno activo</div>
@@ -261,6 +436,8 @@ export default function Caja() {
   const [cargandoArqueos, setCargandoArqueos] = useState(true);
   const [modalAbrir, setModalAbrir] = useState(null);
   const [modalCaja,  setModalCaja]  = useState(null); // null | {} (nueva) | caja (editar)
+  const [modalReponer, setModalReponer] = useState(null); // null | { chica, generales }
+  const puedeReponer = puede('reponer_caja_chica', 'caja');
 
   const [filtros, setFiltros] = useState({
     id_caja:     '',
@@ -388,8 +565,11 @@ export default function Caja() {
                 caja={c}
                 puedoAbrir={puedoAbrir}
                 puedoGestionar={puedoGestionar}
+                puedeReponer={puedeReponer}
+                todasLasCajas={cajas}
                 onAbrir={setModalAbrir}
                 onEditar={setModalCaja}
+                onReponer={(chica, generales) => setModalReponer({ chica, generales })}
               />
             ))}
           </div>
@@ -548,6 +728,14 @@ export default function Caja() {
           sucursales={sucursales}
           onClose={() => setModalCaja(null)}
           onSuccess={handleSuccess}
+        />
+      )}
+      {modalReponer && (
+        <ModalReponer
+          cajaChica={modalReponer.chica}
+          cajasGeneralPosibles={modalReponer.generales}
+          onClose={() => setModalReponer(null)}
+          onSuccess={() => { setModalReponer(null); cargarCajas(); }}
         />
       )}
     </div>

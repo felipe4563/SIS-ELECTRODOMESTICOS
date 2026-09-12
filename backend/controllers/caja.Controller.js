@@ -15,7 +15,7 @@ async function getCajas(req, res) {
     const params = verTodos ? [] : [req.user.id_sucursal];
 
     const [rows] = await db.promise().query(`
-      SELECT c.id_caja, c.nombre, c.activo, c.id_sucursal,
+      SELECT c.id_caja, c.nombre, c.tipo, c.monto_fondo_fijo, c.activo, c.id_sucursal,
         s.nombre AS sucursal,
         aq.id_arqueo,
         aq.id_usuario AS usuario_turno_id,
@@ -38,13 +38,24 @@ async function getCajas(req, res) {
 
 async function crearCaja(req, res) {
   try {
-    const { id_sucursal, nombre } = req.body;
+    const { id_sucursal, nombre, tipo = 'GENERAL', monto_fondo_fijo } = req.body;
     if (!id_sucursal || !nombre?.trim()) {
       return res.status(400).json({ mensaje: 'Sucursal y nombre son requeridos' });
     }
+    if (!['GENERAL', 'CHICA'].includes(tipo)) {
+      return res.status(400).json({ mensaje: 'Tipo de caja inválido' });
+    }
+    let fondoFijo = null;
+    if (tipo === 'CHICA') {
+      const fondoFijoNum = Number(monto_fondo_fijo);
+      if (!Number.isFinite(fondoFijoNum) || fondoFijoNum <= 0) {
+        return res.status(400).json({ mensaje: 'El fondo fijo de una Caja Chica debe ser un monto mayor a 0' });
+      }
+      fondoFijo = fondoFijoNum;
+    }
     const [result] = await db.promise().query(
-      'INSERT INTO cajas (id_sucursal, nombre) VALUES (?, ?)',
-      [id_sucursal, nombre.trim()]
+      'INSERT INTO cajas (id_sucursal, nombre, tipo, monto_fondo_fijo) VALUES (?, ?, ?, ?)',
+      [id_sucursal, nombre.trim(), tipo, fondoFijo]
     );
     await auditLog(req.user.id_usuario, 'cajas', result.insertId, 'INSERT', getIp(req));
     res.status(201).json({ id_caja: result.insertId, mensaje: 'Caja creada correctamente' });
@@ -57,11 +68,30 @@ async function crearCaja(req, res) {
 async function updateCaja(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, activo } = req.body;
+    const { nombre, activo, monto_fondo_fijo } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ mensaje: 'Nombre requerido' });
+
+    const [[caja]] = await db.promise().query('SELECT tipo, monto_fondo_fijo FROM cajas WHERE id_caja = ?', [id]);
+    if (!caja) return res.status(404).json({ mensaje: 'Caja no encontrada' });
+
+    // El fondo fijo solo tiene sentido para Caja Chica. Para General se
+    // ignora lo que venga en el body (el modal ni siquiera lo muestra) y
+    // se fuerza a null, evitando que un submit sin ese campo lo zerifique
+    // o rompa en modo estricto. Para Chica, si el body no trae un valor
+    // (undefined/null/'' o no numérico), se conserva el fondo fijo actual
+    // en vez de pisarlo con null — omitir el campo no debe vaciar una
+    // Caja Chica en producción.
+    let fondoFijo = null;
+    if (caja.tipo === 'CHICA') {
+      const fondoFijoNum = Number(monto_fondo_fijo);
+      fondoFijo = (monto_fondo_fijo !== undefined && monto_fondo_fijo !== null && monto_fondo_fijo !== '' && Number.isFinite(fondoFijoNum))
+        ? fondoFijoNum
+        : caja.monto_fondo_fijo;
+    }
+
     await db.promise().query(
-      'UPDATE cajas SET nombre = ?, activo = ? WHERE id_caja = ?',
-      [nombre.trim(), activo ?? 1, id]
+      'UPDATE cajas SET nombre = ?, activo = ?, monto_fondo_fijo = ? WHERE id_caja = ?',
+      [nombre.trim(), activo ?? 1, fondoFijo, id]
     );
     await auditLog(req.user.id_usuario, 'cajas', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Caja actualizada correctamente' });
@@ -136,12 +166,154 @@ async function getArqueoActual(req, res) {
   }
 }
 
+// ── Caja Chica: saldo, reposición ────────────────────────────────────────
+
+async function _calcularSaldoCajaChica(id_caja) {
+  const [[caja]] = await db.promise().query(
+    `SELECT id_caja, tipo, monto_fondo_fijo FROM cajas WHERE id_caja = ?`, [id_caja]
+  );
+  if (!caja) return null;
+
+  const [[arqueo]] = await db.promise().query(
+    `SELECT id_arqueo, monto_apertura FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`,
+    [id_caja]
+  );
+  if (!arqueo) return { caja, arqueo: null, saldo: null };
+
+  const [[{ total_gastos }]] = await db.promise().query(
+    `SELECT COALESCE(SUM(monto), 0) AS total_gastos FROM gastos WHERE id_arqueo = ? AND estado != 'ANULADO' AND metodo_pago = 'EFECTIVO'`,
+    [arqueo.id_arqueo]
+  );
+  const [[{ total_reposiciones }]] = await db.promise().query(
+    `SELECT COALESCE(SUM(monto), 0) AS total_reposiciones FROM movimientos_caja WHERE id_arqueo_destino = ?`,
+    [arqueo.id_arqueo]
+  );
+
+  const saldo = Number(arqueo.monto_apertura) + Number(total_reposiciones) - Number(total_gastos);
+  return { caja, arqueo, saldo: +saldo.toFixed(2) };
+}
+
+async function getSaldoActual(req, res) {
+  try {
+    const { id } = req.params;
+    const info = await _calcularSaldoCajaChica(id);
+    if (!info) return res.status(404).json({ mensaje: 'Caja no encontrada' });
+    if (info.caja.tipo !== 'CHICA') return res.status(400).json({ mensaje: 'Esta caja no es de tipo Chica' });
+
+    const montoFondo = Number(info.caja.monto_fondo_fijo ?? 0);
+    const sugerido = info.saldo === null ? null : +(montoFondo - info.saldo).toFixed(2);
+    res.json({
+      id_caja: info.caja.id_caja,
+      monto_fondo_fijo: montoFondo,
+      saldo_actual: info.saldo,
+      monto_sugerido_reposicion: sugerido !== null && sugerido > 0 ? sugerido : 0,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al calcular el saldo' });
+  }
+}
+
+async function crearMovimiento(req, res) {
+  try {
+    const { id_caja_origen, id_caja_destino, monto, observaciones } = req.body;
+    const montoNum = Number(monto);
+    if (!id_caja_origen || !id_caja_destino || !Number.isFinite(montoNum) || montoNum <= 0) {
+      return res.status(400).json({ mensaje: 'Caja origen, caja destino y monto (> 0) son requeridos' });
+    }
+    if (Number(id_caja_origen) === Number(id_caja_destino)) {
+      return res.status(400).json({ mensaje: 'La caja de origen y destino no pueden ser la misma' });
+    }
+
+    const [[origen]]  = await db.promise().query('SELECT * FROM cajas WHERE id_caja = ? AND activo = 1', [id_caja_origen]);
+    const [[destino]] = await db.promise().query('SELECT * FROM cajas WHERE id_caja = ? AND activo = 1', [id_caja_destino]);
+    if (!origen || !destino) return res.status(404).json({ mensaje: 'Caja origen o destino no encontrada' });
+    if (origen.tipo !== 'GENERAL') return res.status(400).json({ mensaje: 'La caja de origen debe ser tipo General' });
+    if (destino.tipo !== 'CHICA')  return res.status(400).json({ mensaje: 'La caja de destino debe ser tipo Chica' });
+    if (Number(origen.id_sucursal) !== Number(destino.id_sucursal)) {
+      return res.status(400).json({ mensaje: 'La caja de origen y destino deben ser de la misma sucursal' });
+    }
+
+    const [[aqOrigen]]  = await db.promise().query(`SELECT id_arqueo, id_usuario FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`, [id_caja_origen]);
+    const [[aqDestino]] = await db.promise().query(`SELECT id_arqueo FROM arqueos_caja WHERE id_caja = ? AND estado = 'ABIERTA'`, [id_caja_destino]);
+
+    if (aqOrigen && Number(aqOrigen.id_usuario) !== Number(req.user.id_usuario)) {
+      return res.status(400).json({ mensaje: 'No podés reponer desde una caja que no es tu turno abierto' });
+    }
+
+    const [result] = await db.promise().query(
+      `INSERT INTO movimientos_caja
+         (id_caja_origen, id_caja_destino, id_arqueo_origen, id_arqueo_destino, monto, tipo, observaciones, id_usuario)
+       VALUES (?, ?, ?, ?, ?, 'REPOSICION', ?, ?)`,
+      [id_caja_origen, id_caja_destino, aqOrigen?.id_arqueo ?? null, aqDestino?.id_arqueo ?? null, montoNum, observaciones || null, req.user.id_usuario]
+    );
+
+    await auditLog(req.user.id_usuario, 'movimientos_caja', result.insertId, 'INSERT', getIp(req));
+    res.status(201).json({ id_movimiento: result.insertId, mensaje: 'Reposición registrada correctamente' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al registrar la reposición' });
+  }
+}
+
+// Turnos abiertos del usuario actual, sin importar si tiene ver_arqueo_todos —
+// lo usa el formulario de Gasto para dejar elegir explícitamente la caja
+// cuando el usuario tiene más de un turno abierto a la vez (General + Chica).
+async function getMisCajasAbiertas(req, res) {
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT aq.id_arqueo, c.id_caja, c.nombre AS caja, c.tipo, s.nombre AS sucursal
+      FROM arqueos_caja aq
+      JOIN cajas c ON c.id_caja = aq.id_caja
+      JOIN sucursales s ON s.id_sucursal = c.id_sucursal
+      WHERE aq.id_usuario = ? AND aq.estado = 'ABIERTA'
+      ORDER BY c.tipo, c.nombre
+    `, [req.user.id_usuario]);
+    res.json({ cajas: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al obtener tus cajas abiertas' });
+  }
+}
+
+async function getMovimientos(req, res) {
+  try {
+    const { id_caja, fecha_desde, fecha_hasta } = req.query;
+    const where = ['1=1'];
+    const params = [];
+    if (id_caja)      { where.push('(mc.id_caja_origen = ? OR mc.id_caja_destino = ?)'); params.push(id_caja, id_caja); }
+    if (fecha_desde)  { where.push('mc.fecha >= ?'); params.push(`${fecha_desde} 00:00:00`); }
+    if (fecha_hasta)  { where.push('mc.fecha <= ?'); params.push(`${fecha_hasta} 23:59:59`); }
+
+    const [rows] = await db.promise().query(`
+      SELECT mc.id_movimiento, mc.monto, mc.tipo, mc.observaciones,
+        DATE_FORMAT(mc.fecha, '%Y-%m-%d %H:%i') AS fecha,
+        co.nombre AS caja_origen, cd.nombre AS caja_destino,
+        s.nombre AS sucursal,
+        CONCAT(u.nombres, ' ', u.apellidos) AS usuario
+      FROM movimientos_caja mc
+      JOIN cajas co ON co.id_caja = mc.id_caja_origen
+      JOIN cajas cd ON cd.id_caja = mc.id_caja_destino
+      JOIN sucursales s ON s.id_sucursal = cd.id_sucursal
+      JOIN usuarios u ON u.id_usuario = mc.id_usuario
+      WHERE ${where.join(' AND ')}
+      ORDER BY mc.fecha DESC
+      LIMIT 500
+    `, params);
+
+    res.json({ movimientos: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ mensaje: 'Error al obtener movimientos de caja' });
+  }
+}
+
 async function getArqueo(req, res) {
   try {
     const { id } = req.params;
 
     const [[arqueo]] = await db.promise().query(`
-      SELECT aq.*, c.nombre AS caja, c.id_sucursal, s.nombre AS sucursal,
+      SELECT aq.*, c.nombre AS caja, c.id_sucursal, c.tipo AS tipo_caja, s.nombre AS sucursal,
         CONCAT(u.nombres, ' ', u.apellidos) AS usuario
       FROM arqueos_caja aq
       JOIN cajas c ON c.id_caja = aq.id_caja
@@ -157,6 +329,7 @@ async function getArqueo(req, res) {
       return res.status(403).json({ mensaje: 'No tenés acceso a este arqueo' });
     }
 
+    const esGeneral = arqueo.tipo_caja === 'GENERAL';
     const fechaHasta = arqueo.fecha_cierre ?? new Date();
 
     // Cobros de todos los métodos durante el turno (filtrado por arqueo para separar cajas)
@@ -171,32 +344,46 @@ async function getArqueo(req, res) {
       ORDER BY pv.fecha
     `, [arqueo.id_arqueo]);
 
-    // Gastos de todos los métodos durante el turno
-    const [gastos] = await db.promise().query(`
-      SELECT g.id_gasto, g.numero, g.fecha_creacion AS fecha, g.monto, g.metodo_pago,
-        g.descripcion,
-        cg.nombre AS categoria
-      FROM gastos g
-      LEFT JOIN categorias_gasto cg ON cg.id_categoria_gasto = g.id_categoria_gasto
-      WHERE g.estado != 'ANULADO'
-        AND (
-          g.id_arqueo = ?
-          OR (g.id_arqueo IS NULL AND g.id_sucursal = ? AND g.fecha_creacion >= ? AND g.fecha_creacion <= ?)
-        )
-      ORDER BY g.fecha_creacion
-    `, [arqueo.id_arqueo, arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
+    // Gastos de todos los métodos durante el turno. El fallback por NULL-arqueo
+    // solo aplica a cajas Generales (ver _cerrarArqueo para el detalle).
+    const [gastos] = esGeneral
+      ? await db.promise().query(`
+          SELECT g.id_gasto, g.numero, g.fecha_creacion AS fecha, g.monto, g.metodo_pago,
+            g.descripcion,
+            cg.nombre AS categoria
+          FROM gastos g
+          LEFT JOIN categorias_gasto cg ON cg.id_categoria_gasto = g.id_categoria_gasto
+          WHERE g.estado != 'ANULADO'
+            AND (
+              g.id_arqueo = ?
+              OR (g.id_arqueo IS NULL AND g.id_sucursal = ? AND g.fecha_creacion >= ? AND g.fecha_creacion <= ?)
+            )
+          ORDER BY g.fecha_creacion
+        `, [arqueo.id_arqueo, arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta])
+      : await db.promise().query(`
+          SELECT g.id_gasto, g.numero, g.fecha_creacion AS fecha, g.monto, g.metodo_pago,
+            g.descripcion,
+            cg.nombre AS categoria
+          FROM gastos g
+          LEFT JOIN categorias_gasto cg ON cg.id_categoria_gasto = g.id_categoria_gasto
+          WHERE g.estado != 'ANULADO' AND g.id_arqueo = ?
+          ORDER BY g.fecha_creacion
+        `, [arqueo.id_arqueo]);
 
-    // Pagos a proveedores de todos los métodos durante el turno
-    const [pagosCompra] = await db.promise().query(`
-      SELECT pc.id_pago, pc.numero, pc.fecha, pc.monto, pc.metodo_pago,
-        COALESCE(p.razon_social, p.nombre_comercial) AS proveedor
-      FROM pagos_compra pc
-      LEFT JOIN proveedores p ON p.id_proveedor = pc.id_proveedor
-      WHERE pc.id_sucursal = ?
-        AND pc.fecha >= ?
-        AND pc.fecha <= ?
-      ORDER BY pc.fecha
-    `, [arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta]);
+    // Pagos a proveedores de todos los métodos durante el turno. No aplica a
+    // Caja Chica (ver _cerrarArqueo para el detalle de por qué).
+    const [pagosCompra] = esGeneral
+      ? await db.promise().query(`
+          SELECT pc.id_pago, pc.numero, pc.fecha, pc.monto, pc.metodo_pago,
+            COALESCE(p.razon_social, p.nombre_comercial) AS proveedor
+          FROM pagos_compra pc
+          LEFT JOIN proveedores p ON p.id_proveedor = pc.id_proveedor
+          WHERE pc.id_sucursal = ?
+            AND pc.fecha >= ?
+            AND pc.fecha <= ?
+          ORDER BY pc.fecha
+        `, [arqueo.id_sucursal, arqueo.fecha_apertura, fechaHasta])
+      : [[]];
 
     let monto_cierre_sistema_provisional = null;
     if (arqueo.estado === 'ABIERTA') {
@@ -204,8 +391,15 @@ async function getArqueo(req, res) {
       const totalCobros    = cobros.filter(c => c.metodo_pago === 'EFECTIVO').reduce((s, c) => s + Number(c.monto), 0);
       const totalGastos    = gastos.filter(g => g.metodo_pago === 'EFECTIVO').reduce((s, g) => s + Number(g.monto), 0);
       const totalPagosComp = pagosCompra.filter(p => p.metodo_pago === 'EFECTIVO').reduce((s, p) => s + Number(p.monto), 0);
+      const [[{ total_mov_salida }]] = await db.promise().query(
+        `SELECT COALESCE(SUM(monto), 0) AS total_mov_salida FROM movimientos_caja WHERE id_arqueo_origen = ?`, [arqueo.id_arqueo]
+      );
+      const [[{ total_mov_entrada }]] = await db.promise().query(
+        `SELECT COALESCE(SUM(monto), 0) AS total_mov_entrada FROM movimientos_caja WHERE id_arqueo_destino = ?`, [arqueo.id_arqueo]
+      );
       monto_cierre_sistema_provisional =
-        Number(arqueo.monto_apertura) + totalCobros - totalGastos - totalPagosComp;
+        Number(arqueo.monto_apertura) + totalCobros - totalGastos - totalPagosComp
+        - Number(total_mov_salida) + Number(total_mov_entrada);
     }
 
     res.json({ arqueo, cobros, gastos, pagosCompra, monto_cierre_sistema_provisional });
@@ -260,7 +454,7 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
     }
 
     const [[arqueo]] = await db.promise().query(`
-      SELECT aq.*, c.id_sucursal
+      SELECT aq.*, c.id_sucursal, c.tipo AS tipo_caja
       FROM arqueos_caja aq
       JOIN cajas c ON c.id_caja = aq.id_caja
       WHERE aq.id_arqueo = ?
@@ -273,6 +467,8 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
       return res.status(403).json({ mensaje: 'Solo el cajero que abrió el turno puede cerrarlo' });
     }
 
+    const esGeneral = arqueo.tipo_caja === 'GENERAL';
+
     // Cobros en efectivo del turno (filtrado por arqueo para separar cajas)
     const [[{ total_cobros }]] = await db.promise().query(`
       SELECT COALESCE(SUM(monto), 0) AS total_cobros
@@ -280,29 +476,54 @@ async function _cerrarArqueo(req, res, omitirCheckDueno) {
       WHERE id_arqueo = ? AND metodo_pago = 'EFECTIVO'
     `, [arqueo.id_arqueo]);
 
-    // Gastos en efectivo del turno
-    const [[{ total_gastos }]] = await db.promise().query(`
-      SELECT COALESCE(SUM(monto), 0) AS total_gastos
-      FROM gastos
-      WHERE metodo_pago = 'EFECTIVO' AND estado != 'ANULADO'
-        AND (
-          id_arqueo = ?
-          OR (id_arqueo IS NULL AND id_sucursal = ? AND fecha_creacion >= ?)
-        )
-    `, [arqueo.id_arqueo, arqueo.id_sucursal, arqueo.fecha_apertura]);
+    // Gastos en efectivo del turno. El fallback por NULL-arqueo/sucursal solo
+    // aplica a cajas Generales: en Caja Chica los gastos SIEMPRE deben quedar
+    // asociados a su propio arqueo, y el fallback por sucursal bebe gastos de
+    // otro turno abierto en simultáneo (p. ej. la General de la misma sucursal).
+    const [[{ total_gastos }]] = esGeneral
+      ? await db.promise().query(`
+          SELECT COALESCE(SUM(monto), 0) AS total_gastos
+          FROM gastos
+          WHERE metodo_pago = 'EFECTIVO' AND estado != 'ANULADO'
+            AND (
+              id_arqueo = ?
+              OR (id_arqueo IS NULL AND id_sucursal = ? AND fecha_creacion >= ?)
+            )
+        `, [arqueo.id_arqueo, arqueo.id_sucursal, arqueo.fecha_apertura])
+      : await db.promise().query(`
+          SELECT COALESCE(SUM(monto), 0) AS total_gastos
+          FROM gastos
+          WHERE metodo_pago = 'EFECTIVO' AND estado != 'ANULADO' AND id_arqueo = ?
+        `, [arqueo.id_arqueo]);
 
-    // Pagos a proveedores en efectivo del turno
-    const [[{ total_pagos_compra }]] = await db.promise().query(`
-      SELECT COALESCE(SUM(monto), 0) AS total_pagos_compra
-      FROM pagos_compra
-      WHERE id_sucursal = ? AND metodo_pago = 'EFECTIVO' AND fecha >= ?
-    `, [arqueo.id_sucursal, arqueo.fecha_apertura]);
+    // Pagos a proveedores en efectivo del turno. No aplica a Caja Chica: los
+    // pagos a proveedores no salen de la petty cash, y esta consulta está
+    // scoped por sucursal/fecha (no por id_arqueo), así que si se dejara
+    // correr también para Chica restaría el mismo monto de ambas cajas
+    // cuando General y Chica están abiertas a la vez en la misma sucursal.
+    const total_pagos_compra = esGeneral
+      ? (await db.promise().query(`
+          SELECT COALESCE(SUM(monto), 0) AS total_pagos_compra
+          FROM pagos_compra
+          WHERE id_sucursal = ? AND metodo_pago = 'EFECTIVO' AND fecha >= ?
+        `, [arqueo.id_sucursal, arqueo.fecha_apertura]))[0][0].total_pagos_compra
+      : 0;
+
+    // Movimientos entre cajas (reposiciones de Caja Chica) del turno
+    const [[{ total_mov_salida }]] = await db.promise().query(
+      `SELECT COALESCE(SUM(monto), 0) AS total_mov_salida FROM movimientos_caja WHERE id_arqueo_origen = ?`, [arqueo.id_arqueo]
+    );
+    const [[{ total_mov_entrada }]] = await db.promise().query(
+      `SELECT COALESCE(SUM(monto), 0) AS total_mov_entrada FROM movimientos_caja WHERE id_arqueo_destino = ?`, [arqueo.id_arqueo]
+    );
 
     const monto_cierre_sistema =
       Number(arqueo.monto_apertura) +
       Number(total_cobros) -
       Number(total_gastos) -
-      Number(total_pagos_compra);
+      Number(total_pagos_compra) -
+      Number(total_mov_salida) +
+      Number(total_mov_entrada);
 
     await db.promise().query(`
       UPDATE arqueos_caja
@@ -437,4 +658,5 @@ module.exports = {
   getArqueos, getArqueoActual, getArqueo,
   abrirCaja, cerrarCaja,
   getLibroCaja,
+  getSaldoActual, crearMovimiento, getMovimientos, getMisCajasAbiertas,
 };
