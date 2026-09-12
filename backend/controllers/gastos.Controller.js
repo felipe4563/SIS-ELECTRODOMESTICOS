@@ -204,7 +204,7 @@ const crearGasto = async (req, res) => {
     const {
       id_categoria_gasto, id_sucursal, id_proveedor, descripcion,
       fecha, id_moneda, tipo_cambio, monto, metodo_pago,
-      numero_comprobante, observaciones,
+      numero_comprobante, observaciones, id_caja,
     } = req.body;
 
     if (!id_categoria_gasto || !id_sucursal || !descripcion?.trim() || !fecha || !id_moneda || !monto || !metodo_pago) {
@@ -219,12 +219,26 @@ const crearGasto = async (req, res) => {
       return res.status(400).json({ mensaje: `Número de comprobante requerido para gastos ≥ ${montoMin}` });
     }
 
-    // Si el usuario tiene un turno de caja abierto, el gasto queda atado a ese arqueo
-    // (igual que los cobros de venta) — así el arqueo puede mostrarlo/descontarlo con precisión.
-    const [[arqueoActivo]] = await db.promise().query(
-      `SELECT id_arqueo FROM arqueos_caja WHERE id_usuario = ? AND estado = 'ABIERTA' ORDER BY fecha_apertura DESC LIMIT 1`,
-      [req.user.id_usuario]
-    );
+    // El gasto queda atado al arqueo abierto de la caja que el usuario eligió
+    // explícitamente (o, si no mandó id_caja, al más reciente que tenga abierto
+    // — compatibilidad con clientes viejos). Antes se tomaba SIEMPRE el más
+    // reciente sin dejar elegir, lo que mezclaba Caja General y Caja Chica
+    // cuando un usuario tenía ambas abiertas a la vez.
+    let arqueoActivo;
+    if (id_caja) {
+      const [[aq]] = await db.promise().query(
+        `SELECT id_arqueo FROM arqueos_caja WHERE id_caja = ? AND id_usuario = ? AND estado = 'ABIERTA'`,
+        [id_caja, req.user.id_usuario]
+      );
+      if (!aq) return res.status(400).json({ mensaje: 'No tenés un turno abierto en la caja seleccionada' });
+      arqueoActivo = aq;
+    } else {
+      const [[aq]] = await db.promise().query(
+        `SELECT id_arqueo FROM arqueos_caja WHERE id_usuario = ? AND estado = 'ABIERTA' ORDER BY fecha_apertura DESC LIMIT 1`,
+        [req.user.id_usuario]
+      );
+      arqueoActivo = aq;
+    }
 
     const numero = await generarNumero();
     const [result] = await db.promise().query(`
