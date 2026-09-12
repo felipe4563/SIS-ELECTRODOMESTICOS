@@ -40,10 +40,16 @@ const getFormData = async (req, res) => {
 const getCategorias = async (req, res) => {
   try {
     const { activo } = req.query;
-    let sql = 'SELECT * FROM categorias_gasto';
+    let sql = `
+      SELECT cg.*, p.nombre AS padre_nombre,
+             COUNT(DISTINCT h.id_categoria_gasto) AS total_subcategorias
+      FROM categorias_gasto cg
+      LEFT JOIN categorias_gasto p ON cg.id_categoria_gasto_padre = p.id_categoria_gasto
+      LEFT JOIN categorias_gasto h ON h.id_categoria_gasto_padre = cg.id_categoria_gasto
+    `;
     const params = [];
-    if (activo !== undefined) { sql += ' WHERE activo = ?'; params.push(activo); }
-    sql += ' ORDER BY id_categoria_gasto';
+    if (activo !== undefined) { sql += ' WHERE cg.activo = ?'; params.push(activo); }
+    sql += ' GROUP BY cg.id_categoria_gasto ORDER BY cg.id_categoria_gasto_padre IS NOT NULL, p.nombre, cg.nombre';
     const [rows] = await db.promise().query(sql, params);
     res.json({ categorias: rows });
   } catch (e) { res.status(500).json({ mensaje: e.message }); }
@@ -51,11 +57,21 @@ const getCategorias = async (req, res) => {
 
 const crearCategoria = async (req, res) => {
   try {
-    const { nombre, descripcion } = req.body;
+    const { nombre, descripcion, id_categoria_gasto_padre } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ mensaje: 'Nombre requerido' });
+
+    if (id_categoria_gasto_padre) {
+      const [[padre]] = await db.promise().query(
+        'SELECT id_categoria_gasto_padre FROM categorias_gasto WHERE id_categoria_gasto = ?',
+        [id_categoria_gasto_padre]
+      );
+      if (!padre) return res.status(400).json({ mensaje: 'Categoría padre no encontrada' });
+      if (padre.id_categoria_gasto_padre) return res.status(400).json({ mensaje: 'No se puede anidar una subcategoría dentro de otra subcategoría' });
+    }
+
     const [result] = await db.promise().query(
-      'INSERT INTO categorias_gasto (nombre, descripcion) VALUES (?, ?)',
-      [nombre.trim(), descripcion || null]
+      'INSERT INTO categorias_gasto (nombre, descripcion, id_categoria_gasto_padre) VALUES (?, ?, ?)',
+      [nombre.trim(), descripcion || null, id_categoria_gasto_padre || null]
     );
     await auditLog(req.user.id_usuario, 'categorias_gasto', result.insertId, 'INSERT', getIp(req));
     res.status(201).json({ id_categoria_gasto: result.insertId, mensaje: 'Categoría creada' });
@@ -68,11 +84,22 @@ const crearCategoria = async (req, res) => {
 const updateCategoria = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, activo } = req.body;
+    const { nombre, descripcion, activo, id_categoria_gasto_padre } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ mensaje: 'Nombre requerido' });
+
+    if (id_categoria_gasto_padre) {
+      if (Number(id_categoria_gasto_padre) === Number(id)) {
+        return res.status(400).json({ mensaje: 'Una categoría no puede ser su propio padre' });
+      }
+      const [[{ cntHijos }]] = await db.promise().query(
+        'SELECT COUNT(*) AS cntHijos FROM categorias_gasto WHERE id_categoria_gasto_padre = ?', [id]
+      );
+      if (cntHijos > 0) return res.status(400).json({ mensaje: 'No se puede convertir en subcategoría: ya tiene subcategorías propias' });
+    }
+
     await db.promise().query(
-      'UPDATE categorias_gasto SET nombre=?, descripcion=?, activo=? WHERE id_categoria_gasto=?',
-      [nombre.trim(), descripcion || null, activo ?? 1, id]
+      'UPDATE categorias_gasto SET nombre=?, descripcion=?, activo=?, id_categoria_gasto_padre=? WHERE id_categoria_gasto=?',
+      [nombre.trim(), descripcion || null, activo ?? 1, id_categoria_gasto_padre || null, id]
     );
     await auditLog(req.user.id_usuario, 'categorias_gasto', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Categoría actualizada' });
