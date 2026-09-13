@@ -623,6 +623,8 @@ function TabCategorias({ puede }) {
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Nombre</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Categoría padre</th>
+                <th className="text-center px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Subcategorías</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Descripción</th>
                 <th className="text-center px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Estado</th>
                 {puede('categorias_gestionar', 'gastos') && (
@@ -632,23 +634,27 @@ function TabCategorias({ puede }) {
             </thead>
             <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
               {loading ? (
-                <tr><td colSpan={4} className="py-10">
+                <tr><td colSpan={6} className="py-10">
                   <div className="flex items-center justify-center gap-2 text-zinc-400"><Spinner /><span className="text-sm">Cargando...</span></div>
                 </td></tr>
               ) : cats.length === 0 ? (
-                <tr><td colSpan={4} className="text-center py-10 text-sm text-zinc-400">Sin categorías registradas</td></tr>
+                <tr><td colSpan={6} className="text-center py-10 text-sm text-zinc-400">Sin categorías registradas</td></tr>
               ) : cats.map(c => (
                 <tr key={c.id_categoria_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
                   <td className="px-5 py-3.5">
                     <span className={`font-medium text-zinc-900 dark:text-white ${c.id_categoria_gasto_padre ? 'pl-4 border-l-2 border-yellow-400/40' : ''}`}>
                       {c.id_categoria_gasto_padre ? '↳ ' : ''}{c.nombre}
                     </span>
-                    {c.padre_nombre && (
-                      <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">{c.padre_nombre}</span>
-                    )}
-                    {c.total_subcategorias > 0 && (
-                      <span className="ml-2 inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{c.total_subcategorias} subcategoría{c.total_subcategorias !== 1 ? 's' : ''}</span>
-                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {c.padre_nombre
+                      ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">{c.padre_nombre}</span>
+                      : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
+                    {c.total_subcategorias > 0
+                      ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{c.total_subcategorias}</span>
+                      : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
                   </td>
                   <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">{c.descripcion || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</td>
                   <td className="px-5 py-3.5 text-center"><BadgeActivo activo={c.activo} /></td>

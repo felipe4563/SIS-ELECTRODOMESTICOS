@@ -49,7 +49,7 @@ const getCategorias = async (req, res) => {
     `;
     const params = [];
     if (activo !== undefined) { sql += ' WHERE cg.activo = ?'; params.push(activo); }
-    sql += ' GROUP BY cg.id_categoria_gasto ORDER BY cg.id_categoria_gasto_padre IS NOT NULL, p.nombre, cg.nombre';
+    sql += ' GROUP BY cg.id_categoria_gasto ORDER BY COALESCE(p.nombre, cg.nombre), cg.id_categoria_gasto_padre IS NOT NULL, cg.nombre';
     const [rows] = await db.promise().query(sql, params);
     res.json({ categorias: rows });
   } catch (e) { res.status(500).json({ mensaje: e.message }); }
