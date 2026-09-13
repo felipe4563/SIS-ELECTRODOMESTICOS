@@ -72,3 +72,8 @@ backend/backups/
 #   Planillas de prueba — solo local
 # ===============================
 *.xlsx
+
+# ===============================
+#   Snapshots de Playwright MCP — solo local
+# ===============================
+.playwright-mcp/

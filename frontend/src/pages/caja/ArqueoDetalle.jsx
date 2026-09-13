@@ -753,10 +753,12 @@ export default function ArqueoDetalle() {
             🖨️ Imprimir
           </Link>
 
-          <Link to="/caja"
+          <button
+            type="button"
+            onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate('/caja'))}
             className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
             Volver
-          </Link>
+          </button>
           {esAbierta && puedoRegistrarGasto && (
             <button onClick={() => setModal('gasto')}
               className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">

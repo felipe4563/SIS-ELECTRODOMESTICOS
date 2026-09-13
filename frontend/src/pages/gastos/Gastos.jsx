@@ -563,7 +563,7 @@ function ModalDetalle({ id, onClose, onRefresh, puede }) {
 function TabCategorias({ puede }) {
   const [cats, setCats]         = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [modalCat, setModalCat] = useState(null);
+  const [modalCat, setModalCat] = useState(false);
   const [err, setErr]           = useState('');
 
   const cargar = useCallback(async () => {
