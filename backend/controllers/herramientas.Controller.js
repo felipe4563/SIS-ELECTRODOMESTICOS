@@ -406,6 +406,17 @@ exports.importarProductos = async (req, res) => {
         );
         suc = { id_sucursal: insSuc.insertId };
         sucursalesCreadas++;
+
+        // Toda sucursal nueva arranca con su Caja General y su Caja Chica,
+        // igual que al crearla manualmente desde Configuración → Sucursales.
+        await conn.query(
+          `INSERT INTO cajas (id_sucursal, nombre, tipo, monto_fondo_fijo) VALUES (?, 'Caja General', 'GENERAL', NULL)`,
+          [suc.id_sucursal]
+        );
+        await conn.query(
+          `INSERT INTO cajas (id_sucursal, nombre, tipo, monto_fondo_fijo) VALUES (?, 'Caja Chica', 'CHICA', 1000)`,
+          [suc.id_sucursal]
+        );
       }
 
       const [insDep] = await conn.query(

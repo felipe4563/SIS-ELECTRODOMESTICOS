@@ -126,6 +126,7 @@ const MENU = [
   {
     label: 'Caja',
     items: [
+      { label: 'Resumen',    path: '/caja/resumen', icon: 'bar-chart', anyOf: [['ver','caja'],['ver','cobros'],['ver','bancos']] },
       { label: 'Caja',       path: '/caja',       icon: 'wallet',    action: 'ver',              subject: 'caja' },
       { label: 'Libro Caja', path: '/caja/libro',  icon: 'clipboard', action: 'ver_libro', subject: 'caja' },
     ],

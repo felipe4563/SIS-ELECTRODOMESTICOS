@@ -52,26 +52,48 @@ const createSucursal = async (req, res) => {
     const latVal = (latitud === '' || latitud === undefined || latitud === null) ? null : Number(latitud);
     const lngVal = (longitud === '' || longitud === undefined || longitud === null) ? null : Number(longitud);
 
-    const [result] = await db.promise().query(
-      `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, latitud, longitud, radio_metros)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [empresaId, codigo.trim(), nombre.trim(), tipo,
-       direccion ?? null, ciudad ?? null, telefono ?? null,
-       responsable ?? null, es_punto_venta ? 1 : 1,
-       latVal, lngVal, Number(radio_metros) > 0 ? Number(radio_metros) : 100]
-    );
+    const conn = await db.promise().getConnection();
+    try {
+      await conn.beginTransaction();
 
-    const ip = req.ip || req.socket?.remoteAddress || null;
-    await db.promise().query(
-      `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen)
-       VALUES (?, 'sucursales', ?, 'INSERT', ?)`,
-      [req.user.id_usuario, result.insertId, ip]
-    );
+      const [result] = await conn.query(
+        `INSERT INTO sucursales (id_empresa, codigo, nombre, tipo, direccion, ciudad, telefono, responsable, es_punto_venta, latitud, longitud, radio_metros)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [empresaId, codigo.trim(), nombre.trim(), tipo,
+         direccion ?? null, ciudad ?? null, telefono ?? null,
+         responsable ?? null, es_punto_venta ? 1 : 1,
+         latVal, lngVal, Number(radio_metros) > 0 ? Number(radio_metros) : 100]
+      );
+      const idSucursal = result.insertId;
 
-    const [nueva] = await db.promise().query(
-      `SELECT * FROM sucursales WHERE id_sucursal = ?`, [result.insertId]
-    );
-    return res.status(201).json({ sucursal: nueva[0] });
+      // Toda sucursal nueva arranca con su Caja General y su Caja Chica,
+      // para que no haya que crearlas a mano cada vez.
+      await conn.query(
+        `INSERT INTO cajas (id_sucursal, nombre, tipo, monto_fondo_fijo) VALUES (?, 'Caja General', 'GENERAL', NULL)`,
+        [idSucursal]
+      );
+      await conn.query(
+        `INSERT INTO cajas (id_sucursal, nombre, tipo, monto_fondo_fijo) VALUES (?, 'Caja Chica', 'CHICA', 1000)`,
+        [idSucursal]
+      );
+
+      const ip = req.ip || req.socket?.remoteAddress || null;
+      await conn.query(
+        `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen)
+         VALUES (?, 'sucursales', ?, 'INSERT', ?)`,
+        [req.user.id_usuario, idSucursal, ip]
+      );
+
+      await conn.commit();
+
+      const [nueva] = await conn.query(`SELECT * FROM sucursales WHERE id_sucursal = ?`, [idSucursal]);
+      return res.status(201).json({ sucursal: nueva[0] });
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY')
       return res.status(409).json({ error: 'El código de sucursal ya existe' });

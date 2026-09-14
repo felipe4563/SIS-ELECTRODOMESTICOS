@@ -64,6 +64,7 @@ import Gastos from './pages/gastos/Gastos';
 
 // ── Caja ─────────────────────────────────────────────────────────────────────
 import Caja          from './pages/caja/Caja';
+import ResumenCajas  from './pages/caja/ResumenCajas';
 import ArqueoDetalle from './pages/caja/ArqueoDetalle';
 import ArqueoImprimirDirecto from './pages/caja/ArqueoImprimirDirecto';
 import LibroCaja     from './pages/caja/LibroCaja';
@@ -452,6 +453,9 @@ export default function App() {
               } />
 
               {/* ── Caja ─────────────────────────────────────────────── */}
+              <Route path="/caja/resumen" element={
+                <PageRoute anyOf={[['ver','caja'],['ver','cobros'],['ver','bancos']]}><ResumenCajas /></PageRoute>
+              } />
               <Route path="/caja" element={
                 <PageRoute action="ver" subject="caja"><Caja /></PageRoute>
               } />
