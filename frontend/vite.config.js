@@ -9,6 +9,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registramos el service worker a mano en main.jsx (virtual:pwa-register)
+      // para poder forzar la recarga automática cuando hay una versión nueva,
+      // en vez de dejar que el usuario se quede con la app vieja hasta que
+      // haga un hard refresh por su cuenta.
+      injectRegister: false,
       includeAssets: ['logo.png'],
       manifest: {
         name: 'Mega Electra',
