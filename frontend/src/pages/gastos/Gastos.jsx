@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gastosService } from '../../services/gastos.service';
-import { cajaService } from '../../services/caja.service';
 import { usePermission } from '../../hooks/usePermission';
-import { hoyLocal } from '../../utils/fechaLocal';
+import ModalGasto from '../../components/gastos/ModalGasto';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const ESTADOS = ['REGISTRADO', 'APROBADO', 'PAGADO', 'ANULADO'];
-const METODOS = ['EFECTIVO', 'TRANSFERENCIA', 'QR', 'CHEQUE', 'TARJETA', 'OTRO'];
 
 const BADGE = {
   REGISTRADO: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
@@ -165,181 +163,6 @@ function ModalCategoria({ item, categorias, onClose, onSave }) {
   );
 }
 
-// ── Modal Gasto ───────────────────────────────────────────────────────────────
-function ModalGasto({ item, categorias, sucursales, monedas, onClose, onSave }) {
-  const hoy        = hoyLocal();
-  const monedaBase = monedas.find(m => m.es_moneda_base) || monedas[0] || {};
-
-  const [form, setForm] = useState({
-    id_categoria_gasto: item?.id_categoria_gasto || '',
-    id_sucursal:        item?.id_sucursal || sucursales[0]?.id_sucursal || '',
-    id_proveedor:       item?.id_proveedor || '',
-    descripcion:        item?.descripcion || '',
-    fecha:              item?.fecha?.slice(0, 10) || hoy,
-    id_moneda:          item?.id_moneda || monedaBase.id_moneda || '',
-    tipo_cambio:        item?.tipo_cambio || 1,
-    monto:              item?.monto || '',
-    metodo_pago:        item?.metodo_pago || 'EFECTIVO',
-    numero_comprobante: item?.numero_comprobante || '',
-    observaciones:      item?.observaciones || '',
-    id_caja:            item?.id_caja || '',
-  });
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const [categoriaRaizSeleccionada, setCategoriaRaizSeleccionada] = useState(() => {
-    if (!item?.id_categoria_gasto) return '';
-    const actual = categorias.find(c => c.id_categoria_gasto === item.id_categoria_gasto);
-    return actual?.id_categoria_gasto_padre ? String(actual.id_categoria_gasto_padre) : String(item.id_categoria_gasto);
-  });
-  const subcategorias = categorias.filter(c => c.activo && String(c.id_categoria_gasto_padre) === categoriaRaizSeleccionada);
-
-  const [cajasAbiertas, setCajasAbiertas] = useState([]);
-  useEffect(() => {
-    cajaService.getMisCajasAbiertas()
-      .then(r => {
-        const cajas = r.data.cajas || [];
-        setCajasAbiertas(cajas);
-        if (cajas.length === 1) setForm(f => ({ ...f, id_caja: cajas[0].id_caja }));
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      if (item) await gastosService.updateGasto(item.id_gasto, form);
-      else      await gastosService.crearGasto(form);
-      onSave();
-    } catch (e) {
-      setError(e.response?.data?.mensaje || 'Error al guardar');
-    } finally { setLoading(false); }
-  };
-
-  return (
-    <ModalShell onClose={onClose} title={item ? `Editar · ${item.numero}` : 'Nuevo gasto'} maxW="sm:max-w-2xl">
-      <form onSubmit={handleSubmit} className="p-6 space-y-5">
-        {error && <ErrorBox msg={error} />}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL}>Categoría *</label>
-            <select
-              value={categoriaRaizSeleccionada}
-              onChange={e => {
-                const raizId = e.target.value;
-                setCategoriaRaizSeleccionada(raizId);
-                const raiz = categorias.find(c => String(c.id_categoria_gasto) === raizId);
-                const tieneHijos = categorias.some(c => String(c.id_categoria_gasto_padre) === raizId);
-                set('id_categoria_gasto', tieneHijos ? '' : (raiz?.id_categoria_gasto || ''));
-              }}
-              className={INPUT}
-              required
-            >
-              <option value="">Seleccionar...</option>
-              {categorias.filter(c => c.activo && !c.id_categoria_gasto_padre).map(c => (
-                <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL}>Subcategoría</label>
-            <select
-              value={form.id_categoria_gasto}
-              onChange={e => set('id_categoria_gasto', e.target.value)}
-              className={INPUT}
-              disabled={!categoriaRaizSeleccionada || subcategorias.length === 0}
-              required={subcategorias.length > 0}
-            >
-              <option value="">{subcategorias.length ? 'Seleccionar...' : '— Sin subcategorías —'}</option>
-              {subcategorias.map(c => (
-                <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className={LABEL}>Sucursal *</label>
-          <select value={form.id_sucursal} onChange={e => set('id_sucursal', e.target.value)} className={INPUT} required>
-            {sucursales.map(s => (
-              <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
-            ))}
-          </select>
-        </div>
-
-        {cajasAbiertas.length > 1 && (
-          <div>
-            <label className={LABEL}>Caja *</label>
-            <select value={form.id_caja} onChange={e => set('id_caja', e.target.value)} className={INPUT} required>
-              <option value="">Seleccionar...</option>
-              {cajasAbiertas.map(c => (
-                <option key={c.id_caja} value={c.id_caja}>{c.caja} ({c.tipo === 'CHICA' ? 'Chica' : 'General'}) — {c.sucursal}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div>
-          <label className={LABEL}>Descripción *</label>
-          <input value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Ej. Compra de material de limpieza" className={INPUT} required />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL}>Fecha *</label>
-            <input type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} className={INPUT} required />
-          </div>
-          <div>
-            <label className={LABEL}>Método de pago *</label>
-            <select value={form.metodo_pago} onChange={e => set('metodo_pago', e.target.value)} className={INPUT}>
-              {METODOS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL}>Moneda *</label>
-            <select value={form.id_moneda} onChange={e => set('id_moneda', e.target.value)} className={INPUT} required>
-              {monedas.map(m => (
-                <option key={m.id_moneda} value={m.id_moneda}>{m.nombre} ({m.simbolo})</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL}>Monto *</label>
-            <input type="number" step="0.01" min="0" value={form.monto} onChange={e => set('monto', e.target.value)} placeholder="0.00" className={INPUT} required />
-          </div>
-        </div>
-
-        <div>
-          <label className={LABEL}>N° Comprobante</label>
-          <input value={form.numero_comprobante} onChange={e => set('numero_comprobante', e.target.value)} placeholder="Factura, recibo, N° de nota..." className={INPUT} />
-        </div>
-
-        <div>
-          <label className={LABEL}>Observaciones</label>
-          <textarea value={form.observaciones} onChange={e => set('observaciones', e.target.value)} rows={2} placeholder="Notas adicionales..." className={`${INPUT} resize-none`} />
-        </div>
-
-        <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
-            Cancelar
-          </button>
-          <button type="submit" disabled={loading} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 disabled:opacity-50 transition-colors">
-            {loading ? 'Guardando...' : 'Guardar gasto'}
-          </button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-}
-
 // ── Modal Detalle ─────────────────────────────────────────────────────────────
 function ModalDetalle({ id, onClose, onRefresh, puede }) {
   const [gasto, setGasto]           = useState(null);
@@ -359,7 +182,14 @@ function ModalDetalle({ id, onClose, onRefresh, puede }) {
     finally { setLoading(false); }
   }, [id]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    let cancelado = false;
+    gastosService.getGasto(id)
+      .then(r => { if (!cancelado) setGasto(r.data.gasto); })
+      .catch(() => { if (!cancelado) setErr('Error al cargar el gasto'); })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
+  }, [id]);
 
   const ejecutar = async (a) => {
     setErr('');
@@ -586,7 +416,14 @@ function TabCategorias({ puede }) {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => {
+    let cancelado = false;
+    gastosService.getCategorias()
+      .then(r => { if (!cancelado) setCats(r.data.categorias); })
+      .catch(() => { if (!cancelado) setErr('Error al cargar categorías'); })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
+  }, []);
 
   const handleDelete = async (c) => {
     if (!window.confirm(`¿Eliminar categoría "${c.nombre}"?`)) return;
@@ -808,7 +645,27 @@ export default function Gastos() {
     finally { setLoading(false); }
   }, [filtros]);
 
-  useEffect(() => { if (tab === 'gastos') cargarGastos(); }, [filtros, tab, cargarGastos]);
+  useEffect(() => {
+    if (tab !== 'gastos') return;
+    let cancelado = false;
+    // Se re-ejecuta en cada cambio de filtro/tab (no solo al montar), así que
+    // necesitamos mostrar el spinner de inmediato en vez de esperar al fetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    setErr('');
+    const params = {};
+    Object.entries(filtros).forEach(([k, v]) => { if (v !== '') params[k] = v; });
+    gastosService.getGastos(params)
+      .then(r => {
+        if (cancelado) return;
+        setGastos(r.data.gastos);
+        setTotal(r.data.total);
+        setPages(r.data.pages);
+      })
+      .catch(() => { if (!cancelado) setErr('Error al cargar gastos'); })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
+  }, [filtros, tab]);
 
   const setFiltro = (k, v) => setFiltros(f => ({ ...f, [k]: v, page: 1 }));
 
@@ -837,19 +694,9 @@ export default function Gastos() {
       )}
 
       {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Gastos</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Registro y seguimiento de gastos operativos</p>
-        </div>
-        {puede('crear', 'gastos') && tab === 'gastos' && (
-          <button
-            onClick={() => setModalGasto({})}
-            className="self-start sm:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors shadow-sm"
-          >
-            + Nuevo gasto
-          </button>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white">Gastos</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Registro y seguimiento de gastos operativos</p>
       </div>
 
       {/* Tabs */}
