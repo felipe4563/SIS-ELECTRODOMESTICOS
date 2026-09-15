@@ -777,7 +777,7 @@ export default function Gastos() {
   const [err, setErr]         = useState('');
 
   const [filtros, setFiltros] = useState({
-    id_categoria_gasto: '', id_sucursal: '', estado: '',
+    id_categoria_gasto: '', id_categoria_raiz: '', id_sucursal: '', estado: '',
     fecha_desde: '', fecha_hasta: '', busqueda: '', page: 1, limit: 20,
   });
 
@@ -890,9 +890,28 @@ export default function Gastos() {
                 onChange={e => setFiltro('busqueda', e.target.value)}
                 className={`${FC} sm:col-span-2 lg:col-span-1`}
               />
-              <select value={filtros.id_categoria_gasto} onChange={e => setFiltro('id_categoria_gasto', e.target.value)} className={FC}>
-                <option value="">Todas las categorías</option>
-                {categorias.map(c => <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>)}
+              <select
+                value={filtros.id_categoria_raiz}
+                onChange={e => setFiltros(f => ({ ...f, id_categoria_raiz: e.target.value, id_categoria_gasto: '', page: 1 }))}
+                className={FC}
+              >
+                <option value="">Todos los tipos de gasto</option>
+                {categorias.filter(c => !c.id_categoria_gasto_padre).map(c => (
+                  <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
+                ))}
+              </select>
+              <select
+                value={filtros.id_categoria_gasto}
+                onChange={e => setFiltro('id_categoria_gasto', e.target.value)}
+                className={FC}
+                disabled={!filtros.id_categoria_raiz}
+              >
+                <option value="">{filtros.id_categoria_raiz ? 'Todas las subcategorías' : 'Elegí un tipo de gasto primero'}</option>
+                {categorias
+                  .filter(c => String(c.id_categoria_gasto_padre) === String(filtros.id_categoria_raiz))
+                  .map(c => (
+                    <option key={c.id_categoria_gasto} value={c.id_categoria_gasto}>{c.nombre}</option>
+                  ))}
               </select>
               {puede('ver_todos', 'gastos') && (
                 <select value={filtros.id_sucursal} onChange={e => setFiltro('id_sucursal', e.target.value)} className={FC}>
@@ -907,7 +926,7 @@ export default function Gastos() {
               <input type="date" value={filtros.fecha_desde} onChange={e => setFiltro('fecha_desde', e.target.value)} className={FC} />
               <input type="date" value={filtros.fecha_hasta} onChange={e => setFiltro('fecha_hasta', e.target.value)} className={FC} />
               <button
-                onClick={() => setFiltros({ id_categoria_gasto: '', id_sucursal: '', estado: '', fecha_desde: '', fecha_hasta: '', busqueda: '', page: 1, limit: 20 })}
+                onClick={() => setFiltros({ id_categoria_gasto: '', id_categoria_raiz: '', id_sucursal: '', estado: '', fecha_desde: '', fecha_hasta: '', busqueda: '', page: 1, limit: 20 })}
                 className="px-3 py-2 rounded-xl text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors"
               >
                 Limpiar

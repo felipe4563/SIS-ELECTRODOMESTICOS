@@ -126,12 +126,14 @@ const deleteCategoria = async (req, res) => {
 
 const getGastos = async (req, res) => {
   try {
-    const { id_categoria_gasto, id_sucursal, estado, fecha_desde, fecha_hasta, busqueda, page = 1, limit = 20 } = req.query;
+    const { id_categoria_gasto, id_categoria_raiz, id_sucursal, estado, fecha_desde, fecha_hasta, busqueda, page = 1, limit = 20 } = req.query;
     const offset  = (Number(page) - 1) * Number(limit);
     const where   = ['1=1'];
     const params  = [];
 
     if (id_categoria_gasto) { where.push('g.id_categoria_gasto=?'); params.push(id_categoria_gasto); }
+    // Filtro por "tipo de gasto" (categoría raíz): incluye la raíz misma y todas sus subcategorías
+    if (id_categoria_raiz)  { where.push('(cg.id_categoria_gasto=? OR cg.id_categoria_gasto_padre=?)'); params.push(id_categoria_raiz, id_categoria_raiz); }
     // Sin permiso ver_todos: forzar filtro a la sucursal del usuario
     if (!req.ability.can('ver_todos', 'gastos')) {
       where.push('g.id_sucursal=?');
