@@ -560,11 +560,22 @@ function ModalDetalle({ id, onClose, onRefresh, puede }) {
 }
 
 // ── Tab Categorías ────────────────────────────────────────────────────────────
+const CARPETA_COLORES = [
+  { bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-800/40', text: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' },
+  { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800/40', text: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' },
+  { bg: 'bg-pink-50 dark:bg-pink-900/20', border: 'border-pink-200 dark:border-pink-800/40', text: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300' },
+  { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800/40', text: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' },
+  { bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800/40', text: 'text-purple-600 dark:text-purple-400', badge: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300' },
+  { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800/40', text: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' },
+];
+
 function TabCategorias({ puede }) {
   const [cats, setCats]         = useState([]);
   const [loading, setLoading]   = useState(true);
   const [modalCat, setModalCat] = useState(false);
   const [err, setErr]           = useState('');
+  const [carpetaId, setCarpetaId] = useState(null);
+  const puedeGestionar = puede('categorias_gestionar', 'gastos');
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -581,6 +592,7 @@ function TabCategorias({ puede }) {
     if (!window.confirm(`¿Eliminar categoría "${c.nombre}"?`)) return;
     try {
       await gastosService.deleteCategoria(c.id_categoria_gasto);
+      if (c.id_categoria_gasto === carpetaId) setCarpetaId(null);
       cargar();
     } catch (e) { alert(e.response?.data?.mensaje || 'Error'); }
   };
@@ -590,6 +602,11 @@ function TabCategorias({ puede }) {
       {activo ? 'Activo' : 'Inactivo'}
     </span>
   );
+
+  const raices = cats.filter(c => !c.id_categoria_gasto_padre);
+  const carpeta = raices.find(c => c.id_categoria_gasto === carpetaId) || null;
+  const colorDe = (id) => CARPETA_COLORES[raices.findIndex(r => r.id_categoria_gasto === id) % CARPETA_COLORES.length];
+  const hijas = carpeta ? cats.filter(c => c.id_categoria_gasto_padre === carpeta.id_categoria_gasto) : [];
 
   return (
     <div className="space-y-4">
@@ -602,109 +619,144 @@ function TabCategorias({ puede }) {
         />
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="w-0.5 h-5 rounded-full bg-yellow-400" />
-          <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Categorías de gasto</h3>
-        </div>
-        {puede('categorias_gestionar', 'gastos') && (
-          <button onClick={() => setModalCat({})} className="px-3 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors">
-            + Nueva categoría
-          </button>
-        )}
-      </div>
-
       {err && <ErrorBox msg={err} />}
 
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        {/* Desktop */}
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Nombre</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Categoría padre</th>
-                <th className="text-center px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Subcategorías</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Descripción</th>
-                <th className="text-center px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Estado</th>
-                {puede('categorias_gestionar', 'gastos') && (
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Acciones</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
-              {loading ? (
-                <tr><td colSpan={6} className="py-10">
-                  <div className="flex items-center justify-center gap-2 text-zinc-400"><Spinner /><span className="text-sm">Cargando...</span></div>
-                </td></tr>
-              ) : cats.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 text-sm text-zinc-400">Sin categorías registradas</td></tr>
-              ) : cats.map(c => (
-                <tr key={c.id_categoria_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <span className={`font-medium text-zinc-900 dark:text-white ${c.id_categoria_gasto_padre ? 'pl-4 border-l-2 border-yellow-400/40' : ''}`}>
-                      {c.id_categoria_gasto_padre ? '↳ ' : ''}{c.nombre}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {c.padre_nombre
-                      ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">{c.padre_nombre}</span>
-                      : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
-                  </td>
-                  <td className="px-5 py-3.5 text-center">
-                    {c.total_subcategorias > 0
-                      ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{c.total_subcategorias}</span>
-                      : <span className="text-xs text-zinc-300 dark:text-zinc-600">—</span>}
-                  </td>
-                  <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">{c.descripcion || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</td>
-                  <td className="px-5 py-3.5 text-center"><BadgeActivo activo={c.activo} /></td>
-                  {puede('categorias_gestionar', 'gastos') && (
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Editar">✏️</button>
-                        <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Eliminar">🗑️</button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="sm:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 text-zinc-400 py-10"><Spinner /><span className="text-sm">Cargando...</span></div>
-          ) : cats.length === 0 ? (
-            <div className="py-10 text-center text-sm text-zinc-400">Sin categorías registradas</div>
-          ) : cats.map(c => (
-            <div key={c.id_categoria_gasto} className="flex items-center gap-3 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-sm font-medium text-zinc-900 dark:text-white ${c.id_categoria_gasto_padre ? 'pl-3 border-l-2 border-yellow-400/40' : ''}`}>
-                    {c.id_categoria_gasto_padre ? '↳ ' : ''}{c.nombre}
-                  </span>
-                  {c.padre_nombre && (
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">{c.padre_nombre}</span>
-                  )}
-                  {c.total_subcategorias > 0 && (
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{c.total_subcategorias} subcategoría{c.total_subcategorias !== 1 ? 's' : ''}</span>
-                  )}
-                </div>
-                {c.descripcion && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{c.descripcion}</p>}
-              </div>
-              <BadgeActivo activo={c.activo} />
-              {puede('categorias_gestionar', 'gastos') && (
-                <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors">✏️</button>
-                  <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">🗑️</button>
-                </div>
-              )}
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 text-zinc-400 py-16"><Spinner /><span className="text-sm">Cargando...</span></div>
+      ) : !carpeta ? (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="w-0.5 h-5 rounded-full bg-yellow-400" />
+              <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Categorías de gasto</h3>
             </div>
-          ))}
-        </div>
-      </div>
+            {puedeGestionar && (
+              <button onClick={() => setModalCat({})} className="px-3 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors">
+                + Nueva categoría
+              </button>
+            )}
+          </div>
+
+          {raices.length === 0 ? (
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 py-16 text-center text-sm text-zinc-400">
+              Sin categorías registradas
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {raices.map(c => {
+                const col = colorDe(c.id_categoria_gasto);
+                return (
+                  <div key={c.id_categoria_gasto} className={`relative rounded-2xl border ${col.border} ${col.bg} p-5 hover:shadow-md transition-all`}>
+                    <button onClick={() => setCarpetaId(c.id_categoria_gasto)} className="block w-full text-left">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl flex-shrink-0">📁</span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-bold ${col.text} truncate`}>{c.nombre}</p>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {c.total_subcategorias > 0 ? `${c.total_subcategorias} subcategoría${c.total_subcategorias !== 1 ? 's' : ''}` : 'Sin subcategorías'}
+                          </p>
+                        </div>
+                      </div>
+                      {c.descripcion && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-3 line-clamp-2">{c.descripcion}</p>}
+                    </button>
+                    <div className="flex items-center justify-between mt-4">
+                      <BadgeActivo activo={c.activo} />
+                      {puedeGestionar && (
+                        <div className="flex gap-1">
+                          <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-white/60 dark:hover:bg-zinc-800/60 transition-colors" title="Editar">✏️</button>
+                          <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-white/60 dark:hover:bg-zinc-800/60 transition-colors" title="Eliminar">🗑️</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {(() => {
+            const col = colorDe(carpeta.id_categoria_gasto);
+            return (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setCarpetaId(null)} className="px-3 py-2 rounded-xl text-sm font-medium text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors">
+                    ← Volver
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">📁</span>
+                    <h3 className={`text-base font-bold ${col.text}`}>{carpeta.nombre}</h3>
+                  </div>
+                </div>
+                {puedeGestionar && (
+                  <button onClick={() => setModalCat({ id_categoria_gasto_padre: carpeta.id_categoria_gasto })} className="px-3 py-2 rounded-xl text-sm font-semibold bg-yellow-400 text-zinc-900 hover:bg-yellow-300 transition-colors">
+                    + Nueva subcategoría
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            {/* Desktop */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Nombre</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Descripción</th>
+                    <th className="text-center px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Estado</th>
+                    {puedeGestionar && (
+                      <th className="text-right px-5 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Acciones</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/50">
+                  {hijas.length === 0 ? (
+                    <tr><td colSpan={4} className="text-center py-10 text-sm text-zinc-400">Sin subcategorías registradas</td></tr>
+                  ) : hijas.map(c => (
+                    <tr key={c.id_categoria_gasto} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-white">{c.nombre}</td>
+                      <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">{c.descripcion || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</td>
+                      <td className="px-5 py-3.5 text-center"><BadgeActivo activo={c.activo} /></td>
+                      {puedeGestionar && (
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors" title="Editar">✏️</button>
+                            <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Eliminar">🗑️</button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+              {hijas.length === 0 ? (
+                <div className="py-10 text-center text-sm text-zinc-400">Sin subcategorías registradas</div>
+              ) : hijas.map(c => (
+                <div key={c.id_categoria_gasto} className="flex items-center gap-3 px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{c.nombre}</p>
+                    {c.descripcion && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{c.descripcion}</p>}
+                  </div>
+                  <BadgeActivo activo={c.activo} />
+                  {puedeGestionar && (
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button onClick={() => setModalCat(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors">✏️</button>
+                      <button onClick={() => handleDelete(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">🗑️</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
