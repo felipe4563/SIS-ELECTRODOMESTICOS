@@ -25,7 +25,8 @@ const S = StyleSheet.create({
   // Header
   header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
                 borderBottomWidth: 3, borderBottomColor: '#facc15', paddingBottom: 12, marginBottom: 16 },
-  logo:       { width: 60, height: 40, objectFit: 'contain', marginBottom: 4 },
+  logoRow:    { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logo:       { width: 70, height: 70, objectFit: 'contain' },
   empresa:    { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 2 },
   meta:       { fontSize: 8, color: '#6b7280', marginTop: 1 },
   badgeTitle: { backgroundColor: '#facc15', color: '#1c1917', fontSize: 8, fontFamily: 'Helvetica-Bold',
@@ -98,14 +99,16 @@ function CotizacionDoc({ cotizacion: c, empresa: e, logoUrl }) {
 
         {/* Encabezado */}
         <View style={S.header}>
-          <View>
+          <View style={S.logoRow}>
             {logoUrl && logoUrl !== '/logo.png' && (
               <Image src={logoUrl} style={S.logo} />
             )}
-            <Text style={S.empresa}>{e.nombre_comercial || e.razon_social}</Text>
-            {e.direccion && <Text style={S.meta}>{e.direccion}</Text>}
-            {e.telefono  && <Text style={S.meta}>Tel: {e.telefono}</Text>}
-            {e.nit       && <Text style={S.meta}>NIT: {e.nit}</Text>}
+            <View>
+              <Text style={S.empresa}>{e.nombre_comercial || e.razon_social}</Text>
+              {e.direccion && <Text style={S.meta}>{e.direccion}</Text>}
+              {e.telefono  && <Text style={S.meta}>Tel: {e.telefono}</Text>}
+              {e.nit       && <Text style={S.meta}>NIT: {e.nit}</Text>}
+            </View>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={S.badgeTitle}>COTIZACIÓN</Text>

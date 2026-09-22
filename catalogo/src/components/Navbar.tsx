@@ -152,7 +152,7 @@ export default function Navbar({ empresa }: Props) {
                 fontFamily:    'var(--font-headline)',
                 fontWeight:     800,
                 fontSize:      '1.2rem',
-                color:          '#fff',
+                color:          'var(--color-txt)',
                 letterSpacing: '-0.01em',
               }}>
                 {nombre}

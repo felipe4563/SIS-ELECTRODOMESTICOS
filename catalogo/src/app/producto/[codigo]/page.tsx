@@ -121,7 +121,7 @@ export default async function ProductoPage({ params }: Props) {
                   lineHeight:     1.2,
                   letterSpacing: '-0.02em',
                   marginBottom:  '1rem',
-                  color:          '#fff',
+                  color:          'var(--color-txt)',
                 }}>
                   {producto.producto}
                 </h1>
@@ -199,6 +199,47 @@ export default async function ProductoPage({ params }: Props) {
                   )}
                 </div>
 
+                {/* Especificaciones técnicas */}
+                {(producto.modelo || producto.color || producto.capacidad || producto.categoria) && (
+                  <div style={{
+                    background:   'var(--color-card)',
+                    border:       '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    overflow:     'hidden',
+                    marginBottom: '1.5rem',
+                  }}>
+                    <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)', boxShadow: '0 0 6px var(--color-primary)' }} />
+                      <p style={{ fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-muted)' }}>
+                        Especificaciones técnicas
+                      </p>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <tbody>
+                          {[
+                            { label: 'Capacidad Total', value: producto.capacidad },
+                            { label: 'Modelo',          value: producto.modelo },
+                            { label: 'Color',           value: producto.color },
+                            { label: 'Categoría',       value: producto.categoria },
+                            { label: 'Disponibilidad',  value: producto.disponibilidad },
+                          ].filter(r => r.value).map((row, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                              <td style={{ padding: '0.65rem 1.25rem', color: 'var(--color-muted)', fontWeight: 500,
+                                           width: '40%', fontSize: '0.8rem', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                                {row.label}
+                              </td>
+                              <td style={{ padding: '0.65rem 1.25rem', color: 'var(--color-txt)', fontWeight: 600, fontSize: '0.85rem' }}>
+                                {row.value}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {/* Código interno */}
                 <p style={{ fontSize: '0.72rem', color: 'var(--color-muted)', letterSpacing: '0.04em' }}>
                   Código:{' '}
@@ -212,50 +253,6 @@ export default async function ProductoPage({ params }: Props) {
             </div>
           </div>
         </section>
-
-        {/* ── Specs table ──────────────────────────── */}
-        {(producto.modelo || producto.color || producto.capacidad || producto.categoria) && (
-          <section style={{ padding: '1rem 0 3rem', background: 'var(--color-bg)' }}>
-            <div className="container-max">
-              <div style={{
-                background:   'var(--color-card)',
-                border:       '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                overflow:     'hidden',
-              }}>
-                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)', boxShadow: '0 0 6px var(--color-primary)' }} />
-                  <p style={{ fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-muted)' }}>
-                    Especificaciones técnicas
-                  </p>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', minWidth: 300 }}>
-                    <tbody>
-                      {[
-                        { label: 'Capacidad Total', value: producto.capacidad },
-                        { label: 'Modelo',          value: producto.modelo },
-                        { label: 'Color',           value: producto.color },
-                        { label: 'Categoría',       value: producto.categoria },
-                        { label: 'Disponibilidad',  value: producto.disponibilidad },
-                      ].filter(r => r.value).map((row, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                          <td style={{ padding: '0.75rem 1.5rem', color: 'var(--color-muted)', fontWeight: 500,
-                                       width: '40%', fontSize: '0.8rem', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
-                            {row.label}
-                          </td>
-                          <td style={{ padding: '0.75rem 1.5rem', color: 'var(--color-txt)', fontWeight: 600, fontSize: '0.85rem' }}>
-                            {row.value}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* ── Future-Ready Capabilities ─────────────── */}
         {(producto.caracteristicas || producto.detalle) && (

@@ -54,16 +54,18 @@ function CotizacionHoja({ c, e, logoUrl, clienteNombre, est, detalleHoja, pagina
 
       {/* Encabezado */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #facc15', paddingBottom: '12px', marginBottom: '16px' }}>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {logoUrl && logoUrl !== '/logo.png' && (
-            <img src={logoUrl} alt="Logo" style={{ width: '60px', height: '40px', objectFit: 'contain', marginBottom: '4px' }} />
+            <img src={logoUrl} alt="Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', flexShrink: 0 }} />
           )}
-          <div style={{ fontSize: '14px', fontFamily: 'Helvetica-Bold, Arial, sans-serif', fontWeight: 'bold', color: '#111827', marginBottom: '2px' }}>
-            {e?.nombre_comercial || e?.razon_social}
+          <div>
+            <div style={{ fontSize: '14px', fontFamily: 'Helvetica-Bold, Arial, sans-serif', fontWeight: 'bold', color: '#111827', marginBottom: '2px' }}>
+              {e?.nombre_comercial || e?.razon_social}
+            </div>
+            {e?.direccion && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>{e.direccion}</div>}
+            {e?.telefono  && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>Tel: {e.telefono}</div>}
+            {e?.nit       && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>NIT: {e.nit}</div>}
           </div>
-          {e?.direccion && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>{e.direccion}</div>}
-          {e?.telefono  && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>Tel: {e.telefono}</div>}
-          {e?.nit       && <div style={{ fontSize: '8px', color: '#6b7280', marginTop: '1px' }}>NIT: {e.nit}</div>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <span style={{ backgroundColor: '#facc15', color: '#1c1917', fontSize: '8px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '4px' }}>
