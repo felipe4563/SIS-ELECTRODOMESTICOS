@@ -1,9 +1,9 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { imgUrl } from '@/lib/api';
-import type { Empresa } from '@/lib/api';
+import { api, imgUrl } from '@/lib/api';
+import type { Empresa, Categoria } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 
 interface Props {
@@ -26,12 +26,19 @@ const navLinks = [
 ];
 
 export default function Navbar({ empresa }: Props) {
-  const [open, setOpen]     = useState(false);
-  const [search, setSearch] = useState('');
+  const [open, setOpen]           = useState(false);
+  const [search, setSearch]       = useState('');
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const pathname            = usePathname();
   const { theme, toggle }   = useTheme();
   const nombre = empresa?.nombre_comercial ?? empresa?.razon_social ?? 'Mega Electra';
   const logo   = empresa?.logo_url ? imgUrl(empresa.logo_url) : null;
+
+  useEffect(() => {
+    api.categorias()
+      .then(r => setCategorias(r.categorias.filter(c => c.total_productos > 0)))
+      .catch(() => {});
+  }, []);
 
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 50 }}>
@@ -176,7 +183,7 @@ export default function Navbar({ empresa }: Props) {
                   fontSize:     '0.82rem',
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  color:         l.accent ? 'var(--color-primary)' : isActive ? '#fff' : 'var(--color-muted)',
+                  color:         l.accent ? 'var(--color-primary)' : isActive ? 'var(--color-txt)' : 'var(--color-muted)',
                   textDecoration: 'none',
                   padding:       '0 0.75rem',
                   height:        84,
@@ -304,6 +311,48 @@ export default function Navbar({ empresa }: Props) {
       </div>
       </div>{/* /navbar principal */}
 
+      {/* ── Barra rápida de categorías ── */}
+      {categorias.length > 0 && (
+        <div style={{
+          background:   'var(--color-bg-2)',
+          borderBottom: '1px solid var(--color-border)',
+        }}>
+          <div className="container-max">
+            <nav className="cat-quickbar" style={{
+              display:      'flex',
+              alignItems:   'center',
+              gap:           4,
+              height:        44,
+              overflowX:    'auto',
+              scrollbarWidth:'none',
+            }}>
+              {categorias.map(c => (
+                <Link key={c.id_categoria} href={`/catalogo?categoria=${c.id_categoria}`}
+                  style={{
+                    display:        'flex',
+                    alignItems:     'center',
+                    gap:             6,
+                    padding:        '0 0.7rem',
+                    height:         '100%',
+                    fontSize:       '0.76rem',
+                    fontWeight:      600,
+                    letterSpacing:  '0.02em',
+                    color:          'var(--color-muted)',
+                    textDecoration: 'none',
+                    whiteSpace:     'nowrap',
+                    flexShrink:      0,
+                    transition:     'color 0.15s',
+                  }}
+                  className="nav-link cat-pill">
+                  <span aria-hidden="true">▢</span>
+                  {c.nombre}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @media (max-width: 900px) {
           .nav-desktop  { display: none !important; }
@@ -315,9 +364,11 @@ export default function Navbar({ empresa }: Props) {
         @media (min-width: 901px) {
           .nav-hamburger{ display: none !important; }
         }
-        .nav-link:hover    { color: #fff !important; }
-        .topbar-link:hover { color: #fff !important; }
+        .nav-link:hover    { color: var(--color-txt) !important; }
+        .topbar-link:hover { color: var(--color-txt) !important; }
         .topbar-wa:hover   { background: #128c5e !important; }
+        .cat-quickbar::-webkit-scrollbar { display: none; }
+        .cat-pill:hover    { color: var(--color-primary) !important; }
       `}</style>
     </header>
   );

@@ -26,7 +26,7 @@ const S = StyleSheet.create({
   header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
                 borderBottomWidth: 3, borderBottomColor: '#facc15', paddingBottom: 12, marginBottom: 16 },
   logoRow:    { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logo:       { width: 70, height: 70, objectFit: 'contain' },
+  logo:       { width: '30mm', height: '30mm', objectFit: 'contain' },
   empresa:    { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#111827', marginBottom: 2 },
   meta:       { fontSize: 8, color: '#6b7280', marginTop: 1 },
   badgeTitle: { backgroundColor: '#facc15', color: '#1c1917', fontSize: 8, fontFamily: 'Helvetica-Bold',

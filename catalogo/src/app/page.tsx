@@ -6,6 +6,7 @@ import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import ScrollReveal from '@/components/ScrollReveal';
 import TiltCard from '@/components/TiltCard';
+import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 
 export const revalidate = 60;
 
@@ -24,6 +25,36 @@ export default async function HomePage() {
   const productos   = productosRes.status   === 'fulfilled' ? productosRes.value.productos     : [];
   const promociones = promocionesRes.status === 'fulfilled' ? promocionesRes.value.promociones : [];
   const combos      = combosRes.status      === 'fulfilled' ? combosRes.value.combos           : [];
+
+  // Carrusel del hero: una diapositiva por promoción/combo activo, y si no hay
+  // ninguno, la diapositiva genérica de siempre.
+  const promoSlides: HeroSlide[] = promociones.slice(0, 3).map((promo, i) => ({
+    key:      `promo-${promo.id_promocion ?? i}`,
+    tag:      'Oferta activa',
+    title:    promo.nombre,
+    desc:     promo.descripcion || `${promo.tipo_descuento === 'PORCENTAJE' ? `${promo.valor_descuento}% de descuento` : `Bs ${promo.valor_descuento} de descuento`} por tiempo limitado.`,
+    ctaLabel: 'Ver oferta',
+    ctaHref:  '/promociones',
+  }));
+  const comboSlides: HeroSlide[] = combos.slice(0, 2).map((combo, i) => ({
+    key:      `combo-${combo.id_combo ?? i}`,
+    tag:      'Combo especial',
+    title:    combo.nombre,
+    desc:     combo.descripcion || `Combo de ${combo.productos.length} productos por ${fmtPrecio(combo.precio_combo)}.`,
+    ctaLabel: 'Ver combo',
+    ctaHref:  '/combos',
+  }));
+  const defaultSlide: HeroSlide = {
+    key:       'default',
+    tag:       'Electrodomésticos',
+    title:     'Tu Hogar,',
+    highlight: 'al Siguiente Nivel',
+    desc:      'Refrigeradoras, cocinas, lavadoras y mucho más. Las mejores marcas con garantía, stock disponible y asesoramiento personalizado.',
+    ctaLabel:  'Explorar Catálogo',
+    ctaHref:   '/catalogo',
+    ...(promociones.length > 0 ? { ctaLabel2: 'Ver Ofertas', ctaHref2: '/promociones' } : {}),
+  };
+  const heroSlides: HeroSlide[] = [...promoSlides, ...comboSlides, defaultSlide];
 
   return (
     <>
@@ -142,35 +173,7 @@ export default async function HomePage() {
 
               {/* LEFT: Text */}
               <div>
-                <span className="tag hero-tag-pill" style={{ marginBottom:'1.5rem', display:'inline-block', padding:'0.4rem 1rem', fontSize:'0.72rem' }}>
-                  ◈ Electrodomésticos
-                </span>
-                <h1 className="hero-h1" style={{
-                  fontFamily:    'var(--font-headline)',
-                  fontWeight:     900,
-                  lineHeight:     1.05,
-                  fontSize:      'clamp(2.4rem, 5vw, 3.8rem)',
-                  marginBottom:  '1.25rem',
-                  letterSpacing: '-0.03em',
-                  color:          'var(--color-txt)',
-                }}>
-                  Tu Hogar,<br />
-                  <span style={{ color:'var(--color-primary)' }}>al Siguiente<br />Nivel</span>
-                </h1>
-                <p className="hero-desc" style={{ fontSize:'0.95rem', color:'var(--color-txt-2)', lineHeight:1.7, marginBottom:'2rem', maxWidth:460 }}>
-                  Refrigeradoras, cocinas, lavadoras y mucho más. Las mejores marcas con garantía,
-                  stock disponible y asesoramiento personalizado.
-                </p>
-                <div className="hero-btns" style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-                  <Link href="/catalogo" className="btn-primary hero-cta" style={{ padding:'0.8rem 2rem', fontSize:'0.85rem' }}>
-                    Explorar Catálogo
-                  </Link>
-                  {promociones.length > 0 && (
-                    <Link href="/promociones" className="btn-outline" style={{ padding:'0.8rem 2rem', fontSize:'0.85rem' }}>
-                      Ver Ofertas
-                    </Link>
-                  )}
-                </div>
+                <HeroCarousel slides={heroSlides} />
                 <div className="hero-stats" style={{ display:'flex', gap:'0.75rem', marginTop:'2.5rem', flexWrap:'wrap' }}>
                   {[
                     {

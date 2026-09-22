@@ -69,7 +69,7 @@ function CardSelectable({
       <div style={{
         position:    'relative',
         width:       '100%',
-        aspectRatio: '4/3',
+        aspectRatio: '1/1',
         background:  'var(--color-card-2)',
         overflow:    'hidden',
         borderBottom: '1px solid var(--color-border)',
@@ -78,10 +78,10 @@ function CardSelectable({
           src={img}
           alt={p.producto}
           fill
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 18vw"
           style={{
             objectFit: 'contain',
-            padding:   '1rem',
+            padding:   '0.65rem',
             filter:     'none',
           }}
           onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
@@ -89,9 +89,9 @@ function CardSelectable({
       </div>
 
       {/* Info */}
-      <div style={{ padding: '0.9rem 1rem 1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ padding: '0.65rem 0.75rem 0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
         {p.marca && (
-          <p style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-primary)',
+          <p style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-primary)',
                       textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             {p.marca}
           </p>
@@ -99,7 +99,7 @@ function CardSelectable({
         <h3 style={{
           fontFamily:      'var(--font-headline)',
           fontWeight:       600,
-          fontSize:        '0.88rem',
+          fontSize:        '0.8rem',
           color:           'var(--color-txt)',
           lineHeight:       1.35,
           display:         '-webkit-box',
@@ -251,8 +251,8 @@ export default function CatalogoClient({ productos, telefono }: Props) {
     <>
       <div className="productos-grid" style={{
         display:             'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 210px), 1fr))',
-        gap:                 '1rem',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 175px), 1fr))',
+        gap:                 '0.85rem',
         paddingBottom:        seleccionados.length > 0 ? '5rem' : 0,
       }}>
         {productos.map((p, i) => (

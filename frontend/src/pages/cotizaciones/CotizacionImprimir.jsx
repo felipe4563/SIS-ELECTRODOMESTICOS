@@ -56,7 +56,7 @@ function CotizacionHoja({ c, e, logoUrl, clienteNombre, est, detalleHoja, pagina
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #facc15', paddingBottom: '12px', marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {logoUrl && logoUrl !== '/logo.png' && (
-            <img src={logoUrl} alt="Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', flexShrink: 0 }} />
+            <img src={logoUrl} alt="Logo" style={{ width: '3cm', height: '3cm', objectFit: 'contain', flexShrink: 0 }} />
           )}
           <div>
             <div style={{ fontSize: '14px', fontFamily: 'Helvetica-Bold, Arial, sans-serif', fontWeight: 'bold', color: '#111827', marginBottom: '2px' }}>

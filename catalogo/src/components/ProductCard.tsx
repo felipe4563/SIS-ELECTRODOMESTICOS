@@ -25,7 +25,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
         <div style={{
           position:    'relative',
           width:       '100%',
-          aspectRatio: '4/3',
+          aspectRatio: '1/1',
           background:  'var(--color-card-2)',
           overflow:    'hidden',
           borderBottom: '1px solid var(--color-border)',
@@ -36,10 +36,10 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
             alt={p.producto}
             fill
             loading="eager"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 18vw"
             style={{
               objectFit: 'contain',
-              padding:   '1rem',
+              padding:   '0.65rem',
               filter:     agotado ? 'grayscale(0.6) brightness(0.7)' : 'none',
               transition: 'transform 0.4s',
             }}
@@ -48,15 +48,15 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
         </div>
 
         {/* Info */}
-        <div style={{ padding: '1rem 1rem 1.1rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '0.7rem 0.75rem 0.8rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
           {p.marca && (
             <p style={{
-              fontSize:      '0.65rem',
+              fontSize:      '0.6rem',
               fontWeight:     700,
               color:         'var(--color-primary)',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
-              marginBottom:   4,
+              marginBottom:   3,
             }}>
               {p.marca}
             </p>
@@ -64,10 +64,10 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
           <h3 style={{
             fontFamily:          'var(--font-headline)',
             fontWeight:           600,
-            fontSize:            '0.9rem',
+            fontSize:            '0.8rem',
             color:               'var(--color-txt)',
-            marginBottom:         4,
-            lineHeight:           1.4,
+            marginBottom:         3,
+            lineHeight:           1.35,
             display:             '-webkit-box',
             WebkitLineClamp:      2,
             WebkitBoxOrient:     'vertical',
@@ -77,17 +77,20 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
             {p.producto}
           </h3>
           {p.modelo && (
-            <p style={{ fontSize: '0.72rem', color: 'var(--color-muted)', marginBottom: 10 }}>
+            <p style={{
+              fontSize: '0.66rem', color: 'var(--color-muted)', marginBottom: 8,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
               {p.modelo}{p.color ? ` · ${p.color}` : ''}
             </p>
           )}
 
           {showPrice && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', marginBottom: 9 }}>
               <p style={{
                 fontFamily: 'var(--font-headline)',
                 fontWeight:  700,
-                fontSize:   '1.05rem',
+                fontSize:   '0.92rem',
                 color:       agotado ? 'var(--color-muted)' : 'var(--color-txt)',
               }}>
                 {fmtPrecio(p.precio_publico)}
@@ -97,12 +100,12 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
 
           <div style={{
             width:          '100%',
-            padding:        '0.55rem',
+            padding:        '0.45rem',
             background:     agotado ? 'rgba(107,114,128,0.2)' : 'var(--color-primary)',
             color:          '#fff',
-            fontSize:       '0.7rem',
+            fontSize:       '0.64rem',
             fontWeight:      700,
-            letterSpacing:  '0.08em',
+            letterSpacing:  '0.07em',
             textTransform:  'uppercase',
             textAlign:      'center',
             borderRadius:   'var(--radius-sm)',
