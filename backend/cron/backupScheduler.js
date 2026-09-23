@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const path = require('path');
 const fs   = require('fs');
+const { ahoraCompactoLocal } = require('../utils/fechaLocal');
 
 const BACKUP_DIR  = path.join(__dirname, '..', 'backups');
 const MAX_BACKUPS = 10;
@@ -8,7 +9,7 @@ const MAX_BACKUPS = 10;
 async function ejecutarBackupAuto() {
   try {
     const { generarSQLDump } = require('../controllers/herramientas.Controller');
-    const ts       = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ts       = ahoraCompactoLocal();
     const filename = `backup_auto_${ts}.sql`;
     const filepath = path.join(BACKUP_DIR, filename);
 

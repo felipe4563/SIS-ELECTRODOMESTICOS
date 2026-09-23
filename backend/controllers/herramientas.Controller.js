@@ -4,7 +4,7 @@ const fs      = require('fs');
 const ExcelJS = require('exceljs');
 const PDFDoc  = require('pdfkit');
 const bwipjs  = require('bwip-js');
-const { fechaHoraSegundosLocal } = require('../utils/fechaLocal');
+const { fechaHoraSegundosLocal, ahoraCompactoLocal } = require('../utils/fechaLocal');
 
 const BACKUP_DIR = path.join(__dirname, '..', 'backups');
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -84,7 +84,7 @@ async function generarSQLDump() {
 
 exports.crearBackup = async (req, res) => {
   try {
-    const ts       = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ts       = ahoraCompactoLocal();
     const filename = `backup_${ts}.sql`;
     const filepath = path.join(BACKUP_DIR, filename);
 

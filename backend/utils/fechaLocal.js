@@ -35,6 +35,16 @@ const soloFechaLocal = (d = new Date()) =>
 // absoluto, sin depender de la zona horaria del proceso/contenedor.
 const hoyLocal = () => _fechaDesde(Date.now());
 
+// "AHORA" en Bolivia como "YYYY-MM-DDTHH-MM-SS" (mismo formato que se usaba
+// con `new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)`, pero en
+// hora de Bolivia en vez de UTC) — para nombres de archivo de backup, etc.
+// Calculado desde el instante absoluto, no depende de la TZ del proceso.
+const ahoraCompactoLocal = () => {
+  const b = _bolivia(Date.now());
+  return `${b.getUTCFullYear()}-${pad(b.getUTCMonth() + 1)}-${pad(b.getUTCDate())}`
+       + `T${pad(b.getUTCHours())}-${pad(b.getUTCMinutes())}-${pad(b.getUTCSeconds())}`;
+};
+
 // Fecha de hace `n` días en Bolivia, "YYYY-MM-DD".
 const fechaHaceDiasLocal = (n) => _fechaDesde(Date.now() - n * 86400000);
 
@@ -55,5 +65,5 @@ const fechaHoraSegundosLocal = (d = new Date()) =>
 
 module.exports = {
   soloFechaLocal, hoyLocal, fechaHaceDiasLocal, fechaEnDiasLocal,
-  primerDiaMesLocal, fechaHoraSegundosLocal,
+  primerDiaMesLocal, fechaHoraSegundosLocal, ahoraCompactoLocal,
 };
