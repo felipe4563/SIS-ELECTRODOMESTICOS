@@ -640,7 +640,7 @@ export default function CompraImprimirDirecto() {
   const navigate    = useNavigate();
   const [data,      setData]     = useState(null);
   const [cargando,  setCargando] = useState(true);
-  const [formato,   setFormato]  = useState('80mm');
+  const [formato,   setFormato]  = useState('A4');
   const { empresa, logoUrl } = useEmpresa() ?? {};
 
   useEffect(() => {
@@ -670,7 +670,7 @@ export default function CompraImprimirDirecto() {
 
         {/* Selector de formato */}
         <div className="flex items-center gap-1 rounded-xl border border-zinc-300 dark:border-zinc-600 p-1">
-          {['80mm', '110mm', 'A4'].map(f => (
+          {['A4', '110mm', '80mm'].map(f => (
             <button
               key={f}
               onClick={() => setFormato(f)}

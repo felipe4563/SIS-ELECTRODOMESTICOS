@@ -865,7 +865,12 @@ const createPago = async (req, res) => {
           numero_referencia, comprobante_url, id_usuario, observaciones)
        VALUES (?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?)`,
       [numeroPago, id, id_cuota || null, compra.id_proveedor, compra.id_sucursal,
-       fecha ? new Date(fecha) : new Date(),
+       // Nunca envolver `fecha` (string "YYYY-MM-DD" del <input type="date">)
+       // en `new Date(...)`: JS interpreta ese formato como medianoche UTC, y
+       // al convertir de vuelta a hora de Bolivia (UTC-4) para mostrarla queda
+       // un día atrás. Pasando el string tal cual, MySQL lo toma como
+       // medianoche literal de esa fecha, sin conversión de por medio.
+       fecha || new Date(),
        metodo_pago, id_cuenta_proveedor || null, id_moneda, tipo_cambio, montoPago,
        numero_referencia || null, comprobante_url,
        req.user.id_usuario, observaciones || null]
