@@ -515,15 +515,15 @@ export default function Productos() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Modelo</label>
-              <input name="modelo" value={form.modelo} onChange={handleChange} className={inputCls} />
+              <input name="modelo" value={form.modelo} onChange={handleChange} className={inputCls} placeholder="Ej: DSAF-CS-12HRN1" />
             </div>
             <div>
               <label className={labelCls}>Color</label>
-              <input name="color" value={form.color} onChange={handleChange} className={inputCls} />
+              <input name="color" value={form.color} onChange={handleChange} className={inputCls} placeholder="Ej: BLANCO" />
             </div>
             <div>
               <label className={labelCls}>Características</label>
-              <input name="caracteristicas" value={form.caracteristicas} onChange={handleChange} className={inputCls} />
+              <input name="caracteristicas" value={form.caracteristicas} onChange={handleChange} className={inputCls} placeholder="Ej: FRIO/CALOR, INVERTER, WIFI" />
             </div>
           </div>
 

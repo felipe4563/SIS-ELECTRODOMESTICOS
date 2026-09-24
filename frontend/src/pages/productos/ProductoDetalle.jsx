@@ -228,25 +228,25 @@ function TabDatos({ producto, onActualizar }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Detalle</label>
-            <input name="detalle" value={form.detalle} onChange={handleChange} disabled={!editando} className={inputCls} />
+            <input name="detalle" value={form.detalle} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: 4H MESA VIDRIO E.E. GRILL ELEC." />
           </div>
           <div>
             <label className={labelCls}>Capacidad</label>
-            <input name="capacidad" value={form.capacidad} onChange={handleChange} disabled={!editando} className={inputCls} />
+            <input name="capacidad" value={form.capacidad} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: 60 CM, 2 Lts" />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className={labelCls}>Modelo</label>
-            <input name="modelo" value={form.modelo} onChange={handleChange} disabled={!editando} className={inputCls} />
+            <input name="modelo" value={form.modelo} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: DSAF-CS-12HRN1" />
           </div>
           <div>
             <label className={labelCls}>Color</label>
-            <input name="color" value={form.color} onChange={handleChange} disabled={!editando} className={inputCls} />
+            <input name="color" value={form.color} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: BLANCO" />
           </div>
           <div>
             <label className={labelCls}>Características</label>
-            <input name="caracteristicas" value={form.caracteristicas} onChange={handleChange} disabled={!editando} className={inputCls} />
+            <input name="caracteristicas" value={form.caracteristicas} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: FRIO/CALOR, INVERTER, WIFI" />
           </div>
         </div>
 

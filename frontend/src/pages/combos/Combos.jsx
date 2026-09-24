@@ -84,6 +84,11 @@ export default function Combos() {
   const [formErr, setFormErr]         = useState('');
 
   const [prodSearch, setProdSearch]   = useState('');
+  const [filtroMarca,     setFiltroMarca]     = useState('');
+  const [filtroProducto,  setFiltroProducto]  = useState('');
+  const [filtroModelo,    setFiltroModelo]    = useState('');
+  const [filtroColor,     setFiltroColor]     = useState('');
+  const [filtroCapacidad, setFiltroCapacidad] = useState('');
 
   const imgInputRef                   = useRef();
   const [imgFile, setImgFile]         = useState(null);
@@ -127,26 +132,82 @@ export default function Combos() {
     return list;
   }, [combos, search, filtroActivo]);
 
+  const cambiarFiltroMarca = (v) => {
+    setFiltroMarca(v);
+    setFiltroProducto(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroProducto = (v) => {
+    setFiltroProducto(v);
+    setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroModelo = (v) => {
+    setFiltroModelo(v);
+    setFiltroColor(''); setFiltroCapacidad('');
+  };
+  const cambiarFiltroColor = (v) => {
+    setFiltroColor(v);
+    setFiltroCapacidad('');
+  };
+
+  const marcasDisponibles = useMemo(() =>
+    [...new Set(productos.map(p => p.marca).filter(Boolean))].sort(), [productos]);
+  const productosDisponibles = useMemo(() =>
+    [...new Set(
+      productos.filter(p => !filtroMarca || p.marca === filtroMarca)
+        .map(p => p.nombre).filter(Boolean)
+    )].sort(), [productos, filtroMarca]);
+  const modelosDisponibles = useMemo(() =>
+    [...new Set(
+      productos
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.nombre === filtroProducto))
+        .map(p => p.modelo).filter(Boolean)
+    )].sort(), [productos, filtroMarca, filtroProducto]);
+  const coloresDisponibles = useMemo(() =>
+    [...new Set(
+      productos
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.nombre === filtroProducto) && (!filtroModelo || p.modelo === filtroModelo))
+        .map(p => p.color).filter(Boolean)
+    )].sort(), [productos, filtroMarca, filtroProducto, filtroModelo]);
+  const capacidadesDisponibles = useMemo(() =>
+    [...new Set(
+      productos
+        .filter(p => (!filtroMarca || p.marca === filtroMarca) && (!filtroProducto || p.nombre === filtroProducto) && (!filtroModelo || p.modelo === filtroModelo) && (!filtroColor || p.color === filtroColor))
+        .map(p => p.capacidad).filter(Boolean)
+    )].sort(), [productos, filtroMarca, filtroProducto, filtroModelo, filtroColor]);
+
+  const hayFiltrosActivos = !!(prodSearch || filtroMarca || filtroProducto || filtroModelo || filtroColor || filtroCapacidad);
+
   const prodsFiltrados = useMemo(() => {
-    if (!prodSearch) return productos.slice(0, 30);
-    const q = prodSearch.toLowerCase();
-    return productos
-      .filter(p =>
-        (p.nombre || p.producto || '').toLowerCase().includes(q) ||
+    let list = productos
+      .filter(p => !filtroMarca     || p.marca     === filtroMarca)
+      .filter(p => !filtroProducto  || p.nombre    === filtroProducto)
+      .filter(p => !filtroModelo    || p.modelo    === filtroModelo)
+      .filter(p => !filtroColor     || p.color     === filtroColor)
+      .filter(p => !filtroCapacidad || p.capacidad === filtroCapacidad);
+    if (prodSearch) {
+      const q = prodSearch.toLowerCase();
+      list = list.filter(p =>
+        (p.nombre || '').toLowerCase().includes(q) ||
         p.codigo_interno?.toLowerCase().includes(q) ||
         p.marca?.toLowerCase().includes(q) ||
         p.modelo?.toLowerCase().includes(q)
-      )
-      .slice(0, 30);
-  }, [productos, prodSearch]);
+      );
+    }
+    return list.slice(0, 30);
+  }, [productos, prodSearch, filtroMarca, filtroProducto, filtroModelo, filtroColor, filtroCapacidad]);
 
   // ── Modal helpers ─────────────────────────────────────────────────────────
+
+  const resetFiltrosProducto = () => {
+    setProdSearch('');
+    setFiltroMarca(''); setFiltroProducto(''); setFiltroModelo(''); setFiltroColor(''); setFiltroCapacidad('');
+  };
 
   const openNuevo = () => {
     setEditando(null);
     setForm(EMPTY_FORM);
     setDetalle([]);
-    setProdSearch('');
+    resetFiltrosProducto();
     setFormErr('');
     setImgFile(null);
     setImgPreview(null);
@@ -166,7 +227,7 @@ export default function Combos() {
       activo:       !!combo.activo,
     });
     setFormErr('');
-    setProdSearch('');
+    resetFiltrosProducto();
     setImgFile(null);
     setImgPreview(null);
     try {
@@ -664,6 +725,49 @@ export default function Combos() {
                   </span>
                 </div>
 
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-2">
+                  <select
+                    value={filtroMarca}
+                    onChange={e => cambiarFiltroMarca(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                  >
+                    <option value="">Todas las marcas</option>
+                    {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select
+                    value={filtroProducto}
+                    onChange={e => cambiarFiltroProducto(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                  >
+                    <option value="">Todos los productos</option>
+                    {productosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <select
+                    value={filtroModelo}
+                    onChange={e => cambiarFiltroModelo(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                  >
+                    <option value="">Todos los modelos</option>
+                    {modelosDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select
+                    value={filtroColor}
+                    onChange={e => cambiarFiltroColor(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                  >
+                    <option value="">Todos los colores</option>
+                    {coloresDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select
+                    value={filtroCapacidad}
+                    onChange={e => setFiltroCapacidad(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                  >
+                    <option value="">Todas las capacidades</option>
+                    {capacidadesDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
                 <div className="relative mb-3">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -673,7 +777,7 @@ export default function Combos() {
                     placeholder="Buscar producto por nombre o código…"
                     className="w-full pl-8 pr-3 py-2 rounded-xl border border-yellow-200 dark:border-yellow-700/40 bg-yellow-50 dark:bg-yellow-900/10 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
-                  {prodSearch && (
+                  {hayFiltrosActivos && (
                     <div className="absolute z-10 left-0 right-0 mt-1 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl max-h-44 overflow-y-auto">
                       {prodsFiltrados.length === 0 ? (
                         <p className="px-3 py-3 text-xs text-zinc-400 text-center">Sin resultados</p>

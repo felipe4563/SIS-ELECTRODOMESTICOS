@@ -1240,15 +1240,15 @@ export default function CompraForm() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className={labelCls}>Modelo</label>
-                <input value={npForm.modelo} onChange={e => setNp('modelo', e.target.value)} className={inputCls} />
+                <input value={npForm.modelo} onChange={e => setNp('modelo', e.target.value)} className={inputCls} placeholder="Ej: DSAF-CS-12HRN1" />
               </div>
               <div>
                 <label className={labelCls}>Color</label>
-                <input value={npForm.color} onChange={e => setNp('color', e.target.value)} className={inputCls} />
+                <input value={npForm.color} onChange={e => setNp('color', e.target.value)} className={inputCls} placeholder="Ej: BLANCO" />
               </div>
               <div>
                 <label className={labelCls}>Características</label>
-                <input value={npForm.caracteristicas} onChange={e => setNp('caracteristicas', e.target.value)} className={inputCls} />
+                <input value={npForm.caracteristicas} onChange={e => setNp('caracteristicas', e.target.value)} className={inputCls} placeholder="Ej: FRIO/CALOR, INVERTER, WIFI" />
               </div>
             </div>
 
