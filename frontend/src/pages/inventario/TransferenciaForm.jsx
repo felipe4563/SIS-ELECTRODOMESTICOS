@@ -90,12 +90,17 @@ function CartItemRow({ fila, productos, stockOrigen, onChange, onQtyDelta, onRem
   const sinStock    = disponible !== null && disponible <= 0;
 
   return (
-    <div className="py-2.5 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+    <div className="py-3.5 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
       {productoSel ? (
-        <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex items-start justify-between gap-2 mb-2">
           <div className="min-w-0">
-            <p className="text-sm text-zinc-900 dark:text-white truncate">{productoSel.producto}</p>
-            <p className="text-[11px] font-mono text-zinc-400">{productoSel.codigo_interno}</p>
+            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{productoSel.producto}</p>
+            <p className="text-[11px] font-mono text-zinc-400 mt-0.5">{productoSel.codigo_interno}</p>
+            {(productoSel.marca || productoSel.modelo || productoSel.color || productoSel.capacidad) && (
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                {[productoSel.marca, productoSel.modelo, productoSel.color, productoSel.capacidad].filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
           <button onClick={onRemove} className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-base leading-none">×</button>
         </div>
