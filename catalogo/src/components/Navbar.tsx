@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { api, imgUrl } from '@/lib/api';
 import type { Empresa, Categoria } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
+import CategoriasMenu from '@/components/CategoriasMenu';
 
 interface Props {
   empresa?: Empresa | null;
@@ -311,13 +312,15 @@ export default function Navbar({ empresa }: Props) {
       </div>
       </div>{/* /navbar principal */}
 
-      {/* ── Barra rápida de categorías ── */}
+      {/* ── Barra de categorías (panel desplegable) ── */}
       {categorias.length > 0 && (
         <div style={{
           background:   'var(--color-bg-2)',
           borderBottom: '1px solid var(--color-border)',
         }}>
-          <div className="container-max">
+          <div className="container-max" style={{ display: 'flex', alignItems: 'center' }}>
+            <CategoriasMenu categorias={categorias} />
+
             <nav className="cat-quickbar" style={{
               display:      'flex',
               alignItems:   'center',
@@ -326,7 +329,7 @@ export default function Navbar({ empresa }: Props) {
               overflowX:    'auto',
               scrollbarWidth:'none',
             }}>
-              {categorias.map(c => (
+              {categorias.filter(c => !c.id_categoria_padre).map(c => (
                 <Link key={c.id_categoria} href={`/catalogo?categoria=${c.id_categoria}`}
                   style={{
                     display:        'flex',

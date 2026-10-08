@@ -79,6 +79,7 @@ const S = StyleSheet.create({
   pMarca: { fontSize: 7, color: '#9ca3af', marginTop: 1 },
   pDet:   { fontSize: 7, color: '#6b7280', marginTop: 1 },
   pSpec:  { fontSize: 7, color: '#9ca3af', marginTop: 1 },
+  pObs:   { fontSize: 7, color: '#92400e', marginTop: 1 },
 
   // Totales
   totWrap:  { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, marginBottom: 14 },
@@ -248,6 +249,7 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], recepcion
               {d.marca_nombre && <Text style={S.pMarca}>{d.marca_nombre}</Text>}
               {d.producto_detalle && <Text style={S.pDet}>{d.producto_detalle}</Text>}
               {specLinea(d) && <Text style={S.pSpec}>{specLinea(d)}</Text>}
+              {d.observacion && <Text style={S.pObs}>📝 {d.observacion}</Text>}
             </View>
             <Text style={[S.td, S.cCant, S.right]}>{fmtN(d.cantidad)}</Text>
             <Text style={[S.td, S.cUm, { fontSize: 7, color: '#9ca3af' }]}>{d.unidad_codigo}</Text>

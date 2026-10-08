@@ -193,6 +193,9 @@ function Ticket110({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM }
               {spec && (
                 <div style={{ fontSize: '8px', color: '#666', paddingLeft: '14mm' }}>{spec}</div>
               )}
+              {d.observacion && (
+                <div style={{ fontSize: '8px', color: '#92400e', paddingLeft: '14mm' }}>📝 {d.observacion}</div>
+              )}
             </div>
           );
         })}
@@ -355,6 +358,9 @@ function TicketA4({ c, detalle, cuotas, pagos, recepciones, empresa: e, logoUrl,
                   )}
                   {spec && (
                     <div style={{ fontSize: '8px', color: '#666', marginTop: '1px' }}>{spec}</div>
+                  )}
+                  {d.observacion && (
+                    <div style={{ fontSize: '8px', color: '#92400e', marginTop: '1px' }}>📝 {d.observacion}</div>
                   )}
                 </td>
                 <td style={{ padding: '4px 6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmtN(d.cantidad)}</td>
@@ -623,6 +629,9 @@ const DetalleProductos = ({ detalle, fmtM }) => (
           )}
           {spec && (
             <div style={{ fontSize: '9px', color: '#444', paddingLeft: '2px' }}>{spec}</div>
+          )}
+          {d.observacion && (
+            <div style={{ fontSize: '9px', color: '#92400e', paddingLeft: '2px' }}>📝 {d.observacion}</div>
           )}
         </div>
       );

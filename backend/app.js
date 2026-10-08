@@ -46,13 +46,22 @@ const asistenciaScheduler = require('./cron/asistenciaScheduler');
 const app = express();
 
 // ── CORS ──────────────────────────────────────────────────────────────────
+const ORIGENES_FIJOS = [
+  'https://appmg.arletgroup.com',
+  'https://megaelectra.arletgroup.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
 const corsOptions = {
-  origin: [
-    'https://appmg.arletgroup.com',
-    'https://megaelectra.arletgroup.com',
-    'http://localhost:5173',
-    'http://localhost:5174'
-  ],
+  // Además de los orígenes fijos de siempre, acepta cualquier túnel rápido
+  // de Cloudflare (*.trycloudflare.com) — el subdominio es aleatorio cada
+  // vez que se levanta un túnel, así que no se puede fijar de antemano.
+  origin: (origin, callback) => {
+    if (!origin || ORIGENES_FIJOS.includes(origin) || /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('No permitido por CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 };

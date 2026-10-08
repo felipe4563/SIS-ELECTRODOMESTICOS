@@ -38,6 +38,7 @@ export interface Categoria {
   nombre: string;
   imagen_url?: string | null;
   total_productos: number;
+  id_categoria_padre?: number | null;
 }
 
 export interface Marca {

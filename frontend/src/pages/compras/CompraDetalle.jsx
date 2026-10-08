@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { comprasService } from '../../services/compras.service';
+import { proveedoresService } from '../../services/proveedores.service';
 import { descargarCompraPDF } from './CompraImprimir';
 import { usePermission }   from '../../hooks/usePermission';
 import { useEmpresa }      from '../../contexts/EmpresaContext';
@@ -22,6 +23,14 @@ const ESTADO_BADGE = {
   PARCIAL:    { label: 'Parcial',    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   RECIBIDO:   { label: 'Recibido',   cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   ANULADO:    { label: 'Anulado',    cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+};
+
+const ESTADO_PAGO_BADGE = {
+  PRE_PEDIDO:        { label: 'Pre-pedido',        cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400' },
+  CONTADO_PREVENTA:  { label: 'Contado / Pre-venta', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+  PAGADO:            { label: 'Pagado',            cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  PARCIAL_ACTA:      { label: 'Parcial a cuenta',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  RESERVADO:         { label: 'Reservado',         cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
 };
 
 const CUOTA_BADGE = {
@@ -307,9 +316,50 @@ function Modal({ titulo, onClose, children }) {
 }
 
 // ── Modal Confirmar ───────────────────────────────────────────────────────────
-function ModalConfirmar({ onConfirm, onClose, loading, error }) {
+function ModalConfirmar({ onConfirm, onClose, loading, error, proveedor, onCreditoActualizado }) {
+  const { puede } = usePermission();
   const [form, setForm] = useState({ condicion_pago: 'CONTADO', dias_credito: '30', num_cuotas: '1' });
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const [editandoCredito, setEditandoCredito] = useState(false);
+  const [credForm,        setCredForm]        = useState({ permite_credito: false, limite_credito: '', dias_credito: '' });
+  const [credError,       setCredError]       = useState('');
+  const [credGuardando,   setCredGuardando]   = useState(false);
+
+  const puedeEditarCredito = puede('dar_credito', 'proveedores') || puede('modificar_limite', 'proveedores');
+
+  const abrirEditarCredito = () => {
+    if (!proveedor) return;
+    setCredForm({
+      permite_credito: Boolean(proveedor.permite_credito),
+      limite_credito: proveedor.limite_credito ?? '',
+      dias_credito: proveedor.plazo_credito_dias ?? '',
+    });
+    setCredError('');
+    setEditandoCredito(true);
+  };
+
+  const guardarCredito = async () => {
+    setCredError('');
+    const { permite_credito, limite_credito, dias_credito } = credForm;
+    if (permite_credito && !(Number(limite_credito) >= 0)) {
+      return setCredError('Ingresá un límite de crédito válido');
+    }
+    setCredGuardando(true);
+    try {
+      const res = await proveedoresService.updateCredito(proveedor.id_proveedor, {
+        permite_credito,
+        limite_credito: Number(limite_credito) || 0,
+        dias_credito: Number(dias_credito) || 0,
+      });
+      onCreditoActualizado?.(res.data.credito);
+      setEditandoCredito(false);
+    } catch (err) {
+      setCredError(err.response?.data?.error ?? 'Error al actualizar el crédito');
+    } finally {
+      setCredGuardando(false);
+    }
+  };
 
   return (
     <Modal titulo="Confirmar pedido → Por llegar" onClose={onClose}>
@@ -333,6 +383,60 @@ function ModalConfirmar({ onConfirm, onClose, loading, error }) {
               <input type="number" min="1" max="24" value={form.num_cuotas}
                 onChange={e => setF('num_cuotas', e.target.value)} className={fieldCls} />
             </div>
+
+            {proveedor && (
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className={`text-xs ${proveedor.permite_credito ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                    {proveedor.permite_credito
+                      ? `Crédito: Bs ${fmtMonto(proveedor.limite_credito)} · Saldo: Bs ${fmtMonto(proveedor.saldo_actual)}`
+                      : 'El proveedor no tiene habilitado el crédito'}
+                  </span>
+                  {puedeEditarCredito && !editandoCredito && (
+                    <button type="button" onClick={abrirEditarCredito}
+                      className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline">
+                      ✎ Habilitar / editar crédito
+                    </button>
+                  )}
+                </div>
+
+                {editandoCredito && (
+                  <div className="mt-2.5 space-y-2.5">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+                      <input type="checkbox" checked={credForm.permite_credito}
+                        onChange={e => setCredForm(p => ({ ...p, permite_credito: e.target.checked }))}
+                        className="w-4 h-4 rounded accent-yellow-400" />
+                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Habilitar crédito</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className={labelCls}>Límite de crédito</label>
+                        <input type="number" min={0} step="0.01" value={credForm.limite_credito}
+                          onChange={e => setCredForm(p => ({ ...p, limite_credito: e.target.value }))}
+                          className={fieldCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Días de crédito</label>
+                        <input type="number" min={0} value={credForm.dias_credito}
+                          onChange={e => setCredForm(p => ({ ...p, dias_credito: e.target.value }))}
+                          className={fieldCls} />
+                      </div>
+                    </div>
+                    {credError && <p className="text-xs text-red-500 flex items-center gap-1.5"><span>⚠</span> {credError}</p>}
+                    <div className="flex gap-2">
+                      <button type="button" onClick={guardarCredito} disabled={credGuardando}
+                        className="flex-1 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-xs transition-colors">
+                        {credGuardando ? 'Guardando…' : 'Guardar'}
+                      </button>
+                      <button type="button" onClick={() => setEditandoCredito(false)}
+                        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
         {error && <p className="text-sm text-red-500">{error}</p>}
@@ -603,6 +707,7 @@ export default function CompraDetalle() {
   const [modalErr,     setModalErr]    = useState('');
   const [descargando,  setDescargando] = useState(false);
   const [motivoAnular, setMotivoAnular] = useState('');
+  const [estadoPagoSel, setEstadoPagoSel] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -643,7 +748,7 @@ export default function CompraDetalle() {
   };
 
   const openModal  = m => { setModalErr(''); setModal(m); };
-  const closeModal = () => { setModal(null); setModalErr(''); setMotivoAnular(''); };
+  const closeModal = () => { setModal(null); setModalErr(''); setMotivoAnular(''); setEstadoPagoSel(''); };
 
   const runAction = async (fn) => {
     setSaving(true);
@@ -733,13 +838,23 @@ export default function CompraDetalle() {
             ¿Aprobar <span className="font-mono font-semibold text-zinc-900 dark:text-white">{compra.numero}</span>?
             El pedido pasará a estado <span className="font-semibold text-indigo-600 dark:text-indigo-400">Confirmado</span> y podrá ser enviado al proveedor.
           </p>
+          <div className="mb-4">
+            <label className={labelCls}>Estado de pago / reserva (opcional)</label>
+            <select value={estadoPagoSel} onChange={e => setEstadoPagoSel(e.target.value)} className={fieldCls}>
+              <option value="">— Sin especificar —</option>
+              {Object.entries(ESTADO_PAGO_BADGE).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-400 mt-1">Solo queda como etiqueta informativa, no cambia el flujo de aprobación.</p>
+          </div>
           {modalErr && <p className="text-sm text-red-500 mb-3">{modalErr}</p>}
           <div className="flex gap-3">
             <button onClick={closeModal} disabled={saving}
               className="flex-1 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50">
               Cancelar
             </button>
-            <button onClick={() => runAction(() => comprasService.aprobar(id))} disabled={saving}
+            <button onClick={() => runAction(() => comprasService.aprobar(id, estadoPagoSel ? { estado_pago: estadoPagoSel } : undefined))} disabled={saving}
               className="flex-1 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               {saving ? 'Aprobando…' : 'Aprobar'}
             </button>
@@ -748,7 +863,24 @@ export default function CompraDetalle() {
       )}
       {modal === 'confirmar' && (
         <ModalConfirmar loading={saving} error={modalErr} onClose={closeModal}
-          onConfirm={form => runAction(() => comprasService.confirmar(id, form))} />
+          onConfirm={form => runAction(() => comprasService.confirmar(id, form))}
+          proveedor={{
+            id_proveedor: compra.id_proveedor,
+            permite_credito: compra.proveedor_permite_credito,
+            limite_credito: compra.proveedor_limite_credito,
+            saldo_actual: compra.proveedor_saldo_actual,
+            plazo_credito_dias: compra.proveedor_plazo_credito_dias,
+          }}
+          onCreditoActualizado={credito => setData(prev => ({
+            ...prev,
+            compra: {
+              ...prev.compra,
+              proveedor_permite_credito: credito.permite_credito,
+              proveedor_limite_credito: credito.limite_credito,
+              proveedor_saldo_actual: credito.saldo_actual,
+              proveedor_plazo_credito_dias: credito.plazo_credito_dias,
+            },
+          }))} />
       )}
       {modal === 'recibir' && (
         <ModalRecibir detalle={detalle} loading={saving} error={modalErr}
@@ -817,6 +949,11 @@ export default function CompraDetalle() {
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>
                   {badge.label}
                 </span>
+                {compra.estado_pago && ESTADO_PAGO_BADGE[compra.estado_pago] && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_PAGO_BADGE[compra.estado_pago].cls}`}>
+                    💳 {ESTADO_PAGO_BADGE[compra.estado_pago].label}
+                  </span>
+                )}
               </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{compra.proveedor_nombre}</p>
             </div>
@@ -1037,6 +1174,9 @@ export default function CompraDetalle() {
                           {specLinea(d) && (
                             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
                           )}
+                          {d.observacion && (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">📝 {d.observacion}</p>
+                          )}
                           <SeriesDetalle
                             series={d.series ?? []}
                             maxCantidad={Number(d.cantidad_recibida)}
@@ -1091,6 +1231,9 @@ export default function CompraDetalle() {
                       )}
                       {specLinea(d) && (
                         <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{specLinea(d)}</p>
+                      )}
+                      {d.observacion && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">📝 {d.observacion}</p>
                       )}
                       <SeriesDetalle
                         series={d.series ?? []}

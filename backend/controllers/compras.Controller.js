@@ -301,6 +301,10 @@ const getCompra = async (req, res) => {
       `SELECT c.*,
               p.razon_social AS proveedor_nombre, p.codigo AS proveedor_codigo,
               p.telefono AS proveedor_telefono,
+              p.permite_credito AS proveedor_permite_credito,
+              p.limite_credito AS proveedor_limite_credito,
+              p.saldo_actual AS proveedor_saldo_actual,
+              p.plazo_credito_dias AS proveedor_plazo_credito_dias,
               s.nombre AS sucursal_nombre,
               d.nombre AS deposito_nombre, d.codigo AS deposito_codigo,
               mon.codigo AS moneda_codigo, mon.simbolo AS moneda_simbolo,
@@ -539,9 +543,15 @@ const actualizarFacturaCompra = async (req, res) => {
 
 // ── Aprobar compra PRE_PEDIDO → CONFIRMADO ────────────────────────────────────
 
+const ESTADOS_PAGO_VALIDOS = ['PRE_PEDIDO', 'CONTADO_PREVENTA', 'PAGADO', 'PARCIAL_ACTA', 'RESERVADO'];
+
 const aprobarCompra = async (req, res) => {
   try {
     const { id } = req.params;
+    const { estado_pago } = req.body;
+    if (estado_pago !== undefined && estado_pago !== null && !ESTADOS_PAGO_VALIDOS.includes(estado_pago))
+      return res.status(400).json({ error: 'Estado de pago inválido' });
+
     const [[compra]] = await db.promise().query(
       `SELECT id_compra, estado FROM compras WHERE id_compra = ?`, [id]
     );
@@ -550,9 +560,9 @@ const aprobarCompra = async (req, res) => {
       return res.status(409).json({ error: 'Solo se pueden aprobar compras en estado PRE_PEDIDO' });
 
     await db.promise().query(
-      `UPDATE compras SET estado='CONFIRMADO', id_usuario_aprueba=?, fecha_confirmacion=CURDATE()
+      `UPDATE compras SET estado='CONFIRMADO', id_usuario_aprueba=?, fecha_confirmacion=CURDATE(), estado_pago=?
        WHERE id_compra = ?`,
-      [req.user.id_usuario, id]
+      [req.user.id_usuario, estado_pago || null, id]
     );
 
     await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));

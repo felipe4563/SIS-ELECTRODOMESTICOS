@@ -113,7 +113,7 @@ export default function Compras() {
             onClick={() => navigate('/compras/nueva')}
             className="self-start sm:mt-1 px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-zinc-900 font-semibold text-sm transition-colors shadow-sm"
           >
-            + Nueva compra
+            + Nuevo pre-pedido
           </button>
         )}
       </div>

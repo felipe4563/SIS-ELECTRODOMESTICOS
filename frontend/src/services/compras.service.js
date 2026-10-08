@@ -30,7 +30,7 @@ export const comprasService = {
     });
   },
   eliminarSerieDetalle: (id, idDetalle, idSerie) => api.delete(`/compras/${id}/detalle/${idDetalle}/series/${idSerie}`),
-  aprobar:         (id)                 => api.post(`/compras/${id}/aprobar`),
+  aprobar:         (id, payload)        => api.post(`/compras/${id}/aprobar`, payload),
   confirmar:       (id, data)           => api.post(`/compras/${id}/confirmar`, data),
   recibir:         (id, data)           => api.post(`/compras/${id}/recibir`, data),
   anular:          (id, data)           => api.post(`/compras/${id}/anular`, data),

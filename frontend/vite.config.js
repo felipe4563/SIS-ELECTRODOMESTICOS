@@ -53,6 +53,11 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    // Permite acceder al dev server a través de un túnel de Cloudflare
+    // (Host header distinto de localhost); Vite lo bloquea por defecto.
+    allowedHosts: ['.trycloudflare.com'],
+  },
   build: {
     rollupOptions: {
       output: {

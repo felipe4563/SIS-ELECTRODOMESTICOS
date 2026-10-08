@@ -198,7 +198,7 @@ exports.getProductos = async (req, res) => {
 exports.getCategorias = async (req, res) => {
   try {
     const [rows] = await db.promise().query(
-      `SELECT c.id_categoria, c.nombre,
+      `SELECT c.id_categoria, c.nombre, c.id_categoria_padre,
               COUNT(p.id_producto) AS total_productos
        FROM categorias c
        LEFT JOIN productos p ON p.id_categoria = c.id_categoria AND p.activo = 1 AND p.precio_publico > 0

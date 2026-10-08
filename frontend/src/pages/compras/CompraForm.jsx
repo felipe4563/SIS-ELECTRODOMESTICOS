@@ -10,6 +10,7 @@ import { hoyLocal } from '../../utils/fechaLocal';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const HOY      = hoyLocal();
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
+const BORRADOR_KEY = 'compra_borrador_nueva';
 
 const inputCls   = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors';
 const compactCls = 'w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400';
@@ -195,30 +196,41 @@ function CartLinea({ fila, prod, impuestos, expandido, onToggleExpand, onQtyDelt
       </div>
 
       {expandido && (
-        <div className="px-3 pb-3 pt-1 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30 grid grid-cols-2 gap-2.5">
-          <div>
-            <label className="block text-[10px] text-zinc-400 mb-1">Descuento %</label>
-            <input
-              type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
-              onChange={e => onChange({ descuento_porc: e.target.value })}
-              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
-            />
+        <div className="px-3 pb-3 pt-1 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30 space-y-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[10px] text-zinc-400 mb-1">Descuento %</label>
+              <input
+                type="number" min={0} max={100} step="0.01" value={fila.descuento_porc}
+                onChange={e => onChange({ descuento_porc: e.target.value })}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-zinc-400 mb-1">Impuesto</label>
+              <select
+                value={fila.id_impuesto ?? ''}
+                onChange={e => {
+                  const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
+                  onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
+                }}
+                className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+              >
+                <option value="">Sin imp.</option>
+                {impuestos.map(i => (
+                  <option key={i.id_impuesto} value={i.id_impuesto}>{i.codigo} ({Number(i.porcentaje).toFixed(0)}%)</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div>
-            <label className="block text-[10px] text-zinc-400 mb-1">Impuesto</label>
-            <select
-              value={fila.id_impuesto ?? ''}
-              onChange={e => {
-                const i = impuestos.find(x => String(x.id_impuesto) === e.target.value);
-                onChange({ id_impuesto: e.target.value, impuesto_porc: i ? Number(i.porcentaje) : 0 });
-              }}
-              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
-            >
-              <option value="">Sin imp.</option>
-              {impuestos.map(i => (
-                <option key={i.id_impuesto} value={i.id_impuesto}>{i.codigo} ({Number(i.porcentaje).toFixed(0)}%)</option>
-              ))}
-            </select>
+            <label className="block text-[10px] text-zinc-400 mb-1">Observación de esta línea</label>
+            <textarea
+              rows={2} value={fila.observacion ?? ''}
+              onChange={e => onChange({ observacion: e.target.value })}
+              placeholder="Ej: viene sin caja, color distinto al catálogo…"
+              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400 resize-y"
+            />
           </div>
         </div>
       )}
@@ -282,6 +294,48 @@ export default function CompraForm() {
   const [npGuardando,  setNpGuardando]  = useState(false);
   const [npImagenFile, setNpImagenFile] = useState(null);
 
+  // ── Borrador local ────────────────────────────────────────────────────────
+  // Mientras se arma una compra nueva, se autoguarda en localStorage por si se
+  // pierde la conexión/sesión antes de guardar con éxito (sin esto, perder la
+  // pestaña o un error de red en el submit borraba todo lo cargado).
+  // Lazy initializer (corre una sola vez, durante el render inicial) en vez de
+  // un efecto: evita el round-trip extra de "montar vacío → leer → setState".
+  const [draftDetectado, setDraftDetectado] = useState(() => {
+    if (esEdicion) return null;
+    try {
+      const raw = localStorage.getItem(BORRADOR_KEY);
+      if (!raw) return null;
+      const draft = JSON.parse(raw);
+      if (draft?.items?.length > 0) return draft;
+      localStorage.removeItem(BORRADOR_KEY);
+      return null;
+    } catch { localStorage.removeItem(BORRADOR_KEY); return null; }
+  });
+  const [draftRestaurado, setDraftRestaurado] = useState(false);
+
+  // Autoguardado: cada cambio en datos/items de una compra nueva se persiste.
+  useEffect(() => {
+    if (esEdicion || draftDetectado) return; // no pisar un borrador aún sin decidir
+    if (items.length === 0) { localStorage.removeItem(BORRADOR_KEY); return; }
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(BORRADOR_KEY, JSON.stringify({ datos, items, ts: Date.now() }));
+      } catch { /* localStorage lleno o deshabilitado: el autoguardado simplemente no aplica */ }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [datos, items, esEdicion, draftDetectado]);
+
+  const restaurarBorrador = () => {
+    setDatos(draftDetectado.datos);
+    setItems(draftDetectado.items);
+    setDraftRestaurado(true);
+    setDraftDetectado(null);
+  };
+  const descartarBorrador = () => {
+    localStorage.removeItem(BORRADOR_KEY);
+    setDraftDetectado(null);
+  };
+
   // Carga catálogos + compra (si es edición)
   useEffect(() => {
     comprasService.getFormData()
@@ -332,6 +386,7 @@ export default function CompraForm() {
           descuento_porc:  String(d.descuento_porc),
           id_impuesto:     d.id_impuesto ? String(d.id_impuesto) : '',
           impuesto_porc:   String(d.impuesto_porc ?? 0),
+          observacion:     d.observacion ?? '',
         })));
       }).catch(() => {});
     }
@@ -514,12 +569,28 @@ export default function CompraForm() {
 
   const totalUnidades = items.reduce((s, it) => s + Number(it.cantidad || 0), 0);
 
-  const handleGuardar = async () => {
+  const [mostrarRevision, setMostrarRevision] = useState(false);
+
+  const validarFormulario = () => {
     setError('');
-    if (!datos.id_proveedor || !datos.id_sucursal || !datos.id_deposito_destino || !datos.id_moneda)
-      return setError('Completa los campos obligatorios: proveedor, depósito destino y moneda');
-    if (items.length === 0 || items.some(it => !it.id_producto || Number(it.cantidad) <= 0))
-      return setError('Agregá al menos un producto con cantidad mayor a 0');
+    if (!datos.id_proveedor || !datos.id_sucursal || !datos.id_deposito_destino || !datos.id_moneda) {
+      setError('Completa los campos obligatorios: proveedor, depósito destino y moneda');
+      return false;
+    }
+    if (items.length === 0 || items.some(it => !it.id_producto || Number(it.cantidad) <= 0)) {
+      setError('Agregá al menos un producto con cantidad mayor a 0');
+      return false;
+    }
+    return true;
+  };
+
+  const abrirRevision = () => {
+    if (!validarFormulario()) return;
+    setMostrarRevision(true);
+  };
+
+  const handleGuardar = async () => {
+    if (!validarFormulario()) { setMostrarRevision(false); return; }
 
     setGuardando(true);
     try {
@@ -532,6 +603,7 @@ export default function CompraForm() {
           descuento_porc:  Number(it.descuento_porc),
           descuento_monto: 0,
           impuesto_porc:   0,
+          observacion:     it.observacion?.trim() || null,
         })),
       };
       if (esEdicion) {
@@ -539,10 +611,12 @@ export default function CompraForm() {
         navigate(`/compras/${id}`);
       } else {
         const res = await comprasService.create(payload);
+        localStorage.removeItem(BORRADOR_KEY);
         navigate(`/compras/${res.data.id_compra}`);
       }
     } catch (e) {
       setError(e?.response?.data?.error ?? 'Error al guardar la compra');
+      setMostrarRevision(false);
     } finally {
       setGuardando(false);
     }
@@ -706,8 +780,35 @@ export default function CompraForm() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">
             {esEdicion ? 'Editar Pre-pedido' : 'Nueva Compra'}
           </h1>
+          {!esEdicion && (
+            <p className="text-xs text-zinc-400 mt-0.5">Se crea como Pre-pedido — se podrá confirmar, recibir o anular después.</p>
+          )}
         </div>
       </div>
+
+      {/* Borrador recuperado automáticamente */}
+      {draftDetectado && (
+        <div className="px-4 py-3 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700/40 text-sm text-yellow-800 dark:text-yellow-300 flex flex-col sm:flex-row sm:items-center gap-2.5">
+          <span className="flex-1">
+            💾 Encontramos una compra sin guardar de una sesión anterior ({draftDetectado.items.length} producto{draftDetectado.items.length !== 1 ? 's' : ''}). ¿Querés recuperarla?
+          </span>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={restaurarBorrador}
+              className="px-3 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-zinc-900 text-xs font-semibold transition-colors">
+              Recuperar
+            </button>
+            <button onClick={descartarBorrador}
+              className="px-3 py-1.5 rounded-lg border border-yellow-300 dark:border-yellow-700/40 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 text-xs font-medium transition-colors">
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+      {draftRestaurado && (
+        <div className="px-4 py-2.5 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-xs text-green-700 dark:text-green-400">
+          ✓ Borrador recuperado — revisá los datos y guardá cuando esté listo.
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -1115,10 +1216,10 @@ export default function CompraForm() {
               </div>
 
               <button
-                onClick={handleGuardar} disabled={guardando}
+                onClick={abrirRevision} disabled={guardando}
                 className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-bold text-sm transition-colors mt-1"
               >
-                {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear pre-pedido'}
+                {guardando ? 'Guardando…' : esEdicion ? 'Revisar y guardar' : 'Revisar y crear pre-pedido'}
               </button>
               <button
                 onClick={() => navigate('/compras')}
@@ -1138,12 +1239,81 @@ export default function CompraForm() {
           <p className="text-lg font-bold font-mono text-zinc-900 dark:text-white leading-tight">Bs {fmtMonto(totales.total)}</p>
         </div>
         <button
-          onClick={handleGuardar} disabled={guardando}
+          onClick={abrirRevision} disabled={guardando}
           className="px-5 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-sm transition-colors"
         >
-          {guardando ? 'Guardando…' : esEdicion ? 'Guardar' : 'Crear pre-pedido'}
+          {guardando ? 'Guardando…' : esEdicion ? 'Revisar' : 'Revisar y crear'}
         </button>
       </div>
+
+      {/* ── Modal: revisar antes de guardar ── */}
+      {mostrarRevision && (
+        <Modal titulo="Revisá antes de guardar" onClose={() => setMostrarRevision(false)} maxW="max-w-2xl">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-0.5">Proveedor</p>
+                <p className="text-zinc-900 dark:text-white font-medium">
+                  {catalogo.proveedores.find(p => String(p.id_proveedor) === String(datos.id_proveedor))?.razon_social ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-0.5">Depósito destino</p>
+                <p className="text-zinc-900 dark:text-white font-medium">
+                  {catalogo.depositos.find(d => String(d.id_deposito) === String(datos.id_deposito_destino))?.nombre ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-0.5">Moneda</p>
+                <p className="text-zinc-900 dark:text-white font-medium">
+                  {catalogo.monedas.find(m => String(m.id_moneda) === String(datos.id_moneda))?.nombre ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-0.5">Fecha de pedido</p>
+                <p className="text-zinc-900 dark:text-white font-medium">{datos.fecha_pedido || '—'}</p>
+              </div>
+            </div>
+
+            <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+              <div className="max-h-64 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
+                {items.map((it, i) => {
+                  const prod = catalogo.productos.find(p => String(p.id_producto) === String(it.id_producto));
+                  return (
+                    <div key={it._key ?? i} className="px-3 py-2.5 flex items-start justify-between gap-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-zinc-900 dark:text-white truncate">{prod?.producto ?? '—'}</p>
+                        <p className="text-xs text-zinc-400">{Number(it.cantidad)} × Bs {fmtMonto(it.precio_unitario)}</p>
+                        {it.observacion?.trim() && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">📝 {it.observacion}</p>
+                        )}
+                      </div>
+                      <span className="font-mono font-semibold text-zinc-900 dark:text-white shrink-0">Bs {fmtMonto(calcSubtotal(it))}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-3 py-2.5 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 flex items-center justify-between">
+                <span className="text-sm font-bold text-zinc-900 dark:text-white">Total</span>
+                <span className="text-lg font-bold font-mono text-zinc-900 dark:text-white">Bs {fmtMonto(totales.total)}</span>
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
+
+            <div className="flex gap-3">
+              <button onClick={() => setMostrarRevision(false)} disabled={guardando}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50">
+                ← Volver a editar
+              </button>
+              <button onClick={handleGuardar} disabled={guardando}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-bold text-sm transition-colors">
+                {guardando ? 'Guardando…' : esEdicion ? 'Confirmar cambios' : 'Confirmar y crear pre-pedido'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ── Modal: alta rápida de producto nuevo ── */}
       {npModal && (
@@ -1227,8 +1397,8 @@ export default function CompraForm() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Detalle</label>
-                <input value={npForm.detalle} onChange={e => setNp('detalle', e.target.value)}
-                  className={inputCls} placeholder="Ej: 4H MESA VIDRIO E.E. GRILL ELEC." />
+                <textarea rows={3} value={npForm.detalle} onChange={e => setNp('detalle', e.target.value)}
+                  className={`${inputCls} resize-y`} placeholder="Ej: 4H MESA VIDRIO E.E. GRILL ELEC." />
               </div>
               <div>
                 <label className={labelCls}>Capacidad</label>
