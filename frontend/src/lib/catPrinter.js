@@ -58,12 +58,26 @@ export async function connectCatPrinter() {
     throw new Error('Este navegador no soporta Web Bluetooth. Usá Chrome, Edge, o Brave (activando "Web Bluetooth API" en brave://flags).');
   }
 
+  // Muchas de estas impresoras chinas no anuncian el UUID del servicio en el
+  // paquete de publicidad BLE, así que filtrar por servicio las excluye del
+  // selector. Listamos todos los dispositivos cercanos (igual que hace la
+  // app Tiny Print) y el usuario elige la suya por nombre.
   const device = await navigator.bluetooth.requestDevice({
-    filters: [{ services: [SERVICE_UUID] }],
-    optionalServices: [SERVICE_UUID],
+    acceptAllDevices: true,
+    optionalServices: [SERVICE_UUID, '0000af30-0000-1000-8000-00805f9b34fb'],
   });
-  const server      = await device.gatt.connect();
-  const service     = await server.getPrimaryService(SERVICE_UUID);
+  const server = await device.gatt.connect();
+  let service;
+  try {
+    service = await server.getPrimaryService(SERVICE_UUID);
+  } catch {
+    try {
+      service = await server.getPrimaryService('0000af30-0000-1000-8000-00805f9b34fb');
+    } catch {
+      device.gatt.disconnect();
+      throw new Error(`"${device.name || 'El dispositivo'}" no expone el servicio Bluetooth esperado por esta impresora. Puede ser un modelo distinto al GB01/GB02/MX — avisale a soporte con el nombre exacto del dispositivo.`);
+    }
+  }
   const writeChar   = await service.getCharacteristic(CHAR_WRITE_UUID);
   const notifyChar  = await service.getCharacteristic(CHAR_NOTIFY_UUID);
 
