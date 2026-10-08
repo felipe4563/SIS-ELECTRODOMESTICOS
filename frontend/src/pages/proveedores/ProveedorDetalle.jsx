@@ -49,10 +49,50 @@ const EMPTY_CUENTA = {
 
 // ── Tab Datos Generales ───────────────────────────────────────────────────
 function TabDatos({ proveedor, puedeEditar, onSaved }) {
+  const { puede }   = usePermission();
   const [editando,  setEditando]  = useState(false);
   const [form,      setForm]      = useState({ ...EMPTY_PROV });
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState(null);
+
+  const [editandoCredito, setEditandoCredito] = useState(false);
+  const [credForm,        setCredForm]        = useState({ permite_credito: false, limite_credito: '', dias_credito: '' });
+  const [credError,       setCredError]       = useState('');
+  const [credGuardando,   setCredGuardando]   = useState(false);
+
+  const puedeEditarCredito = puede('dar_credito', 'proveedores') || puede('modificar_limite', 'proveedores');
+
+  const abrirEditarCredito = () => {
+    setCredForm({
+      permite_credito: Boolean(proveedor.permite_credito),
+      limite_credito: proveedor.limite_credito ?? '',
+      dias_credito: proveedor.plazo_credito_dias ?? '',
+    });
+    setCredError('');
+    setEditandoCredito(true);
+  };
+
+  const guardarCredito = async () => {
+    setCredError('');
+    const { permite_credito, limite_credito, dias_credito } = credForm;
+    if (permite_credito && !(Number(limite_credito) >= 0)) {
+      return setCredError('Ingresá un límite de crédito válido');
+    }
+    setCredGuardando(true);
+    try {
+      await proveedoresService.updateCredito(proveedor.id_proveedor, {
+        permite_credito,
+        limite_credito: Number(limite_credito) || 0,
+        dias_credito: Number(dias_credito) || 0,
+      });
+      setEditandoCredito(false);
+      onSaved();
+    } catch (err) {
+      setCredError(err.response?.data?.error ?? 'Error al actualizar el crédito');
+    } finally {
+      setCredGuardando(false);
+    }
+  };
 
   useEffect(() => {
     if (proveedor) setForm({ ...proveedor, activo: !!proveedor.activo });
@@ -141,6 +181,65 @@ function TabDatos({ proveedor, puedeEditar, onSaved }) {
           <input name="pais" value={form.pais || ''} onChange={handleChange} disabled={!editando}
             className={inputCls} />
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 dark:border-zinc-700 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div>
+            <p className={labelCls} style={{ marginBottom: 2 }}>Crédito</p>
+            <span className={`text-sm ${proveedor.permite_credito ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400 dark:text-zinc-500'}`}>
+              {proveedor.permite_credito
+                ? `Habilitado — Límite: Bs ${fmt(proveedor.limite_credito)} · Saldo: Bs ${fmt(proveedor.saldo_actual)}`
+                : 'Sin crédito habilitado'}
+            </span>
+          </div>
+          {puedeEditarCredito && !editandoCredito && (
+            <button type="button" onClick={abrirEditarCredito}
+              className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline">
+              ✎ Editar crédito
+            </button>
+          )}
+        </div>
+
+        {editandoCredito && (
+          <div className="mt-3 space-y-3">
+            {puede('dar_credito', 'proveedores') && (
+              <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+                <input type="checkbox" checked={credForm.permite_credito}
+                  onChange={e => setCredForm(p => ({ ...p, permite_credito: e.target.checked }))}
+                  className="w-4 h-4 rounded accent-amber-500" />
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Habilitar crédito</span>
+              </label>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Límite de crédito</label>
+                <input type="number" min={0} step="0.01" value={credForm.limite_credito}
+                  onChange={e => setCredForm(p => ({ ...p, limite_credito: e.target.value }))}
+                  className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Días de crédito</label>
+                <input type="number" min={0} value={credForm.dias_credito}
+                  onChange={e => setCredForm(p => ({ ...p, dias_credito: e.target.value }))}
+                  className={inputCls} />
+              </div>
+            </div>
+            {credError && (
+              <p className="text-xs text-red-500 flex items-center gap-1.5"><span>⚠</span> {credError}</p>
+            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={guardarCredito} disabled={credGuardando}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-semibold text-sm transition-colors">
+                {credGuardando ? 'Guardando…' : 'Guardar'}
+              </button>
+              <button type="button" onClick={() => setEditandoCredito(false)}
+                className="px-4 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-sm text-gray-600 dark:text-zinc-300">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
