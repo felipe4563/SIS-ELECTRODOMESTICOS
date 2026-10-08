@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
+import { isBluetoothSupported, connectCatPrinter, renderLabelToCanvas } from '../../lib/catPrinter';
 
 const APP_URL = import.meta.env.VITE_APP_URL ?? 'https://appmg.arletgroup.com';
 
@@ -42,6 +43,38 @@ export default function EtiquetasImprimir() {
     Array.from({ length: item.copias }, () => item)
   );
 
+  const [btEstado, setBtEstado] = useState('idle'); // idle | conectando | imprimiendo | error
+  const [btProgreso, setBtProgreso] = useState({ actual: 0, total: 0 });
+  const [btError, setBtError] = useState('');
+
+  const imprimirPorBluetooth = async () => {
+    setBtError('');
+    if (!isBluetoothSupported()) {
+      setBtError('Este navegador no soporta Bluetooth. Usá Chrome, Edge o Brave (con el flag "Web Bluetooth API" activado en brave://flags).');
+      setBtEstado('error');
+      return;
+    }
+    let printer;
+    try {
+      setBtEstado('conectando');
+      printer = await connectCatPrinter();
+      setBtEstado('imprimiendo');
+      setBtProgreso({ actual: 0, total: printLabels.length });
+      for (let i = 0; i < printLabels.length; i++) {
+        const item = printLabels[i];
+        const canvas = await renderLabelToCanvas(item, qrUrls[item.codigo_interno]);
+        await printer.printCanvas(canvas);
+        setBtProgreso({ actual: i + 1, total: printLabels.length });
+      }
+      setBtEstado('idle');
+    } catch (err) {
+      setBtError(err?.message || 'No se pudo imprimir por Bluetooth. Verificá que la impresora esté encendida y cerca.');
+      setBtEstado('error');
+    } finally {
+      printer?.disconnect();
+    }
+  };
+
   return (
     <>
       {/* ── Barra acciones (solo pantalla) ─────────────────────────────── */}
@@ -55,12 +88,23 @@ export default function EtiquetasImprimir() {
         <span className="font-semibold text-zinc-900 dark:text-white text-sm">
           Etiquetas QR de productos
         </span>
-        <button
-          onClick={() => window.print()}
-          className="px-4 py-1.5 rounded-xl bg-yellow-400 text-zinc-900 text-sm font-semibold hover:bg-yellow-500 transition-colors"
-        >
-          🖨 Imprimir
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={imprimirPorBluetooth}
+            disabled={btEstado === 'conectando' || btEstado === 'imprimiendo'}
+            className="px-4 py-1.5 rounded-xl border border-blue-400 text-blue-600 dark:text-blue-400 text-sm font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+          >
+            {btEstado === 'conectando' && '🔵 Conectando…'}
+            {btEstado === 'imprimiendo' && `🔵 Imprimiendo ${btProgreso.actual}/${btProgreso.total}…`}
+            {(btEstado === 'idle' || btEstado === 'error') && '🔵 Imprimir por Bluetooth'}
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-1.5 rounded-xl bg-yellow-400 text-zinc-900 text-sm font-semibold hover:bg-yellow-500 transition-colors"
+          >
+            🖨 Imprimir
+          </button>
+        </div>
       </div>
 
       {/* ── Vista previa (solo pantalla) ───────────────────────────────── */}
@@ -69,6 +113,11 @@ export default function EtiquetasImprimir() {
           <p className="text-xs text-zinc-500 mb-2">
             Etiquetas 40mm × 40mm — Código QR con enlace al producto. Ajusta las copias por producto.
           </p>
+          {btError && (
+            <div className="px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
+              ⚠ {btError}
+            </div>
+          )}
           {items.map((item, idx) => (
             <div
               key={idx}
