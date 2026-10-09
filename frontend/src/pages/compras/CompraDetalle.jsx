@@ -1358,7 +1358,7 @@ export default function CompraDetalle() {
                           )}
                           <SeriesDetalle
                             series={d.series ?? []}
-                            maxCantidad={Number(d.cantidad_recibida)}
+                            maxCantidad={Number(d.cantidad)}
                             editable={puedeEditarFactura}
                             onAgregar={(numeroSerie, file) => agregarSerie(d.id_detalle, numeroSerie, file)}
                             onEliminar={idSerie => eliminarSerie(d.id_detalle, idSerie)}
@@ -1416,7 +1416,7 @@ export default function CompraDetalle() {
                       )}
                       <SeriesDetalle
                         series={d.series ?? []}
-                        maxCantidad={Number(d.cantidad_recibida)}
+                        maxCantidad={Number(d.cantidad)}
                         editable={puedeEditarFactura}
                         onAgregar={(numeroSerie, file) => agregarSerie(d.id_detalle, numeroSerie, file)}
                         onEliminar={idSerie => eliminarSerie(d.id_detalle, idSerie)}

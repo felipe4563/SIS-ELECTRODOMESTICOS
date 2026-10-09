@@ -152,12 +152,14 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   const mm = valor => Math.round(valor * DOTS_PER_MM);
 
   const pad       = mm(2);
-  const qrSize    = mm(28);
+  const qrSize    = mm(25);
   const gapCol    = mm(2);
   const colDerechaX = pad + qrSize + gapCol;
   const colDerechaW = CONTENT_DOTS_W - pad - colDerechaX;
-  const filaSerieH   = mm(8);
-  const filaSuperiorH = CONTENT_DOTS_H - pad * 2 - filaSerieH;
+  const filaSerieH   = mm(6);
+  const empresaH     = empresaNombre ? mm(3.0) + mm(1) : 0;
+  const filaSuperiorY = pad + empresaH;
+  const filaSuperiorH = CONTENT_DOTS_H - pad * 2 - filaSerieH - empresaH;
 
   const contenido = document.createElement('canvas');
   contenido.width  = CONTENT_DOTS_W;
@@ -167,23 +169,29 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   ctx.fillRect(0, 0, contenido.width, contenido.height);
   ctx.fillStyle = '#000';
 
+  // Nombre de la empresa como encabezado centrado, a todo el ancho — así no
+  // compite por espacio con la columna de datos y no se corta con "…".
+  if (empresaNombre) {
+    ctx.font = `bold ${mm(3.0)}px sans-serif`;
+    drawTruncado(ctx, empresaNombre, CONTENT_DOTS_W / 2, pad + mm(3.0), CONTENT_DOTS_W - pad * 2, 'center');
+  }
+
   if (qrDataUrl) {
     const img = await loadImage(qrDataUrl);
-    ctx.drawImage(img, pad, pad + Math.round((filaSuperiorH - qrSize) / 2), qrSize, qrSize);
+    ctx.drawImage(img, pad, filaSuperiorY + Math.round((filaSuperiorH - qrSize) / 2), qrSize, qrSize);
   }
 
   const campos = [
-    empresaNombre && { texto: empresaNombre, bold: true, size: mm(3.4) },
-    item.nombre   && { texto: item.nombre, bold: false, size: mm(3.0) },
-    item.marca    && { texto: `Marca: ${item.marca}`,       bold: false, size: mm(2.9) },
-    item.modelo   && { texto: `Modelo: ${item.modelo}`,     bold: false, size: mm(2.9) },
-    item.color    && { texto: `Color: ${item.color}`,       bold: false, size: mm(2.9) },
-    item.capacidad&& { texto: `Cap: ${item.capacidad}`,     bold: false, size: mm(2.9) },
+    item.nombre   && { texto: item.nombre, bold: false, size: mm(2.6) },
+    item.marca    && { texto: `Marca: ${item.marca}`,       bold: false, size: mm(2.5) },
+    item.modelo   && { texto: `Modelo: ${item.modelo}`,     bold: false, size: mm(2.5) },
+    item.color    && { texto: `Color: ${item.color}`,       bold: false, size: mm(2.5) },
+    item.capacidad&& { texto: `Cap: ${item.capacidad}`,     bold: false, size: mm(2.5) },
   ].filter(Boolean);
 
   const lineGap = mm(0.6);
   const totalTexto = campos.reduce((s, c) => s + c.size + lineGap, 0) - lineGap;
-  let y = pad + Math.round((filaSuperiorH - totalTexto) / 2) + campos[0]?.size;
+  let y = filaSuperiorY + Math.round((filaSuperiorH - totalTexto) / 2) + campos[0]?.size;
   for (const c of campos) {
     ctx.font = `${c.bold ? 'bold ' : ''}${c.size}px sans-serif`;
     drawTruncado(ctx, c.texto, colDerechaX, y, colDerechaW, 'left');
@@ -191,8 +199,8 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   }
 
   // N° de serie (sin línea separadora)
-  const ySerie = pad + filaSuperiorH + mm(5.5);
-  ctx.font = `bold ${mm(3.4)}px sans-serif`;
+  const ySerie = filaSuperiorY + filaSuperiorH + mm(4.2);
+  ctx.font = `bold ${mm(3.0)}px sans-serif`;
   const textoSerie = item.numero_serie ? `N° Serie: ${item.numero_serie}` : 'N° Serie: _______________';
   drawTruncado(ctx, textoSerie, CONTENT_DOTS_W / 2, ySerie, CONTENT_DOTS_W - pad * 2, 'center');
 

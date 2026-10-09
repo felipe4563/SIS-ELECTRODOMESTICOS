@@ -212,6 +212,7 @@ export default function EtiquetasImprimir() {
               // Contenido diseñado en horizontal (60×40) y rotado 90° con CSS
               // para que entre en el rollo físico de 40×60.
               <div className="etq-rot">
+                {empresaNombre && <p className="etq-empresa">{empresaNombre}</p>}
                 <div className="etq-fila-sup">
                   <div className="etq-qr">
                     {qrUrls[item.codigo_interno] && (
@@ -219,7 +220,6 @@ export default function EtiquetasImprimir() {
                     )}
                   </div>
                   <div className="etq-datos">
-                    {empresaNombre && <p className="etq-empresa">{empresaNombre}</p>}
                     <p className="etq-campo">{item.nombre}</p>
                     {item.marca     && <p className="etq-campo">Marca: {item.marca}</p>}
                     {item.modelo    && <p className="etq-campo">Modelo: {item.modelo}</p>}
@@ -294,11 +294,11 @@ export default function EtiquetasImprimir() {
             display: flex;
             flex-direction: row;
             gap: 2mm;
-            height: 28mm;
+            height: 25mm;
           }
           .etq-qr {
-            width: 28mm;
-            height: 28mm;
+            width: 25mm;
+            height: 25mm;
             flex-shrink: 0;
             align-self: center;
           }
@@ -312,26 +312,27 @@ export default function EtiquetasImprimir() {
             overflow: hidden;
           }
           .etq-empresa {
-            font-size: 9pt;
+            font-size: 8pt;
             font-weight: 700;
-            margin: 0;
+            margin: 0 0 1mm;
+            text-align: center;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
           }
           .etq-campo {
-            font-size: 8pt;
+            font-size: 7pt;
             margin: 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
           }
           .etq-serie {
-            height: 8mm;
+            height: 6mm;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9pt;
+            font-size: 8pt;
             font-weight: 700;
             text-align: center;
             white-space: nowrap;

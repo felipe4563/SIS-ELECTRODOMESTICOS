@@ -1101,7 +1101,7 @@ const agregarSerieDetalle = async (req, res) => {
       return res.status(400).json({ error: 'El número de serie es requerido' });
 
     const [[detalle]] = await db.promise().query(
-      `SELECT cd.id_detalle, cd.cantidad_recibida
+      `SELECT cd.id_detalle, cd.cantidad
        FROM compra_detalle cd WHERE cd.id_detalle = ? AND cd.id_compra = ?`, [idDetalle, id]
     );
     if (!detalle) return res.status(404).json({ error: 'Línea de compra no encontrada' });
@@ -1109,8 +1109,8 @@ const agregarSerieDetalle = async (req, res) => {
     const [[{ cnt }]] = await db.promise().query(
       `SELECT COUNT(*) AS cnt FROM compra_detalle_series WHERE id_detalle = ?`, [idDetalle]
     );
-    if (cnt >= Number(detalle.cantidad_recibida)) {
-      return res.status(409).json({ error: 'Ya se registraron números de serie para todas las unidades recibidas' });
+    if (cnt >= Number(detalle.cantidad)) {
+      return res.status(409).json({ error: 'Ya se registraron números de serie para todas las unidades pedidas' });
     }
 
     const imagenUrl = req.file ? `/uploads/compras/${req.file.filename}` : null;
