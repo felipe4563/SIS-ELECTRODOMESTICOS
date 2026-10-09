@@ -636,6 +636,90 @@ const confirmarPedido = async (req, res) => {
   }
 };
 
+// ── Corregir condición de pago de un pedido ya confirmado ─────────────────────
+// Solo permitido mientras no se haya registrado ningún pago (saldo_pendiente
+// intacto) — una vez hay pagos, condicion_pago/dias_credito ya no es un dato
+// que se pueda cambiar sin arrastrar inconsistencias en pagos/cuotas.
+
+const actualizarCondicionPago = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { condicion_pago, dias_credito = 0, num_cuotas = 1 } = req.body;
+    if (!['CONTADO', 'CREDITO'].includes(condicion_pago))
+      return res.status(400).json({ error: 'Condición de pago inválida' });
+
+    const [[compra]] = await db.promise().query(
+      `SELECT id_compra, id_proveedor, estado, total, saldo_pendiente, condicion_pago, fecha_pedido
+       FROM compras WHERE id_compra = ?`, [id]
+    );
+    if (!compra) return res.status(404).json({ error: 'Compra no encontrada' });
+    if (!['POR_LLEGAR', 'PARCIAL', 'RECIBIDO'].includes(compra.estado))
+      return res.status(409).json({ error: 'Solo se puede corregir la condición de pago en compras ya confirmadas' });
+    if (Number(compra.saldo_pendiente) !== Number(compra.total))
+      return res.status(409).json({ error: 'No se puede modificar: ya se registraron pagos sobre esta compra' });
+
+    if (condicion_pago === 'CREDITO') {
+      const [[prov]] = await db.promise().query(
+        `SELECT permite_credito, limite_credito, saldo_actual FROM proveedores WHERE id_proveedor = ?`, [compra.id_proveedor]
+      );
+      if (!prov?.permite_credito) {
+        return res.status(400).json({ error: 'El proveedor no tiene habilitado el crédito' });
+      }
+      const saldoSinEstaCompra = compra.condicion_pago === 'CREDITO'
+        ? Number(prov.saldo_actual) - Number(compra.saldo_pendiente)
+        : Number(prov.saldo_actual);
+      const nuevoSaldo = saldoSinEstaCompra + Number(compra.total);
+      if (nuevoSaldo > Number(prov.limite_credito)) {
+        return res.status(400).json({
+          error: `Excede el límite de crédito del proveedor (Límite: ${prov.limite_credito}, Saldo: ${prov.saldo_actual}, Compra: ${Number(compra.total).toFixed(2)})`,
+        });
+      }
+    }
+
+    await db.promise().query(
+      `UPDATE compras SET condicion_pago = ?, dias_credito = ? WHERE id_compra = ?`,
+      [condicion_pago, condicion_pago === 'CREDITO' ? Number(dias_credito) : 0, id]
+    );
+
+    // Ninguna cuota tiene pagos (ya validado arriba vía saldo_pendiente === total),
+    // así que es seguro reemplazarlas por completo.
+    await db.promise().query(`DELETE FROM compra_cuotas WHERE id_compra = ?`, [id]);
+    if (condicion_pago === 'CREDITO' && Number(dias_credito) > 0) {
+      const nCuotas   = Math.max(1, Number(num_cuotas));
+      const montoBase = +(Number(compra.total) / nCuotas).toFixed(2);
+      const fechaBase = new Date(compra.fecha_pedido);
+
+      for (let i = 1; i <= nCuotas; i++) {
+        const diasEsta = Math.round((Number(dias_credito) / nCuotas) * i);
+        const fVenc    = new Date(fechaBase);
+        fVenc.setDate(fVenc.getDate() + diasEsta);
+        await db.promise().query(
+          `INSERT INTO compra_cuotas (id_compra, numero_cuota, fecha_vencimiento, monto)
+           VALUES (?,?,?,?)`,
+          [id, i, soloFechaLocal(fVenc), montoBase]
+        );
+      }
+    }
+
+    // Recalcular saldo del proveedor (cubre tanto entrar como salir de crédito)
+    await db.promise().query(
+      `UPDATE proveedores SET saldo_actual = (
+         SELECT COALESCE(SUM(saldo_pendiente), 0)
+         FROM compras
+         WHERE id_proveedor = ? AND condicion_pago = 'CREDITO'
+           AND estado IN ('POR_LLEGAR','PARCIAL','RECIBIDO')
+       ) WHERE id_proveedor = ?`,
+      [compra.id_proveedor, compra.id_proveedor]
+    );
+
+    await auditLog(req.user.id_usuario, 'compras', id, 'UPDATE', getIp(req));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[actualizarCondicionPago]', err);
+    res.status(500).json({ error: 'Error al actualizar la condición de pago' });
+  }
+};
+
 // ── Recibir mercadería → stock + kardex ───────────────────────────────────────
 
 const recibirMercaderia = async (req, res) => {
@@ -1131,7 +1215,7 @@ module.exports = {
   getCompras, getCompra,
   createCompra, updateCompra, actualizarFacturaCompra, subirFacturaImagen, subirImagenDetalle,
   agregarSerieDetalle, eliminarSerieDetalle,
-  aprobarCompra, confirmarPedido, recibirMercaderia, anularCompra,
+  aprobarCompra, confirmarPedido, actualizarCondicionPago, recibirMercaderia, anularCompra,
   createPago, anularPago,
   actualizarCuota,
 };

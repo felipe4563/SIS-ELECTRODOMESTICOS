@@ -67,7 +67,11 @@ export default function Productos() {
   const imprimirEtiquetas = () => {
     const etiquetas = lista
       .filter(p => seleccionados.has(p.id_producto))
-      .map(p => ({ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }));
+      .map(p => ({
+        nombre: p.producto, codigo_interno: p.codigo_interno,
+        marca: p.marca_nombre, modelo: p.modelo, color: p.color, capacidad: p.capacidad,
+        copias: 1,
+      }));
     navigate('/productos/etiquetas', { state: { etiquetas } });
   };
 
@@ -335,7 +339,11 @@ export default function Productos() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
                           <button
-                            onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }] } })}
+                            onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{
+                              nombre: p.producto, codigo_interno: p.codigo_interno,
+                              marca: p.marca_nombre, modelo: p.modelo, color: p.color, capacidad: p.capacidad,
+                              copias: 1,
+                            }] } })}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
                             title="Imprimir etiqueta QR">
                             <HiQrCode className="h-4 w-4" />
@@ -424,7 +432,11 @@ export default function Productos() {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{ nombre: p.producto, codigo_interno: p.codigo_interno, copias: 1 }] } })}
+                      onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{
+                              nombre: p.producto, codigo_interno: p.codigo_interno,
+                              marca: p.marca_nombre, modelo: p.modelo, color: p.color, capacidad: p.capacidad,
+                              copias: 1,
+                            }] } })}
                       className="p-2 rounded-lg text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors"
                       title="Imprimir etiqueta QR">
                       <HiQrCode className="h-4 w-4" />

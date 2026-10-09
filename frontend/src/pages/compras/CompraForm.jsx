@@ -46,6 +46,7 @@ function Ic({ id, size = 15, className = '' }) {
     trash:   <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m5-3h4a1 1 0 011 1v2H9V4a1 1 0 011-1z" /></>,
     tune:    <><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></>,
     search:  <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
+    pencil:  <><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></>,
   };
   return (
     <svg viewBox="0 0 24 24" width={size} height={size}
@@ -143,21 +144,39 @@ function ProductoTile({ prod, enCarrito, onClick, onDecrement }) {
 }
 
 /* ─── Línea del carrito (panel de orden) ─────────────────────────────────── */
-function CartLinea({ fila, prod, impuestos, expandido, onToggleExpand, onQtyDelta, onChange, onRemove }) {
+function CartLinea({ fila, prod, impuestos, expandido, onToggleExpand, onQtyDelta, onChange, onRemove, onEditarProducto }) {
   const sub = calcSubtotal(fila);
+  const specs = prod && [prod.marca, prod.modelo, prod.color, prod.capacidad].filter(Boolean).join(' · ');
   return (
     <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5">
+      {/* Nombre completo + código + specs — en su propia fila, sin truncar */}
+      <div className="flex items-start justify-between gap-2 px-3 pt-2.5">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{prod?.producto ?? '—'}</p>
-          {prod && (prod.marca || prod.modelo || prod.color || prod.capacidad) && (
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
-              {[prod.marca, prod.modelo, prod.color, prod.capacidad].filter(Boolean).join(' · ')}
-            </p>
+          <p className="text-sm font-medium text-zinc-900 dark:text-white leading-snug break-words">{prod?.producto ?? '—'}</p>
+          {prod?.codigo_interno && (
+            <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">{prod.codigo_interno}</p>
+          )}
+          {specs && (
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 break-words">{specs}</p>
           )}
         </div>
-
         <div className="flex items-center gap-1 shrink-0">
+          {prod && (
+            <button onClick={onEditarProducto} title="Editar datos del producto (marca, categoría, precios…)"
+              className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+              <Ic id="pencil" size={13} />
+            </button>
+          )}
+          <button onClick={onRemove} title="Quitar"
+            className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+            <Ic id="trash" size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Controles: cantidad, precio, editar detalle */}
+      <div className="flex items-center gap-1.5 px-3 pt-2 pb-2.5">
+        <div className="flex items-center gap-1">
           <button onClick={() => onQtyDelta(-1)}
             className="w-6 h-6 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
             <Ic id="minus" size={12} />
@@ -176,17 +195,13 @@ function CartLinea({ fila, prod, impuestos, expandido, onToggleExpand, onQtyDelt
         <input
           type="number" min="0" step="0.01" value={fila.precio_unitario}
           onChange={e => onChange({ precio_unitario: e.target.value })}
-          className="w-20 text-right font-mono text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white py-1 px-1.5 focus:outline-none focus:ring-1 focus:ring-yellow-400 shrink-0"
+          className="flex-1 min-w-0 text-right font-mono text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white py-1 px-1.5 focus:outline-none focus:ring-1 focus:ring-yellow-400"
         />
 
         <button onClick={onToggleExpand}
-          className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${expandido ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600' : 'text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
-          title="Descuento e impuesto">
-          <Ic id="tune" size={13} />
-        </button>
-        <button onClick={onRemove}
-          className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0">
-          <Ic id="trash" size={13} />
+          className={`shrink-0 h-7 px-2 rounded-lg flex items-center gap-1 transition-colors text-[11px] font-medium ${expandido ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' : 'text-zinc-500 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+          title="Editar descuento, impuesto y observación">
+          <Ic id="tune" size={13} /> Editar
         </button>
       </div>
 
@@ -293,6 +308,8 @@ export default function CompraForm() {
   const [npError,      setNpError]      = useState('');
   const [npGuardando,  setNpGuardando]  = useState(false);
   const [npImagenFile, setNpImagenFile] = useState(null);
+  const [npEditId,     setNpEditId]     = useState(null); // id_producto en edición, o null si es alta nueva
+  const [npCargando,   setNpCargando]   = useState(false);
 
   // ── Borrador local ────────────────────────────────────────────────────────
   // Mientras se arma una compra nueva, se autoguarda en localStorage por si se
@@ -632,9 +649,55 @@ export default function CompraForm() {
       id_moneda_costo: catalogo?.monedas.find(m => m.es_moneda_base)?.id_moneda ?? '',
     });
     setNpImagenFile(null);
+    setNpEditId(null);
     setNpModal(true);
   };
   const setNp = (k, v) => setNpForm(p => ({ ...p, [k]: v }));
+
+  // Abre el mismo modal pero precargado con los datos reales del producto,
+  // para corregir cosas como una categoría/marca mal puesta sin salir de la compra.
+  const abrirEditarProducto = async (idProducto) => {
+    setNpError('');
+    setNpImagenFile(null);
+    setNpEditId(idProducto);
+    setNpModal(true);
+    setNpCargando(true);
+    try {
+      const res = await productosService.getOne(idProducto);
+      const p = res.data.producto;
+      setNpForm({
+        id_marca:             p.id_marca ? String(p.id_marca) : '',
+        id_categoria:         p.id_categoria ? String(p.id_categoria) : '',
+        id_unidad:            p.id_unidad ? String(p.id_unidad) : '',
+        id_moneda_costo:      p.id_moneda_costo ? String(p.id_moneda_costo) : '',
+        producto:             p.producto ?? '',
+        detalle:              p.detalle ?? '',
+        capacidad:            p.capacidad ?? '',
+        caracteristicas:      p.caracteristicas ?? '',
+        modelo:               p.modelo ?? '',
+        color:                p.color ?? '',
+        precio_real:          String(p.precio_real ?? ''),
+        costo_logistica:      p.costo_logistica ?? 0,
+        costo_mcm:            p.costo_mcm ?? 0,
+        precio_publico:       String(p.precio_publico ?? ''),
+        bono:                 p.bono ?? 0,
+        precio_mayor:         p.precio_mayor ?? 0,
+        id_proveedor_default: p.id_proveedor_default ? String(p.id_proveedor_default) : '',
+        stock_minimo:         p.stock_minimo ?? 0,
+        stock_maximo:         p.stock_maximo ?? 0,
+        notas:                p.notas ?? '',
+        // No editables acá, pero el backend los requiere para no perderlos al guardar:
+        codigo_interno:       p.codigo_interno,
+        codigo_barras:        p.codigo_barras,
+        imagen_url:           p.imagen_url,
+        activo:               !!p.activo,
+      });
+    } catch {
+      setNpError('No se pudo cargar el producto');
+    } finally {
+      setNpCargando(false);
+    }
+  };
 
   const guardarNuevoProducto = async () => {
     setNpError('');
@@ -646,41 +709,74 @@ export default function CompraForm() {
 
     setNpGuardando(true);
     try {
-      const res = await productosService.create(npForm);
-      const creado = res.data.producto;
-      const marcaNombre = metaProductos?.marcas.find(m => String(m.id_marca) === String(creado.id_marca))?.nombre ?? creado.marca_nombre;
+      if (npEditId) {
+        const res = await productosService.update(npEditId, npForm);
+        const editado = res.data.producto ?? { ...npForm, id_producto: npEditId };
+        const marcaNombre = metaProductos?.marcas.find(m => String(m.id_marca) === String(npForm.id_marca))?.nombre;
 
-      let imagenUrl = creado.imagen_url;
-      if (npImagenFile) {
-        try {
-          const imgRes = await productosService.uploadImagen(creado.id_producto, npImagenFile);
-          imagenUrl = imgRes.data.imagen_url;
-        } catch { /* el producto ya se creó; la foto se puede agregar después desde Productos */ }
+        let imagenUrl = editado.imagen_url ?? npForm.imagen_url;
+        if (npImagenFile) {
+          try {
+            const imgRes = await productosService.uploadImagen(npEditId, npImagenFile);
+            imagenUrl = imgRes.data.imagen_url;
+          } catch { /* el producto ya se actualizó; la foto se puede cambiar después desde Productos */ }
+        }
+
+        setCatalogo(prev => ({
+          ...prev,
+          productos: prev.productos.map(p => String(p.id_producto) === String(npEditId) ? {
+            ...p,
+            producto:             npForm.producto,
+            modelo:               npForm.modelo,
+            color:                npForm.color,
+            capacidad:            npForm.capacidad,
+            producto_detalle:     npForm.detalle,
+            precio_real:          npForm.precio_real,
+            id_proveedor_default: npForm.id_proveedor_default,
+            marca:                marcaNombre ?? p.marca,
+            codigo_interno:       editado.codigo_interno ?? p.codigo_interno,
+            imagen_url:           imagenUrl,
+          } : p),
+        }));
+        setNpModal(false);
+        setNpEditId(null);
+      } else {
+        const res = await productosService.create(npForm);
+        const creado = res.data.producto;
+        const marcaNombre = metaProductos?.marcas.find(m => String(m.id_marca) === String(creado.id_marca))?.nombre ?? creado.marca_nombre;
+
+        let imagenUrl = creado.imagen_url;
+        if (npImagenFile) {
+          try {
+            const imgRes = await productosService.uploadImagen(creado.id_producto, npImagenFile);
+            imagenUrl = imgRes.data.imagen_url;
+          } catch { /* el producto ya se creó; la foto se puede agregar después desde Productos */ }
+        }
+
+        const prodParaCatalogo = {
+          id_producto:          creado.id_producto,
+          codigo_interno:       creado.codigo_interno,
+          codigo_barras:        creado.codigo_barras,
+          producto:             creado.producto,
+          precio_real:          creado.precio_real,
+          id_impuesto_default:  creado.id_impuesto_default,
+          id_proveedor_default: creado.id_proveedor_default,
+          modelo:               creado.modelo,
+          color:                creado.color,
+          capacidad:            creado.capacidad,
+          producto_detalle:     creado.detalle,
+          imagen_url:           imagenUrl,
+          marca:                marcaNombre,
+        };
+
+        setCatalogo(prev => ({ ...prev, productos: [...prev.productos, prodParaCatalogo] }));
+        agregarAlCarrito(prodParaCatalogo);
+        setBusquedaProducto('');
       }
-
-      const prodParaCatalogo = {
-        id_producto:          creado.id_producto,
-        codigo_interno:       creado.codigo_interno,
-        codigo_barras:        creado.codigo_barras,
-        producto:             creado.producto,
-        precio_real:          creado.precio_real,
-        id_impuesto_default:  creado.id_impuesto_default,
-        id_proveedor_default: creado.id_proveedor_default,
-        modelo:               creado.modelo,
-        color:                creado.color,
-        capacidad:            creado.capacidad,
-        producto_detalle:     creado.detalle,
-        imagen_url:           imagenUrl,
-        marca:                marcaNombre,
-      };
-
-      setCatalogo(prev => ({ ...prev, productos: [...prev.productos, prodParaCatalogo] }));
-      agregarAlCarrito(prodParaCatalogo);
       setNpModal(false);
       setNpImagenFile(null);
-      setBusquedaProducto('');
     } catch (err) {
-      setNpError(err.response?.data?.error ?? 'Error al crear el producto');
+      setNpError(err.response?.data?.error ?? (npEditId ? 'Error al actualizar el producto' : 'Error al crear el producto'));
     } finally {
       setNpGuardando(false);
     }
@@ -1181,6 +1277,7 @@ export default function CompraForm() {
                       onQtyDelta={d => cambiarCantidad(i, d)}
                       onChange={patch => updateItem(i, patch)}
                       onRemove={() => removeItem(i)}
+                      onEditarProducto={() => abrirEditarProducto(fila.id_producto)}
                     />
                   );
                 })
@@ -1317,10 +1414,13 @@ export default function CompraForm() {
 
       {/* ── Modal: alta rápida de producto nuevo ── */}
       {npModal && (
-        <Modal titulo="Nuevo producto" onClose={() => setNpModal(false)} maxW="max-w-2xl">
+        <Modal titulo={npEditId ? 'Editar producto' : 'Nuevo producto'} onClose={() => { setNpModal(false); setNpEditId(null); }} maxW="max-w-2xl">
           <div className="space-y-4">
             {npError && (
               <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{npError}</div>
+            )}
+            {npCargando && (
+              <div className="px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 text-sm">Cargando datos del producto…</div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1375,6 +1475,8 @@ export default function CompraForm() {
               <div className="flex items-center gap-3">
                 {npImagenFile ? (
                   <img src={URL.createObjectURL(npImagenFile)} alt="Producto" className="w-14 h-14 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                ) : npForm.imagen_url ? (
+                  <img src={buildImgUrl(npForm.imagen_url)} alt="Producto" className="w-14 h-14 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
                 ) : (
                   <div className="w-14 h-14 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-300 dark:text-zinc-600">
                     <Ic id="package" size={20} />
@@ -1478,13 +1580,15 @@ export default function CompraForm() {
             </div>
 
             <div className="flex justify-end gap-3 pt-1">
-              <button type="button" onClick={() => setNpModal(false)}
+              <button type="button" onClick={() => { setNpModal(false); setNpEditId(null); }}
                 className="px-4 py-2 rounded-xl text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
                 Cancelar
               </button>
-              <button type="button" onClick={guardarNuevoProducto} disabled={npGuardando}
+              <button type="button" onClick={guardarNuevoProducto} disabled={npGuardando || npCargando}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-yellow-400 hover:bg-yellow-500 text-zinc-900 disabled:opacity-50 transition-colors">
-                {npGuardando ? 'Creando…' : 'Crear y agregar al pedido'}
+                {npEditId
+                  ? (npGuardando ? 'Guardando…' : 'Guardar cambios')
+                  : (npGuardando ? 'Creando…' : 'Crear y agregar al pedido')}
               </button>
             </div>
           </div>

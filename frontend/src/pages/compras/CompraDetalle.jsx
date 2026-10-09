@@ -455,6 +455,151 @@ function ModalConfirmar({ onConfirm, onClose, loading, error, proveedor, onCredi
   );
 }
 
+// ── Modal Corregir condición de pago (pedido ya confirmado) ───────────────────
+function ModalCondicionPago({ compra, onConfirm, onClose, loading, error, onCreditoActualizado }) {
+  const { puede } = usePermission();
+  const [form, setForm] = useState({
+    condicion_pago: compra.condicion_pago,
+    dias_credito: compra.dias_credito || '30',
+    num_cuotas: '1',
+  });
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const [editandoCredito, setEditandoCredito] = useState(false);
+  const [credForm,        setCredForm]        = useState({ permite_credito: false, limite_credito: '', dias_credito: '' });
+  const [credError,       setCredError]       = useState('');
+  const [credGuardando,   setCredGuardando]   = useState(false);
+
+  const puedeEditarCredito = puede('dar_credito', 'proveedores') || puede('modificar_limite', 'proveedores');
+
+  const abrirEditarCredito = () => {
+    setCredForm({
+      permite_credito: Boolean(compra.proveedor_permite_credito),
+      limite_credito: compra.proveedor_limite_credito ?? '',
+      dias_credito: compra.proveedor_plazo_credito_dias ?? '',
+    });
+    setCredError('');
+    setEditandoCredito(true);
+  };
+
+  const guardarCredito = async () => {
+    setCredError('');
+    const { permite_credito, limite_credito, dias_credito } = credForm;
+    if (permite_credito && !(Number(limite_credito) >= 0)) {
+      return setCredError('Ingresá un límite de crédito válido');
+    }
+    setCredGuardando(true);
+    try {
+      const res = await proveedoresService.updateCredito(compra.id_proveedor, {
+        permite_credito,
+        limite_credito: Number(limite_credito) || 0,
+        dias_credito: Number(dias_credito) || 0,
+      });
+      onCreditoActualizado?.(res.data.credito);
+      setEditandoCredito(false);
+    } catch (err) {
+      setCredError(err.response?.data?.error ?? 'Error al actualizar el crédito');
+    } finally {
+      setCredGuardando(false);
+    }
+  };
+
+  return (
+    <Modal titulo="Corregir condición de pago" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Esta compra ya fue confirmada. Como todavía no se registró ningún pago,
+          podés corregir la condición de pago sin problema.
+        </p>
+        <div>
+          <label className={labelCls}>Condición de pago</label>
+          <select value={form.condicion_pago} onChange={e => setF('condicion_pago', e.target.value)} className={fieldCls}>
+            <option value="CONTADO">Contado</option>
+            <option value="CREDITO">Crédito</option>
+          </select>
+        </div>
+        {form.condicion_pago === 'CREDITO' && (
+          <>
+            <div>
+              <label className={labelCls}>Días de crédito</label>
+              <input type="number" min="1" value={form.dias_credito}
+                onChange={e => setF('dias_credito', e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Número de cuotas</label>
+              <input type="number" min="1" max="24" value={form.num_cuotas}
+                onChange={e => setF('num_cuotas', e.target.value)} className={fieldCls} />
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 p-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className={`text-xs ${compra.proveedor_permite_credito ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                  {compra.proveedor_permite_credito
+                    ? `Crédito: Bs ${fmtMonto(compra.proveedor_limite_credito)} · Saldo: Bs ${fmtMonto(compra.proveedor_saldo_actual)}`
+                    : 'El proveedor no tiene habilitado el crédito'}
+                </span>
+                {puedeEditarCredito && !editandoCredito && (
+                  <button type="button" onClick={abrirEditarCredito}
+                    className="text-xs text-yellow-600 dark:text-yellow-400 hover:underline">
+                    ✎ Habilitar / editar crédito
+                  </button>
+                )}
+              </div>
+
+              {editandoCredito && (
+                <div className="mt-2.5 space-y-2.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+                    <input type="checkbox" checked={credForm.permite_credito}
+                      onChange={e => setCredForm(p => ({ ...p, permite_credito: e.target.checked }))}
+                      className="w-4 h-4 rounded accent-yellow-400" />
+                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Habilitar crédito</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className={labelCls}>Límite de crédito</label>
+                      <input type="number" min={0} step="0.01" value={credForm.limite_credito}
+                        onChange={e => setCredForm(p => ({ ...p, limite_credito: e.target.value }))}
+                        className={fieldCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Días de crédito</label>
+                      <input type="number" min={0} value={credForm.dias_credito}
+                        onChange={e => setCredForm(p => ({ ...p, dias_credito: e.target.value }))}
+                        className={fieldCls} />
+                    </div>
+                  </div>
+                  {credError && <p className="text-xs text-red-500 flex items-center gap-1.5"><span>⚠</span> {credError}</p>}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={guardarCredito} disabled={credGuardando}
+                      className="flex-1 py-1.5 rounded-lg bg-yellow-400 hover:bg-yellow-500 disabled:opacity-60 text-zinc-900 font-semibold text-xs transition-colors">
+                      {credGuardando ? 'Guardando…' : 'Guardar'}
+                    </button>
+                    <button type="button" onClick={() => setEditandoCredito(false)}
+                      className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} disabled={loading}
+            className="flex-1 px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={() => onConfirm(form)} disabled={loading}
+            className="flex-1 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+            {loading ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Modal Recibir ─────────────────────────────────────────────────────────────
 function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
   const pendientes = detalle.filter(d => Number(d.cantidad_recibida) < Number(d.cantidad));
@@ -774,7 +919,11 @@ export default function CompraDetalle() {
         .filter(r => Number(r.cantidad_recibida) > 0)
         .map(r => {
           const det = detalle.find(d => d.id_detalle === r.id_detalle);
-          return { nombre: det?.producto || '', codigo_interno: det?.codigo_interno || '', copias: 1 };
+          return {
+            nombre: det?.producto || '', codigo_interno: det?.codigo_interno || '',
+            marca: det?.marca_nombre, modelo: det?.modelo, color: det?.color, capacidad: det?.capacidad,
+            series: det?.series, copias: 1,
+          };
         })
         .filter(p => p.codigo_interno);
       cargar();
@@ -804,6 +953,9 @@ export default function CompraDetalle() {
   const puedeEditar        = puede('editar_pre_pedido',  'compras') && compra.estado === 'PRE_PEDIDO';
   const puedeAprobar       = puede('aprobar',            'compras') && compra.estado === 'PRE_PEDIDO';
   const puedeConfirmar     = puede('confirmar_pedido',   'compras') && ['PRE_PEDIDO', 'CONFIRMADO'].includes(compra.estado);
+  const puedeCorregirCondPago = puede('confirmar_pedido', 'compras')
+    && ['POR_LLEGAR', 'PARCIAL', 'RECIBIDO'].includes(compra.estado)
+    && Number(compra.saldo_pendiente) === Number(compra.total);
   const puedeRecibir       = (puede('recibir', 'compras') || puede('recibir_parcial', 'compras')) && ['POR_LLEGAR', 'PARCIAL'].includes(compra.estado);
   const puedePagar         = puede('pagar',              'compras') && compra.estado !== 'ANULADO' && Number(compra.saldo_pendiente) > 0;
   const puedeAnular        = puede('anular',             'compras') && !['RECIBIDO', 'ANULADO'].includes(compra.estado);
@@ -822,6 +974,8 @@ export default function CompraDetalle() {
         etiquetas: etiquetasDisponibles.map(d => ({
           nombre: d.producto,
           codigo_interno: d.codigo_interno,
+          marca: d.marca_nombre, modelo: d.modelo, color: d.color, capacidad: d.capacidad,
+          series: d.series,
           copias: 1,
         })),
       },
@@ -871,6 +1025,20 @@ export default function CompraDetalle() {
             saldo_actual: compra.proveedor_saldo_actual,
             plazo_credito_dias: compra.proveedor_plazo_credito_dias,
           }}
+          onCreditoActualizado={credito => setData(prev => ({
+            ...prev,
+            compra: {
+              ...prev.compra,
+              proveedor_permite_credito: credito.permite_credito,
+              proveedor_limite_credito: credito.limite_credito,
+              proveedor_saldo_actual: credito.saldo_actual,
+              proveedor_plazo_credito_dias: credito.plazo_credito_dias,
+            },
+          }))} />
+      )}
+      {modal === 'condicionPago' && (
+        <ModalCondicionPago compra={compra} loading={saving} error={modalErr} onClose={closeModal}
+          onConfirm={form => runAction(() => comprasService.actualizarCondicionPago(id, form))}
           onCreditoActualizado={credito => setData(prev => ({
             ...prev,
             compra: {
@@ -1047,7 +1215,6 @@ export default function CompraDetalle() {
                 ['Sucursal',       compra.sucursal_nombre],
                 ['Depósito dest.', compra.deposito_nombre],
                 ['Moneda',         `${compra.moneda_codigo} (TC: ${compra.tipo_cambio})`],
-                ['Cond. de pago',  compra.condicion_pago + (compra.condicion_pago === 'CREDITO' ? ` · ${compra.dias_credito} días` : '')],
                 ['Procedencia',    compra.procedencia || '—'],
                 ['Fecha pedido',   fmtFecha(compra.fecha_pedido)],
                 ['Est. llegada',   fmtFecha(compra.fecha_estim_llegada)],
@@ -1059,6 +1226,18 @@ export default function CompraDetalle() {
                   <p className="font-medium text-zinc-900 dark:text-white leading-snug">{value}</p>
                 </div>
               ))}
+              <div>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-0.5">Cond. de pago</p>
+                <p className="font-medium text-zinc-900 dark:text-white leading-snug">
+                  {compra.condicion_pago + (compra.condicion_pago === 'CREDITO' ? ` · ${compra.dias_credito} días` : '')}
+                  {puedeCorregirCondPago && (
+                    <button onClick={() => openModal('condicionPago')}
+                      className="ml-1.5 text-xs text-amber-600 dark:text-amber-400 hover:underline align-middle">
+                      ✎ Corregir
+                    </button>
+                  )}
+                </p>
+              </div>
               <FacturaProvCell
                 id={compra.id_compra}
                 value={compra.numero_factura}

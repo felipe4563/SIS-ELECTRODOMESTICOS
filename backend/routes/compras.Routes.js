@@ -52,6 +52,7 @@ router.delete('/:id/detalle/:idDetalle/series/:idSerie', authMiddleware, puedeEd
 
 router.post('/:id/aprobar',   authMiddleware, checkPermission('aprobar',           'compras'), ctrl.aprobarCompra);
 router.post('/:id/confirmar', authMiddleware, checkPermission('confirmar_pedido',  'compras'), ctrl.confirmarPedido);
+router.put ('/:id/condicion-pago', authMiddleware, checkPermission('confirmar_pedido', 'compras'), ctrl.actualizarCondicionPago);
 router.post('/:id/recibir',   authMiddleware, puedeRecibirCompras,                            ctrl.recibirMercaderia);
 router.post('/:id/anular',    authMiddleware, checkPermission('anular',            'compras'), ctrl.anularCompra);
 
