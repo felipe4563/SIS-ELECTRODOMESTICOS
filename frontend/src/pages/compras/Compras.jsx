@@ -39,14 +39,19 @@ export default function Compras() {
 
   const [compras,    setCompras]    = useState([]);
   const [sucursales, setSucursales] = useState([]);
+  const [depositos,  setDepositos]  = useState([]);
   const [cargando,   setCargando]   = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage]   = useState(1);
   const [resumen, setResumen] = useState({ byEstado: {}, saldoTotal: 0, total: 0 });
   const LIMIT = 20;
   const [filtros,    setFiltros]    = useState({
-    q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '',
+    q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '', id_deposito_destino: '',
   });
+
+  const depositosDeSucursal = filtros.id_sucursal
+    ? depositos.filter(d => String(d.id_sucursal) === String(filtros.id_sucursal))
+    : depositos;
 
   const ejecutarBusqueda = async (p = 1, overrideFiltros) => {
     setCargando(true);
@@ -65,7 +70,10 @@ export default function Compras() {
   useEffect(() => {
     if (puedeVerTodas) {
       comprasService.getFormData()
-        .then(({ data }) => setSucursales(data.sucursales ?? []))
+        .then(({ data }) => {
+          setSucursales(data.sucursales ?? []);
+          setDepositos(data.depositos ?? []);
+        })
         .catch(() => {});
     }
   }, []); // eslint-disable-line
@@ -180,12 +188,24 @@ export default function Compras() {
         {puedeVerTodas && (
           <select
             value={filtros.id_sucursal}
-            onChange={e => setF('id_sucursal', e.target.value)}
+            onChange={e => setFiltros(p => ({ ...p, id_sucursal: e.target.value, id_deposito_destino: '' }))}
             className={inputCls}
           >
             <option value="">Todas las sucursales</option>
             {sucursales.map(s => (
               <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>
+            ))}
+          </select>
+        )}
+        {puedeVerTodas && filtros.id_sucursal && (
+          <select
+            value={filtros.id_deposito_destino}
+            onChange={e => setF('id_deposito_destino', e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Todos los depósitos</option>
+            {depositosDeSucursal.map(d => (
+              <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>
             ))}
           </select>
         )}
@@ -214,7 +234,7 @@ export default function Compras() {
             <p className="text-sm">Sin órdenes para estos filtros</p>
             <button
               onClick={() => {
-                const limpios = { q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '' };
+                const limpios = { q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '', id_deposito_destino: '' };
                 setFiltros(limpios);
               }}
               className="text-xs text-amber-500 hover:text-amber-600 underline underline-offset-2 transition-colors"

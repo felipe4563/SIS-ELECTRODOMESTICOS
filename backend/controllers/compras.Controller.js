@@ -198,7 +198,7 @@ const getFormData = async (req, res) => {
 
 const getCompras = async (req, res) => {
   try {
-    const { estado, id_proveedor, id_sucursal, fecha_desde, fecha_hasta, q, page = 1, limit = 20 } = req.query;
+    const { estado, id_proveedor, id_sucursal, id_deposito_destino, fecha_desde, fecha_hasta, q, page = 1, limit = 20 } = req.query;
     const limitNum = Math.min(Number(limit) || 20, 200);
     const offset = (Number(page) - 1) * limitNum;
     const conds = [], vals = [];
@@ -226,6 +226,7 @@ const getCompras = async (req, res) => {
     }
 
     if (id_proveedor) { conds.push('c.id_proveedor = ?'); vals.push(id_proveedor); condsBase.push('c.id_proveedor = ?'); valsBase.push(id_proveedor); }
+    if (id_deposito_destino) { conds.push('c.id_deposito_destino = ?'); vals.push(id_deposito_destino); condsBase.push('c.id_deposito_destino = ?'); valsBase.push(id_deposito_destino); }
     if (fecha_desde)  { conds.push('DATE(c.fecha_pedido) >= ?'); vals.push(fecha_desde); condsBase.push('DATE(c.fecha_pedido) >= ?'); valsBase.push(fecha_desde); }
     if (fecha_hasta)  { conds.push('DATE(c.fecha_pedido) <= ?'); vals.push(fecha_hasta); condsBase.push('DATE(c.fecha_pedido) <= ?'); valsBase.push(fecha_hasta); }
     if (q) {
