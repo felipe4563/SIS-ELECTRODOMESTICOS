@@ -209,9 +209,14 @@ export default function Compras() {
             ))}
           </select>
         )}
+        <span className="text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap" title="Filtra por la fecha en que se hizo el pedido (columna PEDIDO), no por fecha de recepción ni de registro en el sistema.">
+          Fecha de pedido:
+        </span>
         <input type="date" value={filtros.fecha_desde}
+          title="Filtra por la fecha del pedido, no por la de recepción."
           onChange={e => setF('fecha_desde', e.target.value)} className={inputCls} />
         <input type="date" value={filtros.fecha_hasta}
+          title="Filtra por la fecha del pedido, no por la de recepción."
           onChange={e => setF('fecha_hasta', e.target.value)} className={inputCls} />
         <button
           onClick={() => ejecutarBusqueda(1)}
@@ -232,14 +237,21 @@ export default function Compras() {
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-zinc-400">
             <span className="text-3xl">📦</span>
             <p className="text-sm">Sin órdenes para estos filtros</p>
+            {(filtros.fecha_desde || filtros.fecha_hasta) && (
+              <p className="text-xs text-zinc-400 max-w-sm text-center">
+                Recordá que solo se muestran órdenes con fecha de pedido entre{' '}
+                <strong>{fmtFecha(filtros.fecha_desde)}</strong> y <strong>{fmtFecha(filtros.fecha_hasta)}</strong>.
+                Si la orden es más vieja o más nueva que ese rango, ampliá las fechas.
+              </p>
+            )}
             <button
               onClick={() => {
-                const limpios = { q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '', id_deposito_destino: '' };
+                const limpios = { q: '', estado: '', fecha_desde: '', fecha_hasta: '', id_sucursal: '', id_deposito_destino: '' };
                 setFiltros(limpios);
               }}
               className="text-xs text-amber-500 hover:text-amber-600 underline underline-offset-2 transition-colors"
             >
-              Limpiar filtros
+              Ver todo el historial (sin filtro de fechas)
             </button>
           </div>
         ) : (
