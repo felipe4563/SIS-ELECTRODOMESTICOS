@@ -381,9 +381,16 @@ const getKardex = async (req, res) => {
     const safeLimit = Math.min(Number(limit) || 20, 200);
     const offset = (Number(page) - 1) * safeLimit;
 
+    const verTodos   = req.ability.can('ver_todos_depositos', 'inventario');
+    const idSucursal = req.user.id_sucursal;
+    if (!verTodos && !idSucursal) {
+      return res.json({ kardex: [], total: 0, page: Number(page), limit: safeLimit });
+    }
+
     const where  = [];
     const params = [];
 
+    if (!verTodos) { where.push('d.id_sucursal = ?'); params.push(idSucursal); }
     if (id_producto)   { where.push('k.id_producto = ?');     params.push(id_producto); }
     if (id_deposito)   { where.push('k.id_deposito = ?');     params.push(id_deposito); }
     if (fecha_desde)   { where.push('k.fecha >= ?');          params.push(fecha_desde); }
