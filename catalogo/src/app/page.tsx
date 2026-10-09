@@ -5,7 +5,6 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import ScrollReveal from '@/components/ScrollReveal';
-import TiltCard from '@/components/TiltCard';
 import HeroCarousel, { type HeroSlide } from '@/components/HeroCarousel';
 
 export const revalidate = 60;
@@ -99,12 +98,6 @@ export default async function HomePage() {
           .hero-btns  { animation: fadeInUp   0.65s ease both .42s; }
           .hero-stats { animation: fadeIn     0.7s  ease both .58s; }
 
-          .hero-appliances > * { animation: scaleIn 0.6s cubic-bezier(.22,.68,0,1.2) both; }
-          .hero-appliances > *:nth-child(1) { animation-delay:.18s; }
-          .hero-appliances > *:nth-child(2) { animation-delay:.29s; }
-          .hero-appliances > *:nth-child(3) { animation-delay:.40s; }
-          .hero-appliances > *:nth-child(4) { animation-delay:.51s; }
-
           .hero-glow-1 { animation: glowDrift  9s ease-in-out infinite; }
           .hero-glow-2 { animation: glowDrift 13s ease-in-out infinite reverse; }
           .hero-glow-3 { animation: glowDrift 11s ease-in-out infinite; }
@@ -138,7 +131,7 @@ export default async function HomePage() {
 
           @media (prefers-reduced-motion: reduce) {
             .hero-tag, .hero-h1, .hero-desc, .hero-btns, .hero-stats,
-            .hero-appliances > *, .hero-glow-1, .hero-glow-2, .hero-glow-3,
+            .hero-glow-1, .hero-glow-2, .hero-glow-3,
             .hero-tag-pill, .hero-cta, .hero-stat-card, [data-scroll] {
               animation: none !important;
               opacity: 1 !important;
@@ -149,13 +142,17 @@ export default async function HomePage() {
         `}</style>
 
         {/* ── Hero ──────────────────────────────────── */}
-        <section style={{
-          position:   'relative',
-          overflow:   'hidden',
-          background: 'var(--hero-bg)',
-          minHeight:  '82vh',
-          display:    'flex',
-          alignItems: 'center',
+        <section className="hero-section" style={{
+          position:         'relative',
+          overflow:         'hidden',
+          backgroundColor:  'var(--color-bg)',
+          backgroundImage:  'var(--hero-overlay), var(--hero-bg-image), var(--hero-bg)',
+          backgroundSize:   'cover, cover, cover',
+          backgroundPosition: 'center, right center, center',
+          backgroundRepeat: 'no-repeat, no-repeat, no-repeat',
+          minHeight:        '82vh',
+          display:          'flex',
+          alignItems:       'center',
         }}>
           {/* Glows flotantes */}
           <div className="hero-glow-1" style={{ position:'absolute', top:'-15%', right:'-8%', width:650, height:650, borderRadius:'50%', background:'radial-gradient(ellipse, rgba(225,29,72,0.18) 0%, transparent 70%)', pointerEvents:'none' }} />
@@ -169,10 +166,7 @@ export default async function HomePage() {
           <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(225,29,72,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(225,29,72,0.04) 1px, transparent 1px)', backgroundSize:'60px 60px', pointerEvents:'none' }} />
 
           <div className="container-max" style={{ position:'relative', zIndex:1, padding:'5rem 1.5rem', width:'100%' }}>
-            <div className="hero-split">
-
-              {/* LEFT: Text */}
-              <div>
+            <div className="hero-text">
                 <HeroCarousel slides={heroSlides} />
                 <div className="hero-stats" style={{ display:'flex', gap:'0.75rem', marginTop:'2.5rem', flexWrap:'wrap' }}>
                   {[
@@ -215,82 +209,20 @@ export default async function HomePage() {
                     </div>
                   ))}
                 </div>
-              </div>
-
-              {/* RIGHT: Appliance showcase */}
-              <div className="hero-appliances">
-                {([
-                  { label: 'Refrigeradoras', desc: 'Conservación óptima',  src: '/hero/fridge.jpg'  },
-                  { label: 'Lavadoras',       desc: 'Limpieza eficiente',   src: '/hero/washer.jpg'  },
-                  { label: 'Cocinas',         desc: 'Potencia y precisión', src: '/hero/stove.jpg'   },
-                  { label: 'Televisores',     desc: 'Entretenimiento HD',   src: '/hero/tv.jpg'      },
-                ]).map(item => (
-                  <Link key={item.label} href="/catalogo" style={{ textDecoration:'none' }}>
-                    <TiltCard className="appliance-card" style={{
-                      background:    'var(--color-card)',
-                      border:        '1px solid var(--color-border)',
-                      borderRadius:  'var(--radius-md)',
-                      overflow:      'hidden',
-                      cursor:        'pointer',
-                    }}>
-                      <div style={{ position:'relative', width:'100%', height:130, overflow:'hidden' }}>
-                        <Image
-                          src={item.src}
-                          alt={item.label}
-                          fill
-                          style={{ objectFit:'cover', transition:'transform 0.4s ease' }}
-                          className="appliance-img"
-                          sizes="(max-width:900px) 25vw, 22vw"
-                        />
-                        <div style={{
-                          position:   'absolute',
-                          inset:       0,
-                          background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)',
-                        }} />
-                      </div>
-                      <div style={{ padding:'0.85rem 1rem' }}>
-                        <p style={{ fontWeight:700, fontSize:'0.82rem', color:'var(--color-txt)', marginBottom:2, letterSpacing:'-0.01em' }}>
-                          {item.label}
-                        </p>
-                        <p style={{ fontSize:'0.68rem', color:'var(--color-muted)', letterSpacing:'0.02em' }}>
-                          {item.desc}
-                        </p>
-                      </div>
-                    </TiltCard>
-                  </Link>
-                ))}
-              </div>
             </div>
           </div>
 
           <style>{`
-            .hero-split {
-              display: grid;
-              grid-template-columns: 54% 46%;
-              gap: 3rem;
-              align-items: center;
-            }
-            .hero-appliances {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 1rem;
-            }
-            .appliance-card:hover {
-              border-color: rgba(225,29,72,0.4) !important;
-              box-shadow: 0 14px 36px rgba(0,0,0,0.45);
-            }
-            .appliance-card:hover .appliance-img {
-              transform: scale(1.06);
-            }
-            [data-theme="light"] .appliance-card:hover {
-              box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            .hero-text {
+              max-width: 620px;
             }
             @media (max-width: 900px) {
-              .hero-split { grid-template-columns: 1fr; }
-              .hero-appliances { grid-template-columns: repeat(4, 1fr); }
-            }
-            @media (max-width: 560px) {
-              .hero-appliances { grid-template-columns: 1fr 1fr; }
+              .hero-text { max-width: none; }
+              /* En mobile el texto ocupa todo el ancho — la foto de
+                 portada (pensada para dejar espacio a la izquierda con la
+                 columna de texto angosta) ya no tiene dónde encajar sin
+                 taparlo, así que queda solo el degradé de fondo. */
+              .hero-section { background-image: var(--hero-overlay), var(--hero-bg) !important; }
             }
           `}</style>
         </section>

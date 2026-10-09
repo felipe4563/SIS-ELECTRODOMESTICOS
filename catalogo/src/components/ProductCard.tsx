@@ -5,8 +5,11 @@ import type { Producto } from '@/lib/api';
 import { imgUrl, fmtPrecio } from '@/lib/api';
 
 export default function ProductCard({ p, showPrice = true }: { p: Producto; showPrice?: boolean }) {
-  const img    = imgUrl(p.imagen_url);
-  const agotado = !p.disponible;
+  const img = imgUrl(p.imagen_url);
+  // Sin stock no bloquea nada acá: el catálogo es para cotizar, no venta
+  // directa, así que un producto sin stock se puede seguir consultando
+  // igual que cualquier otro (lo mismo que ya hacía la tarjeta seleccionable
+  // del listado principal en CatalogoClient.tsx).
 
   return (
     <Link href={`/producto/${encodeURIComponent(p.codigo_interno)}`} style={{ textDecoration: 'none', display: 'block' }}>
@@ -40,7 +43,6 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
             style={{
               objectFit: 'contain',
               padding:   '0.65rem',
-              filter:     agotado ? 'grayscale(0.6) brightness(0.7)' : 'none',
               transition: 'transform 0.4s',
             }}
             onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
@@ -91,7 +93,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
                 fontFamily: 'var(--font-headline)',
                 fontWeight:  700,
                 fontSize:   '0.92rem',
-                color:       agotado ? 'var(--color-muted)' : 'var(--color-txt)',
+                color:      'var(--color-txt)',
               }}>
                 {fmtPrecio(p.precio_publico)}
               </p>
@@ -101,7 +103,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
           <div style={{
             width:          '100%',
             padding:        '0.45rem',
-            background:     agotado ? 'rgba(107,114,128,0.2)' : 'var(--color-primary)',
+            background:     'var(--color-primary)',
             color:          '#fff',
             fontSize:       '0.64rem',
             fontWeight:      700,
@@ -111,7 +113,7 @@ export default function ProductCard({ p, showPrice = true }: { p: Producto; show
             borderRadius:   'var(--radius-sm)',
             transition:     'background 0.2s',
           }} className="card-btn">
-            {agotado ? 'Sin stock' : 'Adquirir'}
+            Adquirir
           </div>
         </div>
       </article>

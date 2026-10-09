@@ -1,5 +1,18 @@
 const db = require('../config/db');
 
+// Al filtrar por una categoría padre (ej. "AIRE"), hay que incluir también
+// los productos cargados directamente en sus subcategorías (ej. "FRIO",
+// "SECO") — si no, "Ver todo en AIRE" deja afuera productos que sí
+// pertenecen a esa familia solo porque están etiquetados en el hijo.
+// La jerarquía tiene un solo nivel (categorías → subcategorías), así que
+// alcanza con una consulta de los hijos directos.
+async function resolverCategoriaIds(idCategoria) {
+  const [hijos] = await db.promise().query(
+    'SELECT id_categoria FROM categorias WHERE id_categoria_padre = ?', [idCategoria]
+  );
+  return [idCategoria, ...hijos.map(h => h.id_categoria)];
+}
+
 /* ─── Producto por código interno ─────────────────────────────── */
 exports.getProductoPorCodigo = async (req, res) => {
   try {
@@ -8,7 +21,7 @@ exports.getProductoPorCodigo = async (req, res) => {
     const [[producto]] = await db.promise().query(
       `SELECT p.id_producto, p.id_categoria, p.id_marca,
               p.codigo_interno, p.producto, p.imagen_url, p.modelo, p.color,
-              p.capacidad, p.caracteristicas, p.detalle, p.precio_publico,
+              p.capacidad, p.caracteristicas, p.detalle, p.notas, p.precio_publico,
               m.nombre AS marca, c.nombre AS categoria,
               COALESCE(SUM(s.cantidad), 0) AS stock_total
        FROM productos p
@@ -137,7 +150,10 @@ exports.getProductos = async (req, res) => {
     const params = [];
     const where  = ['p.activo = 1', 'p.precio_publico > 0'];
 
-    if (categoria) { where.push('p.id_categoria = ?'); params.push(Number(categoria)); }
+    if (categoria) {
+      const ids = await resolverCategoriaIds(Number(categoria));
+      where.push(`p.id_categoria IN (${ids.map(() => '?').join(',')})`); params.push(...ids);
+    }
     if (marca)     { where.push('m.nombre = ?');       params.push(marca);             }
     if (color)     { where.push('p.color = ?');        params.push(color);             }
     if (buscar)    { where.push('(p.producto LIKE ? OR p.modelo LIKE ? OR p.codigo_interno LIKE ?)');
@@ -222,9 +238,10 @@ exports.getMarcas = async (req, res) => {
     let extraWhere = '';
 
     if (categoria) {
+      const ids = await resolverCategoriaIds(Number(categoria));
       join      = 'JOIN productos p ON p.id_marca = m.id_marca AND p.activo = 1 AND p.precio_publico > 0';
-      extraWhere = 'AND p.id_categoria = ?';
-      params.push(Number(categoria));
+      extraWhere = `AND p.id_categoria IN (${ids.map(() => '?').join(',')})`;
+      params.push(...ids);
     }
 
     const [rows] = await db.promise().query(
@@ -315,7 +332,10 @@ exports.getColores = async (req, res) => {
     const { categoria } = req.query;
     const where = ["p.activo = 1", "p.precio_publico > 0", "p.color IS NOT NULL", "p.color != ''"];
     const params = [];
-    if (categoria) { where.push('p.id_categoria = ?'); params.push(Number(categoria)); }
+    if (categoria) {
+      const ids = await resolverCategoriaIds(Number(categoria));
+      where.push(`p.id_categoria IN (${ids.map(() => '?').join(',')})`); params.push(...ids);
+    }
     const [rows] = await db.promise().query(
       `SELECT DISTINCT p.color FROM productos p WHERE ${where.join(' AND ')} ORDER BY p.color ASC`,
       params

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen, FaStar, FaTrash, FaPlus } from 'react-icons/fa';
+import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen, FaStar, FaTrash, FaPlus, FaExpandAlt } from 'react-icons/fa';
 import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../api/axios';
@@ -16,6 +16,7 @@ function TabDatos({ producto, onActualizar }) {
   const [editando,  setEditando]  = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState(null);
+  const [campoModal, setCampoModal] = useState(null); // 'detalle' | 'caracteristicas' | null
   const [form,      setForm]      = useState({
     codigo_interno: '', codigo_barras: '',
     id_marca: '', id_categoria: '', id_unidad: '', id_moneda_costo: '',
@@ -92,12 +93,12 @@ function TabDatos({ producto, onActualizar }) {
     setForm(prev => ({ ...prev, [name]: v }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async ({ keepEditing = false } = {}) => {
     setError(null);
     setGuardando(true);
     try {
       await productosService.update(producto.id_producto, form);
-      setEditando(false);
+      if (!keepEditing) setEditando(false);
       onActualizar();
     } catch (err) {
       setError(err.response?.data?.error || 'Error al guardar');
@@ -227,7 +228,13 @@ function TabDatos({ producto, onActualizar }) {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Detalle</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelCls + ' mb-0'}>Detalle</label>
+              <button type="button" onClick={() => setCampoModal('detalle')}
+                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-amber-500 dark:text-zinc-500 dark:hover:text-amber-400 transition-colors">
+                <FaExpandAlt className="h-2.5 w-2.5" /> Expandir
+              </button>
+            </div>
             <input name="detalle" value={form.detalle} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: 4H MESA VIDRIO E.E. GRILL ELEC." />
           </div>
           <div>
@@ -245,10 +252,29 @@ function TabDatos({ producto, onActualizar }) {
             <input name="color" value={form.color} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: BLANCO" />
           </div>
           <div>
-            <label className={labelCls}>Características</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelCls + ' mb-0'}>Características</label>
+              <button type="button" onClick={() => setCampoModal('caracteristicas')}
+                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-amber-500 dark:text-zinc-500 dark:hover:text-amber-400 transition-colors">
+                <FaExpandAlt className="h-2.5 w-2.5" /> Expandir
+              </button>
+            </div>
             <input name="caracteristicas" value={form.caracteristicas} onChange={handleChange} disabled={!editando} className={inputCls} placeholder="Ej: FRIO/CALOR, INVERTER, WIFI" />
           </div>
         </div>
+
+        {campoModal && (
+          <ModalCampoExpandido
+            titulo={{ detalle: 'Detalle', caracteristicas: 'Características', notas: 'Notas' }[campoModal]}
+            name={campoModal}
+            value={form[campoModal]}
+            editando={editando}
+            guardando={guardando}
+            onChange={handleChange}
+            onGuardar={() => handleSave({ keepEditing: true })}
+            onCerrar={() => setCampoModal(null)}
+          />
+        )}
 
         {/* Precios */}
         <div className="pt-3 border-t border-gray-100 dark:border-zinc-800">
@@ -320,7 +346,13 @@ function TabDatos({ producto, onActualizar }) {
         {/* Notas y estado */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Notas</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelCls + ' mb-0'}>Notas</label>
+              <button type="button" onClick={() => setCampoModal('notas')}
+                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-amber-500 dark:text-zinc-500 dark:hover:text-amber-400 transition-colors">
+                <FaExpandAlt className="h-2.5 w-2.5" /> Expandir
+              </button>
+            </div>
             <textarea name="notas" value={form.notas} onChange={handleChange} disabled={!editando} rows={2}
               className={inputCls + ' resize-none'} />
           </div>
@@ -332,6 +364,47 @@ function TabDatos({ producto, onActualizar }) {
                 <span className="text-sm text-gray-700 dark:text-zinc-300">Producto activo</span>
               </label>
             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal: campo de texto expandido (Detalle / Características) ───────────
+function ModalCampoExpandido({ titulo, name, value, editando, guardando, onChange, onGuardar, onCerrar }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCerrar}>
+      <div onClick={e => e.stopPropagation()}
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800 flex-shrink-0">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-zinc-300">{titulo}</h3>
+          <button onClick={onCerrar} className="text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 transition-colors">
+            <FaTimes className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          <textarea
+            name={name}
+            value={value}
+            onChange={onChange}
+            disabled={!editando}
+            rows={14}
+            autoFocus
+            className={inputCls + ' resize-none leading-relaxed'}
+          />
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 dark:border-zinc-800 flex-shrink-0">
+          <button onClick={onCerrar}
+            className="px-3 py-1.5 rounded-xl text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
+            Cerrar
+          </button>
+          {editando && (
+            <button onClick={onGuardar} disabled={guardando}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 disabled:opacity-50 transition-all">
+              {guardando ? <FaSpinner className="animate-spin h-3 w-3" /> : <FaSave className="h-3 w-3" />}
+              Guardar y seguir escribiendo
+            </button>
           )}
         </div>
       </div>

@@ -9,7 +9,7 @@ const getCategorias = async (req, res) => {
        LEFT JOIN categorias p ON c.id_categoria_padre = p.id_categoria
        LEFT JOIN categorias h ON h.id_categoria_padre = c.id_categoria
        GROUP BY c.id_categoria
-       ORDER BY c.id_categoria_padre IS NOT NULL, p.nombre, c.nombre`
+       ORDER BY COALESCE(p.nombre, c.nombre), c.id_categoria_padre IS NOT NULL, c.nombre`
     );
     return res.json({ categorias: rows });
   } catch (err) {

@@ -59,13 +59,23 @@ h1, h2, h3, h4, h5, h6 {
 a { color: inherit; }
 
 .container-max {
+  width: 100%;
   max-width: 1280px;
   margin-inline: auto;
   padding-inline: 1.5rem;
+  box-sizing: border-box;
 }
 
 @media (max-width: 640px) {
   .container-max { padding-inline: 1rem; }
+}
+
+@media (min-width: 1440px) {
+  .container-max { max-width: 1440px; padding-inline: 2rem; }
+}
+
+@media (min-width: 1800px) {
+  .container-max { max-width: 1680px; padding-inline: 2.5rem; }
 }
 
 /* ── Buttons ─────────────────────────────────────── */
@@ -251,6 +261,8 @@ input:focus, select:focus {
   --color-surface-deep:   #07090d;
   --color-img-bg:         #0d0f14;
   --hero-bg:              linear-gradient(135deg, #080a0e 0%, #0f1117 40%, #130b10 100%);
+  --hero-bg-image:        url('/hero/portada-oscura.webp');
+  --hero-overlay:         linear-gradient(90deg, rgba(8,10,14,0.88) 0%, rgba(8,10,14,0.55) 35%, rgba(8,10,14,0.08) 62%, transparent 80%);
   --cta-bg:               linear-gradient(135deg, #0a0608 0%, #130b10 50%, #0a0608 100%);
   --combo-placeholder-bg: linear-gradient(135deg, #0d0f14, #1a1d24);
   --shadow-hover-card:    0 12px 32px rgba(0, 0, 0, 0.5);
@@ -273,6 +285,8 @@ input:focus, select:focus {
   --color-surface-deep: #e2e5ef;
   --color-img-bg:       #f0f2f5;
   --hero-bg:            linear-gradient(135deg, #edf0f7 0%, #f4f5fa 40%, #ede8f0 100%);
+  --hero-bg-image:      url('/hero/portada-clara.webp');
+  --hero-overlay:       linear-gradient(90deg, rgba(237,240,247,0.92) 0%, rgba(237,240,247,0.62) 35%, rgba(237,240,247,0.1) 62%, transparent 80%);
   --cta-bg:             linear-gradient(135deg, #f0ecf4 0%, #f5f0f7 50%, #f0ecf4 100%);
   --combo-placeholder-bg: linear-gradient(135deg, #e8ebf2, #f0f2f8);
   --shadow-hover-card:  0 12px 32px rgba(0, 0, 0, 0.13);

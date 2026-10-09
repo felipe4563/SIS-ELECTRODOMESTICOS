@@ -11,13 +11,14 @@ export default function EtiquetasImprimir() {
   const { state }    = useLocation();
   const { empresa }  = useEmpresa() ?? {};
   const empresaNombre = empresa?.nombre_comercial || empresa?.razon_social || '';
-  const [items, setItems]   = useState([]);
+  const [items, setItems]   = useState(() =>
+    (state?.etiquetas ?? []).map(e => ({ ...e, copias: e.copias ?? 1 }))
+  );
   const [qrUrls, setQrUrls] = useState({});
   const [modo, setModo]     = useState('detallado'); // 'detallado' | 'simple'
 
   useEffect(() => {
-    if (!state?.etiquetas?.length) { navigate(-1); return; }
-    setItems(state.etiquetas.map(e => ({ ...e, copias: e.copias ?? 1 })));
+    if (!state?.etiquetas?.length) navigate(-1);
   }, []); // eslint-disable-line
 
   useEffect(() => {
@@ -293,11 +294,11 @@ export default function EtiquetasImprimir() {
             display: flex;
             flex-direction: row;
             gap: 2mm;
-            height: 27mm;
+            height: 28mm;
           }
           .etq-qr {
-            width: 24mm;
-            height: 24mm;
+            width: 28mm;
+            height: 28mm;
             flex-shrink: 0;
             align-self: center;
           }
@@ -311,7 +312,7 @@ export default function EtiquetasImprimir() {
             overflow: hidden;
           }
           .etq-empresa {
-            font-size: 6.5pt;
+            font-size: 9pt;
             font-weight: 700;
             margin: 0;
             white-space: nowrap;
@@ -319,18 +320,18 @@ export default function EtiquetasImprimir() {
             text-overflow: ellipsis;
           }
           .etq-campo {
-            font-size: 5.5pt;
+            font-size: 8pt;
             margin: 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
           }
           .etq-serie {
-            height: 9mm;
+            height: 8mm;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 6.5pt;
+            font-size: 9pt;
             font-weight: 700;
             text-align: center;
             white-space: nowrap;

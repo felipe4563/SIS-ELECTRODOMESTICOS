@@ -357,15 +357,20 @@ export default function Navbar({ empresa }: Props) {
       )}
 
       <style>{`
-        @media (max-width: 900px) {
+        @media (max-width: 1200px) {
           .nav-desktop  { display: none !important; }
-          .nav-search   { display: none !important; }
           .nav-hamburger{ display: flex !important; }
+        }
+        @media (min-width: 1201px) {
+          .nav-hamburger{ display: none !important; }
+        }
+        @media (max-width: 900px) {
+          .nav-search   { display: none !important; }
           .topbar-dir   { display: none !important; }
           .topbar-email { display: none !important; }
         }
-        @media (min-width: 901px) {
-          .nav-hamburger{ display: none !important; }
+        @media (min-width: 901px) and (max-width: 1200px) {
+          .nav-search input { width: 140px !important; }
         }
         .nav-link:hover    { color: var(--color-txt) !important; }
         .topbar-link:hover { color: var(--color-txt) !important; }

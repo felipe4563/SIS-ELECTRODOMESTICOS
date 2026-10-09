@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import BackButton from '@/components/BackButton';
 import GaleriaProducto from '@/components/GaleriaProducto';
+import ExpandableText from '@/components/ExpandableText';
 
 export const revalidate = 60;
 
@@ -193,8 +194,8 @@ export default async function ProductoPage({ params }: Props) {
                       Añadir al carrito / WhatsApp
                     </a>
                   ) : (
-                    <button className="btn-primary" style={{ width: '100%', padding: '0.9rem', fontSize: '0.85rem' }} disabled={agotado}>
-                      {agotado ? 'Sin stock' : 'Consultar disponibilidad'}
+                    <button className="btn-primary" style={{ width: '100%', padding: '0.9rem', fontSize: '0.85rem' }}>
+                      Consultar disponibilidad
                     </button>
                   )}
                 </div>
@@ -255,7 +256,7 @@ export default async function ProductoPage({ params }: Props) {
         </section>
 
         {/* ── Future-Ready Capabilities ─────────────── */}
-        {(producto.caracteristicas || producto.detalle) && (
+        {(producto.caracteristicas || producto.detalle || producto.notas) && (
           <section style={{ padding: '3rem 0 4rem', background: 'var(--color-bg-2)' }}>
             <div className="container-max">
               <div style={{ marginBottom: '2rem' }}>
@@ -280,9 +281,7 @@ export default async function ProductoPage({ params }: Props) {
                     </div>
                     <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
                                  marginBottom: 10, color: 'var(--color-txt)' }}>Características</h3>
-                    <p style={{ fontSize: '0.83rem', color: 'var(--color-muted)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                      {producto.caracteristicas}
-                    </p>
+                    <ExpandableText titulo="Características" texto={producto.caracteristicas} />
                   </div>
                 )}
                 {producto.detalle && (
@@ -300,9 +299,25 @@ export default async function ProductoPage({ params }: Props) {
                     </div>
                     <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
                                  marginBottom: 10, color: 'var(--color-txt)' }}>Descripción</h3>
-                    <p style={{ fontSize: '0.83rem', color: 'var(--color-muted)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                      {producto.detalle}
-                    </p>
+                    <ExpandableText titulo="Descripción" texto={producto.detalle} />
+                  </div>
+                )}
+                {producto.notas && (
+                  <div style={{
+                    background:   'var(--color-card)',
+                    border:       '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding:      '1.5rem',
+                  }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 'var(--radius)',
+                                  background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '1.2rem', marginBottom: '1rem' }}>
+                      ℹ️
+                    </div>
+                    <h3 style={{ fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '0.95rem',
+                                 marginBottom: 10, color: 'var(--color-txt)' }}>Información adicional</h3>
+                    <ExpandableText titulo="Información adicional" texto={producto.notas} />
                   </div>
                 )}
               </div>
@@ -353,7 +368,7 @@ export default async function ProductoPage({ params }: Props) {
       <Footer empresa={empresa} />
 
       <style>{`
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
           .product-grid { grid-template-columns: 1fr !important; gap: 1.5rem !important; }
         }
         @media (max-width: 480px) {

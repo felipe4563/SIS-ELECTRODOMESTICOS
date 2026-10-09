@@ -70,6 +70,7 @@ export interface ProductoImagen {
 export interface ProductoDetalle extends Producto {
   caracteristicas: string | null;
   detalle: string | null;
+  notas: string | null;
   disponibilidad: string;
   imagenes: ProductoImagen[];
   promociones: Promocion[];

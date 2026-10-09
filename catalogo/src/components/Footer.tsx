@@ -24,7 +24,7 @@ export default function Footer({ empresa }: { empresa?: Empresa | null }) {
               {nombre}
             </p>
             <p style={{ fontSize: '0.8rem', color: 'var(--color-muted)', lineHeight: 1.65, marginBottom: 12 }}>
-              Tu tienda de confianza en electrodomésticos. Encontrá las mejores marcas con garantía y atención personalizada.
+              Tu tienda de confianza en electrodomésticos. Encuentra las mejores marcas con garantía y atención personalizada.
             </p>
             {empresa?.email && (
               <p style={{ fontSize: '0.78rem', color: 'var(--color-muted)' }}>{empresa.email}</p>

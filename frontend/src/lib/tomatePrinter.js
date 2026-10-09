@@ -152,11 +152,11 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   const mm = valor => Math.round(valor * DOTS_PER_MM);
 
   const pad       = mm(2);
-  const qrSize    = mm(24);
+  const qrSize    = mm(28);
   const gapCol    = mm(2);
   const colDerechaX = pad + qrSize + gapCol;
   const colDerechaW = CONTENT_DOTS_W - pad - colDerechaX;
-  const filaSerieH   = mm(10);
+  const filaSerieH   = mm(8);
   const filaSuperiorH = CONTENT_DOTS_H - pad * 2 - filaSerieH;
 
   const contenido = document.createElement('canvas');
@@ -173,12 +173,12 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   }
 
   const campos = [
-    empresaNombre && { texto: empresaNombre, bold: true, size: mm(2.6) },
-    item.nombre   && { texto: item.nombre, bold: false, size: mm(2.2) },
-    item.marca    && { texto: `Marca: ${item.marca}`,       bold: false, size: mm(2.1) },
-    item.modelo   && { texto: `Modelo: ${item.modelo}`,     bold: false, size: mm(2.1) },
-    item.color    && { texto: `Color: ${item.color}`,       bold: false, size: mm(2.1) },
-    item.capacidad&& { texto: `Cap: ${item.capacidad}`,     bold: false, size: mm(2.1) },
+    empresaNombre && { texto: empresaNombre, bold: true, size: mm(3.4) },
+    item.nombre   && { texto: item.nombre, bold: false, size: mm(3.0) },
+    item.marca    && { texto: `Marca: ${item.marca}`,       bold: false, size: mm(2.9) },
+    item.modelo   && { texto: `Modelo: ${item.modelo}`,     bold: false, size: mm(2.9) },
+    item.color    && { texto: `Color: ${item.color}`,       bold: false, size: mm(2.9) },
+    item.capacidad&& { texto: `Cap: ${item.capacidad}`,     bold: false, size: mm(2.9) },
   ].filter(Boolean);
 
   const lineGap = mm(0.6);
@@ -191,8 +191,8 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   }
 
   // N° de serie (sin línea separadora)
-  const ySerie = pad + filaSuperiorH + mm(6);
-  ctx.font = `bold ${mm(2.6)}px sans-serif`;
+  const ySerie = pad + filaSuperiorH + mm(5.5);
+  ctx.font = `bold ${mm(3.4)}px sans-serif`;
   const textoSerie = item.numero_serie ? `N° Serie: ${item.numero_serie}` : 'N° Serie: _______________';
   drawTruncado(ctx, textoSerie, CONTENT_DOTS_W / 2, ySerie, CONTENT_DOTS_W - pad * 2, 'center');
 

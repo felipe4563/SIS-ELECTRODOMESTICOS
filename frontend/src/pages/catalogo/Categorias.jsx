@@ -14,6 +14,7 @@ export default function Categorias() {
   const [lista,     setLista]     = useState([]);
   const [cargando,  setCargando]  = useState(true);
   const [busqueda,  setBusqueda]  = useState('');
+  const [filtroPadre, setFiltroPadre] = useState('');
   const [modal,     setModal]     = useState(false);
   const [confirm,   setConfirm]   = useState(null);
   const [editando,  setEditando]  = useState(null);
@@ -34,10 +35,19 @@ export default function Categorias() {
   // Solo categorías raíz como posibles padres (sin padre propio)
   const posiblesPadres = lista.filter(c => !c.id_categoria_padre && c.activo);
 
-  const visibles = lista.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (c.padre_nombre || '').toLowerCase().includes(busqueda.toLowerCase())
-  );
+  // Categorías que tienen al menos una subcategoría (para el filtro rápido)
+  const familiasConHijos = posiblesPadres.filter(p => p.total_subcategorias > 0);
+
+  const visibles = lista.filter(c => {
+    const coincideBusqueda =
+      c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (c.padre_nombre || '').toLowerCase().includes(busqueda.toLowerCase());
+    const coincideFiltro =
+      !filtroPadre ||
+      String(c.id_categoria) === filtroPadre ||
+      String(c.id_categoria_padre) === filtroPadre;
+    return coincideBusqueda && coincideFiltro;
+  });
 
   const abrirCrear  = () => { setEditando(null); setForm(EMPTY); setError(null); setModal(true); };
   const abrirEditar = (c) => {
@@ -113,13 +123,27 @@ export default function Categorias() {
         <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">{error}</div>
       )}
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
         <input
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o categoría padre..."
-          className={inputCls}
+          className={`${inputCls} flex-1`}
         />
+        {familiasConHijos.length > 0 && (
+          <select
+            value={filtroPadre}
+            onChange={e => setFiltroPadre(e.target.value)}
+            className={`${inputCls} sm:w-64`}
+          >
+            <option value="">Todas las categorías</option>
+            {familiasConHijos.map(p => (
+              <option key={p.id_categoria} value={p.id_categoria}>
+                {p.nombre} ({p.total_subcategorias} subcategoría{p.total_subcategorias !== 1 ? 's' : ''})
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {cargando ? (
@@ -159,7 +183,11 @@ export default function Categorias() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           {c.total_subcategorias > 0
-                            ? <span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">{c.total_subcategorias}</span>
+                            ? <button onClick={() => setFiltroPadre(String(c.id_categoria))}
+                                title={`Ver subcategorías de ${c.nombre}`}
+                                className="inline-flex px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-500/20 transition-colors">
+                                {c.total_subcategorias}
+                              </button>
                             : <span className="text-xs text-gray-400 dark:text-zinc-600">—</span>
                           }
                         </td>
@@ -212,9 +240,10 @@ export default function Categorias() {
                           </span>
                         )}
                         {c.total_subcategorias > 0 && (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                          <button onClick={() => setFiltroPadre(String(c.id_categoria))}
+                            className="inline-flex px-2 py-0.5 rounded-full text-[10px] bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400">
                             {c.total_subcategorias} subcategoría{c.total_subcategorias !== 1 ? 's' : ''}
-                          </span>
+                          </button>
                         )}
                       </div>
                     </div>
