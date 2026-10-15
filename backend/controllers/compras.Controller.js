@@ -364,10 +364,13 @@ const getCompra = async (req, res) => {
     );
 
     const [recepciones] = await db.promise().query(
-      `SELECT cr.id_recepcion, cr.fecha, cr.observaciones,
+      `SELECT cr.id_recepcion, cr.fecha, cr.observaciones, cr.id_deposito,
+              d.nombre AS deposito_nombre, s.nombre AS sucursal_nombre,
               u.nombres AS usuario_nombres, u.apellidos AS usuario_apellidos
        FROM compra_recepciones cr
        JOIN usuarios u ON u.id_usuario = cr.id_usuario
+       JOIN depositos d ON d.id_deposito = cr.id_deposito
+       JOIN sucursales s ON s.id_sucursal = d.id_sucursal
        WHERE cr.id_compra = ?
        ORDER BY cr.fecha DESC`, [id]
     );
