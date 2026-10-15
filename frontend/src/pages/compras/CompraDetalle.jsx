@@ -601,7 +601,7 @@ function ModalCondicionPago({ compra, onConfirm, onClose, loading, error, onCred
 }
 
 // ── Modal Recibir ─────────────────────────────────────────────────────────────
-function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
+function ModalRecibir({ detalle, depositos, idDepositoSugerido, onConfirm, onClose, loading, error }) {
   const pendientes = detalle.filter(d => Number(d.cantidad_recibida) < Number(d.cantidad));
   const [recs, setRecs] = useState(() =>
     pendientes.map(d => ({
@@ -613,6 +613,7 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
     }))
   );
   const [obs, setObs] = useState('');
+  const [idDeposito, setIdDeposito] = useState(idDepositoSugerido ? String(idDepositoSugerido) : '');
 
   const setRec    = (idx, val) => setRecs(prev => prev.map((r, i) => i === idx ? { ...r, cantidad_recibida: val } : r));
   const setBarras = (idx, val) => setRecs(prev => prev.map((r, i) => i === idx ? { ...r, codigo_barras: val }   : r));
@@ -665,6 +666,17 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
           </div>
         )}
         <div>
+          <label className={labelCls}>Depósito destino de esta recepción</label>
+          <select value={idDeposito} onChange={e => setIdDeposito(e.target.value)} className={fieldCls}>
+            <option value="">— Seleccionar —</option>
+            {depositos.filter(d => d.activo).map(d => (
+              <option key={d.id_deposito} value={d.id_deposito}>
+                {d.sucursal_nombre} — {d.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className={labelCls}>Observaciones</label>
           <input type="text" value={obs} onChange={e => setObs(e.target.value)} className={fieldCls} />
         </div>
@@ -676,13 +688,14 @@ function ModalRecibir({ detalle, onConfirm, onClose, loading, error }) {
           </button>
           <button
             onClick={() => onConfirm({
+              id_deposito: idDeposito,
               recepciones: recs.map(({ id_detalle, cantidad_recibida }) => ({ id_detalle, cantidad_recibida })),
               observaciones: obs,
               codigos_barras: recs
                 .filter(r => r.id_producto != null && r.codigo_barras?.trim())
                 .map(({ id_producto, codigo_barras }) => ({ id_producto, codigo_barras })),
             })}
-            disabled={loading || pendientes.length === 0}
+            disabled={loading || pendientes.length === 0 || !idDeposito}
             className="flex-1 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
             {loading ? 'Guardando…' : 'Confirmar recepción'}
           </button>
@@ -844,6 +857,7 @@ export default function CompraDetalle() {
 
   const [data,         setData]        = useState(null);
   const [monedas,      setMonedas]     = useState([]);
+  const [depositos,    setDepositos]   = useState([]);
   const [cargando,     setCargando]    = useState(true);
   const [tab,          setTab]         = useState('productos');
   const [modal,        setModal]       = useState(null);
@@ -865,7 +879,10 @@ export default function CompraDetalle() {
 
   useEffect(() => {
     cargar();
-    comprasService.getFormData().then(r => setMonedas(r.data.monedas ?? [])).catch(() => {});
+    comprasService.getFormData().then(r => {
+      setMonedas(r.data.monedas ?? []);
+      setDepositos(r.data.depositos ?? []);
+    }).catch(() => {});
   }, []); // eslint-disable-line
 
   const subirImagenDetalle = async (idCompra, idDetalle, file) => {
@@ -1051,7 +1068,8 @@ export default function CompraDetalle() {
           }))} />
       )}
       {modal === 'recibir' && (
-        <ModalRecibir detalle={detalle} loading={saving} error={modalErr}
+        <ModalRecibir detalle={detalle} depositos={depositos} idDepositoSugerido={compra.id_deposito_destino}
+          loading={saving} error={modalErr}
           onClose={closeModal} onConfirm={handleRecibir} />
       )}
       {modal === 'pagar' && (
@@ -1476,10 +1494,13 @@ export default function CompraDetalle() {
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {recepciones.map(r => (
                 <div key={r.id_recepcion} className="px-4 py-4">
-                  <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center justify-between gap-3 mb-1">
                     <p className="text-sm font-semibold text-zinc-900 dark:text-white">{fmtDT(r.fecha)}</p>
                     <p className="text-xs text-zinc-400">{r.usuario_nombres} {r.usuario_apellidos}</p>
                   </div>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mb-2">
+                    📍 {r.sucursal_nombre} — {r.deposito_nombre}
+                  </p>
                   {r.items?.length > 0 && (
                     <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5 mb-2">
                       {r.items.map((it, i) => (
