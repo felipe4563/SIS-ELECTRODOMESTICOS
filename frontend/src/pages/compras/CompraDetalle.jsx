@@ -1231,7 +1231,7 @@ export default function CompraDetalle() {
               {[
                 ['Proveedor',      compra.proveedor_nombre],
                 ['Sucursal',       compra.sucursal_nombre],
-                ['Depósito dest.', compra.deposito_nombre],
+                ['Depósito sugerido', compra.deposito_nombre],
                 ['Moneda',         `${compra.moneda_codigo} (TC: ${compra.tipo_cambio})`],
                 ['Procedencia',    compra.procedencia || '—'],
                 ['Fecha pedido',   fmtFecha(compra.fecha_pedido)],
