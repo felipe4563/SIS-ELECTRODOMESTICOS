@@ -725,10 +725,17 @@ const actualizarCondicionPago = async (req, res) => {
 const recibirMercaderia = async (req, res) => {
   try {
     const { id } = req.params;
-    const { recepciones, observaciones, codigos_barras } = req.body;
+    const { recepciones, observaciones, codigos_barras, id_deposito } = req.body;
 
     if (!Array.isArray(recepciones) || !recepciones.length)
       return res.status(400).json({ error: 'Debe indicar las cantidades recibidas' });
+    if (!id_deposito)
+      return res.status(400).json({ error: 'Debe indicar el depósito destino de la recepción' });
+
+    const [[depositoRow]] = await db.promise().query(
+      `SELECT id_deposito FROM depositos WHERE id_deposito = ? AND activo = 1`, [id_deposito]
+    );
+    if (!depositoRow) return res.status(400).json({ error: 'Depósito destino inválido o inactivo' });
 
     const [[comp]] = await db.promise().query(
       `SELECT * FROM compras WHERE id_compra = ?`, [id]
@@ -765,8 +772,8 @@ const recibirMercaderia = async (req, res) => {
     }
 
     const [recepcionRes] = await db.promise().query(
-      `INSERT INTO compra_recepciones (id_compra, id_usuario, observaciones) VALUES (?,?,?)`,
-      [id, req.user.id_usuario, observaciones || null]
+      `INSERT INTO compra_recepciones (id_compra, id_usuario, observaciones, id_deposito) VALUES (?,?,?,?)`,
+      [id, req.user.id_usuario, observaciones || null, id_deposito]
     );
     const id_recepcion = recepcionRes.insertId;
 
@@ -791,7 +798,7 @@ const recibirMercaderia = async (req, res) => {
 
       const [[stockRow]] = await db.promise().query(
         `SELECT cantidad, costo_promedio FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [detalle.id_producto, comp.id_deposito_destino]
+        [detalle.id_producto, id_deposito]
       );
 
       const cantActual  = stockRow ? +Number(stockRow.cantidad) : 0;
@@ -808,13 +815,13 @@ const recibirMercaderia = async (req, res) => {
            cantidad             = cantidad + ?,
            costo_promedio       = ?,
            fecha_ult_movimiento = NOW()`,
-        [detalle.id_producto, comp.id_deposito_destino, cantReal, costoPromNuevo,
+        [detalle.id_producto, id_deposito, cantReal, costoPromNuevo,
          cantReal, costoPromNuevo]
       );
 
       const [[stockNuevo]] = await db.promise().query(
         `SELECT cantidad, costo_promedio FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [detalle.id_producto, comp.id_deposito_destino]
+        [detalle.id_producto, id_deposito]
       );
 
       await db.promise().query(
@@ -823,7 +830,7 @@ const recibirMercaderia = async (req, res) => {
             saldo_cantidad, saldo_costo,
             documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
          VALUES (?,?,?,NOW(), ?,?, ?,?, 'COMPRA',?,?,?,?)`,
-        [detalle.id_producto, comp.id_deposito_destino, tipoMov.id_tipo_movimiento,
+        [detalle.id_producto, id_deposito, tipoMov.id_tipo_movimiento,
          cantReal, costoNuevo,
          stockNuevo.cantidad,
          +(Number(stockNuevo.cantidad) * Number(stockNuevo.costo_promedio)).toFixed(4),
