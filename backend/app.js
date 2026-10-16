@@ -89,6 +89,14 @@ app.use(helmet({
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
+// El ERP siempre necesita el dato más fresco (precios, stock, ediciones) —
+// sin esto, un refresh normal del navegador puede servir una respuesta de
+// /api/* desde caché en vez de pedirla de nuevo, obligando a hacer hard
+// refresh para ver cambios recién guardados.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 app.use('/api', limiterGlobal);
 app.use('/api/auth/login', limiterLogin);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

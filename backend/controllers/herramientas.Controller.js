@@ -475,9 +475,6 @@ exports.importarProductos = async (req, res) => {
           : `${marcaNombre.replace(/[^A-Z0-9]/gi, '').slice(0, 5)}-${productoBase.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-${detalle.replace(/[^A-Z0-9]/gi, '').slice(0, 4)}-F${fila}`
               .toUpperCase();
 
-        // Nombre del producto: PRODUCTO + " " + DETALLE
-        const nombreProducto = detalle ? `${productoBase} ${detalle}` : productoBase;
-
         try {
           const [[marcaExiste]] = await conn.query(`SELECT id_marca FROM marcas WHERE nombre = ?`, [marcaNombre]);
           const idMarca = await resolverMarca(conn, marcaNombre);
@@ -504,7 +501,7 @@ exports.importarProductos = async (req, res) => {
             id_marca:        idMarca,
             id_categoria:    idCategoria,
             id_unidad:       idUnidadDefault,
-            producto:        nombreProducto,
+            producto:        productoBase,
             detalle:         detalle || null,
             modelo:          modelo  || null,
             color:           color   || null,
