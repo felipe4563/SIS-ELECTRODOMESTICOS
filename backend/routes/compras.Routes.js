@@ -48,6 +48,8 @@ router.post('/:id/detalle/:idDetalle/imagen', authMiddleware, puedeEditarFactura
   upload.single('imagen'), validateMagic(IMAGES_ONLY), ctrl.subirImagenDetalle);
 router.post('/:id/detalle/:idDetalle/series', authMiddleware, puedeEditarFactura,
   upload.single('imagen'), validateMagic(IMAGES_ONLY), ctrl.agregarSerieDetalle);
+router.put('/:id/detalle/:idDetalle/series/:idSerie', authMiddleware, puedeEditarFactura,
+  upload.single('imagen'), validateMagic(IMAGES_ONLY), ctrl.editarSerieDetalle);
 router.delete('/:id/detalle/:idDetalle/series/:idSerie', authMiddleware, puedeEditarFactura, ctrl.eliminarSerieDetalle);
 
 router.post('/:id/aprobar',   authMiddleware, checkPermission('aprobar',           'compras'), ctrl.aprobarCompra);

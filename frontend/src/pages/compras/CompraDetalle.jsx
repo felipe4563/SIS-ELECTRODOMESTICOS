@@ -209,12 +209,16 @@ function ImagenDetalleUpload({ id, idDetalle, url, editable, onSubir, compact = 
 }
 
 // ── Números de serie por unidad recibida (uno por unidad, con foto opcional) ──
-function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEliminar }) {
+function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar, onEliminar }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [numeroSerie,  setNumeroSerie]  = useState('');
   const [file,         setFile]         = useState(null);
   const [guardando,    setGuardando]    = useState(false);
   const [err,          setErr]          = useState('');
+  const [editandoId,   setEditandoId]   = useState(null);
+  const [editValor,    setEditValor]    = useState('');
+  const [editFile,     setEditFile]     = useState(null);
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
 
   if (maxCantidad <= 0) return null;
   const puedeAgregar = editable && series.length < maxCantidad;
@@ -229,6 +233,26 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onElimin
       setErr(e?.response?.data?.error ?? 'Error al guardar');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const iniciarEdicion = (s) => {
+    setEditandoId(s.id_serie);
+    setEditValor(s.numero_serie);
+    setEditFile(null);
+    setErr('');
+  };
+
+  const guardarEdicion = async (idSerie) => {
+    if (!editValor.trim()) return setErr('Ingresá el número de serie');
+    setGuardandoEdit(true); setErr('');
+    try {
+      await onEditar(idSerie, editValor.trim(), editFile);
+      setEditandoId(null); setEditFile(null);
+    } catch (e) {
+      setErr(e?.response?.data?.error ?? 'Error al editar');
+    } finally {
+      setGuardandoEdit(false);
     }
   };
 
@@ -248,9 +272,10 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onElimin
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {series.map(s => {
                   const url = buildFileUrl(s.imagen_url);
+                  const editandoEsta = editandoId === s.id_serie;
                   return (
                     <div key={s.id_serie} className="relative flex flex-col items-center">
-                      {editable && (
+                      {editable && !editandoEsta && (
                         <button onClick={() => onEliminar(s.id_serie)}
                           className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-zinc-700 text-white text-xs leading-none flex items-center justify-center hover:bg-red-500 transition-colors">
                           ×
@@ -265,9 +290,40 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onElimin
                           Sin foto
                         </div>
                       )}
-                      <span className="mt-1.5 font-mono text-xs text-zinc-600 dark:text-zinc-300 text-center break-all">
-                        {s.numero_serie}
-                      </span>
+                      {editandoEsta ? (
+                        <div className="mt-1.5 flex flex-col items-center gap-1 w-full">
+                          <input type="text" value={editValor} onChange={e => setEditValor(e.target.value)}
+                            disabled={guardandoEdit} autoFocus
+                            className="w-full px-1.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-mono text-center bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                          <label className={`text-[10px] font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${guardandoEdit ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {editFile ? 'Foto nueva ✓' : (url ? 'Cambiar foto' : 'Agregar imagen')}
+                            <input type="file" accept="image/*" capture="environment" className="hidden" disabled={guardandoEdit}
+                              onChange={e => setEditFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                          <div className="flex gap-1.5">
+                            <button onClick={() => guardarEdicion(s.id_serie)} disabled={guardandoEdit}
+                              className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50">
+                              {guardandoEdit ? 'Guardando…' : 'Guardar'}
+                            </button>
+                            <button onClick={() => { setEditandoId(null); setEditFile(null); }} disabled={guardandoEdit}
+                              className="text-[10px] text-zinc-400 hover:underline disabled:opacity-50">
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <span className="font-mono text-xs text-zinc-600 dark:text-zinc-300 text-center break-all">
+                            {s.numero_serie}
+                          </span>
+                          {editable && (
+                            <button onClick={() => iniciarEdicion(s)}
+                              className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline shrink-0">
+                              Editar
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -282,13 +338,13 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onElimin
                   placeholder="N° de serie" disabled={guardando}
                   className="flex-1 min-w-[140px] px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
                 <label className={`text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${guardando ? 'opacity-50 pointer-events-none' : ''}`}>
-                  {file ? 'Foto ✓' : '+ Foto'}
+                  {file ? 'Foto ✓' : 'Agregar imagen'}
                   <input type="file" accept="image/*" capture="environment" className="hidden" disabled={guardando}
                     onChange={e => setFile(e.target.files?.[0] ?? null)} />
                 </label>
                 <button onClick={agregar} disabled={guardando}
                   className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-zinc-900 text-xs font-semibold disabled:opacity-50 transition-colors">
-                  {guardando ? 'Guardando…' : 'Agregar'}
+                  {guardando ? 'Guardando…' : 'Guardar'}
                 </button>
               </div>
             )}
@@ -901,6 +957,16 @@ export default function CompraDetalle() {
     }));
   };
 
+  const editarSerie = async (idDetalle, idSerie, numeroSerie, file) => {
+    const { data: res } = await comprasService.editarSerieDetalle(id, idDetalle, idSerie, numeroSerie, file);
+    setData(prev => ({
+      ...prev,
+      detalle: prev.detalle.map(d => d.id_detalle === idDetalle
+        ? { ...d, series: (d.series ?? []).map(s => s.id_serie === idSerie ? { ...s, numero_serie: res.numero_serie, imagen_url: res.imagen_url } : s) }
+        : d),
+    }));
+  };
+
   const eliminarSerie = async (idDetalle, idSerie) => {
     await comprasService.eliminarSerieDetalle(id, idDetalle, idSerie);
     setData(prev => ({
@@ -1380,6 +1446,7 @@ export default function CompraDetalle() {
                             maxCantidad={Number(d.cantidad)}
                             editable={puedeEditarFactura}
                             onAgregar={(numeroSerie, file) => agregarSerie(d.id_detalle, numeroSerie, file)}
+                            onEditar={(idSerie, numeroSerie, file) => editarSerie(d.id_detalle, idSerie, numeroSerie, file)}
                             onEliminar={idSerie => eliminarSerie(d.id_detalle, idSerie)}
                           />
                         </td>
@@ -1438,6 +1505,7 @@ export default function CompraDetalle() {
                         maxCantidad={Number(d.cantidad)}
                         editable={puedeEditarFactura}
                         onAgregar={(numeroSerie, file) => agregarSerie(d.id_detalle, numeroSerie, file)}
+                        onEditar={(idSerie, numeroSerie, file) => editarSerie(d.id_detalle, idSerie, numeroSerie, file)}
                         onEliminar={idSerie => eliminarSerie(d.id_detalle, idSerie)}
                       />
                     </div>

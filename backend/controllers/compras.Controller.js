@@ -1137,6 +1137,45 @@ const agregarSerieDetalle = async (req, res) => {
   }
 };
 
+const editarSerieDetalle = async (req, res) => {
+  try {
+    const { id, idDetalle, idSerie } = req.params;
+    const { numero_serie } = req.body;
+    if (!numero_serie?.trim())
+      return res.status(400).json({ error: 'El número de serie es requerido' });
+
+    const [[serie]] = await db.promise().query(
+      `SELECT s.id_serie, s.imagen_url FROM compra_detalle_series s
+       JOIN compra_detalle cd ON cd.id_detalle = s.id_detalle
+       WHERE s.id_serie = ? AND s.id_detalle = ? AND cd.id_compra = ?`, [idSerie, idDetalle, id]
+    );
+    if (!serie) return res.status(404).json({ error: 'Número de serie no encontrado' });
+
+    const imagenNueva = req.file ? `/uploads/compras/${req.file.filename}` : null;
+    if (imagenNueva) {
+      await db.promise().query(
+        `UPDATE compra_detalle_series SET numero_serie = ?, imagen_url = ? WHERE id_serie = ?`,
+        [numero_serie.trim(), imagenNueva, idSerie]
+      );
+      if (serie.imagen_url) {
+        const archivo = path.join(__dirname, '..', serie.imagen_url.replace(/^\/+/, ''));
+        fs.unlink(archivo, () => {});
+      }
+    } else {
+      await db.promise().query(
+        `UPDATE compra_detalle_series SET numero_serie = ? WHERE id_serie = ?`,
+        [numero_serie.trim(), idSerie]
+      );
+    }
+
+    await auditLog(req.user.id_usuario, 'compra_detalle_series', idSerie, 'UPDATE', getIp(req));
+    res.json({ id_serie: Number(idSerie), numero_serie: numero_serie.trim(), imagen_url: imagenNueva ?? serie.imagen_url });
+  } catch (err) {
+    console.error('[editarSerieDetalle]', err);
+    res.status(500).json({ error: 'Error al editar el número de serie' });
+  }
+};
+
 const eliminarSerieDetalle = async (req, res) => {
   try {
     const { id, idDetalle, idSerie } = req.params;
@@ -1224,7 +1263,7 @@ module.exports = {
   getFormData,
   getCompras, getCompra,
   createCompra, updateCompra, actualizarFacturaCompra, subirFacturaImagen, subirImagenDetalle,
-  agregarSerieDetalle, eliminarSerieDetalle,
+  agregarSerieDetalle, editarSerieDetalle, eliminarSerieDetalle,
   aprobarCompra, confirmarPedido, actualizarCondicionPago, recibirMercaderia, anularCompra,
   createPago, anularPago,
   actualizarCuota,

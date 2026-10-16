@@ -29,6 +29,14 @@ export const comprasService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  editarSerieDetalle: (id, idDetalle, idSerie, numero_serie, file) => {
+    const form = new FormData();
+    form.append('numero_serie', numero_serie);
+    if (file) form.append('imagen', file);
+    return api.put(`/compras/${id}/detalle/${idDetalle}/series/${idSerie}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   eliminarSerieDetalle: (id, idDetalle, idSerie) => api.delete(`/compras/${id}/detalle/${idDetalle}/series/${idSerie}`),
   aprobar:         (id, payload)        => api.post(`/compras/${id}/aprobar`, payload),
   confirmar:       (id, data)           => api.post(`/compras/${id}/confirmar`, data),
