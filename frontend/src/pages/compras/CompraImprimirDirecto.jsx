@@ -157,7 +157,7 @@ function Ticket110({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM }
           <div style={{ fontWeight: 'bold', fontSize: '10px', marginBottom: '2px' }}>DESTINO</div>
           <div style={{ fontSize: '10px' }}>{c.sucursal_nombre}</div>
           <div style={{ fontSize: '9px' }}>Depósito: {c.deposito_nombre}</div>
-          <div style={{ fontSize: '9px' }}>{c.condicion_pago === 'CREDITO' ? `Crédito (${c.dias_credito} días)` : 'Contado'} · {c.moneda_codigo}</div>
+          <div style={{ fontSize: '9px' }}>Condición: <b>{c.condicion_pago === 'CREDITO' ? `Crédito (${c.dias_credito} días)` : 'Contado'}</b> · {c.moneda_codigo}</div>
         </div>
       </div>
 
@@ -326,7 +326,7 @@ function TicketA4({ c, detalle, cuotas, pagos, recepciones, empresa: e, logoUrl,
           <div style={{ fontWeight: 'bold', fontSize: '10px' }}>{c.sucursal_nombre}</div>
           <div style={{ color: '#444' }}>Depósito: {c.deposito_nombre}</div>
           <div style={{ color: '#444' }}>
-            {c.condicion_pago === 'CREDITO' ? `Crédito — ${c.dias_credito} días` : 'Contado'} · Moneda: {c.moneda_codigo}
+            Condición: <b>{c.condicion_pago === 'CREDITO' ? `Crédito — ${c.dias_credito} días` : 'Contado'}</b> · Moneda: {c.moneda_codigo}
             {Number(c.tipo_cambio) !== 1 && ` · T.C.: ${c.tipo_cambio}`}
           </div>
         </div>
