@@ -220,11 +220,14 @@ export default function EtiquetasImprimir() {
                     )}
                   </div>
                   <div className="etq-datos">
-                    <p className="etq-campo">{item.nombre}</p>
-                    {item.marca     && <p className="etq-campo">Marca: {item.marca}</p>}
-                    {item.modelo    && <p className="etq-campo">Modelo: {item.modelo}</p>}
-                    {item.color     && <p className="etq-campo">Color: {item.color}</p>}
-                    {item.capacidad && <p className="etq-campo">Cap: {item.capacidad}</p>}
+                    <p className="etq-nombre">{item.nombre}</p>
+                    <div className="etq-detalle">
+                      {item.detalle   && <p className="etq-campo">{item.detalle}</p>}
+                      {item.marca     && <p className="etq-campo">Marca: {item.marca}</p>}
+                      {item.modelo    && <p className="etq-campo">Modelo: {item.modelo}</p>}
+                      {item.color     && <p className="etq-campo">Color: {item.color}</p>}
+                      {item.capacidad && <p className="etq-campo">Cap: {item.capacidad}</p>}
+                    </div>
                   </div>
                 </div>
                 <div className="etq-serie">
@@ -305,6 +308,20 @@ export default function EtiquetasImprimir() {
           .etq-datos {
             flex: 1;
             min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          }
+          .etq-nombre {
+            font-size: 7pt;
+            margin: 0 0 1.2mm;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .etq-detalle {
+            flex: 1;
+            min-height: 0;
             display: flex;
             flex-direction: column;
             justify-content: center;

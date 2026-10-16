@@ -68,7 +68,7 @@ export default function Productos() {
     const etiquetas = lista
       .filter(p => seleccionados.has(p.id_producto))
       .map(p => ({
-        nombre: p.producto, codigo_interno: p.codigo_interno,
+        nombre: p.producto, detalle: p.detalle, codigo_interno: p.codigo_interno,
         marca: p.marca_nombre, modelo: p.modelo, color: p.color, capacidad: p.capacidad,
         copias: 1,
       }));
@@ -340,7 +340,7 @@ export default function Productos() {
                         <div className="flex items-center gap-1 justify-end">
                           <button
                             onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{
-                              nombre: p.producto, codigo_interno: p.codigo_interno,
+                              nombre: p.producto, detalle: p.detalle, codigo_interno: p.codigo_interno,
                               marca: p.marca_nombre, modelo: p.modelo, color: p.color, capacidad: p.capacidad,
                               copias: 1,
                             }] } })}
@@ -433,7 +433,7 @@ export default function Productos() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => navigate('/productos/etiquetas', { state: { etiquetas: [{
-                              nombre: p.producto, codigo_interno: p.codigo_interno,
+                              nombre: p.producto, detalle: p.detalle, codigo_interno: p.codigo_interno,
                               marca: p.marca_nombre, modelo: p.modelo, color: p.color, capacidad: p.capacidad,
                               copias: 1,
                             }] } })}

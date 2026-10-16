@@ -990,6 +990,7 @@ export default function CompraDetalle() {
       state: {
         etiquetas: etiquetasDisponibles.map(d => ({
           nombre: d.producto,
+          detalle: d.producto_detalle,
           codigo_interno: d.codigo_interno,
           marca: d.marca_nombre, modelo: d.modelo, color: d.color, capacidad: d.capacidad,
           series: d.series,

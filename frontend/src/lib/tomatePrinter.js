@@ -181,17 +181,35 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
     ctx.drawImage(img, pad, filaSuperiorY + Math.round((filaSuperiorH - qrSize) / 2), qrSize, qrSize);
   }
 
+  // Nombre del producto: fijo arriba, pegado al nombre de la empresa —
+  // no se mueve con el resto del detalle.
+  let nombreH = 0;
+  if (item.nombre) {
+    const nombreSize = mm(2.6);
+    ctx.font = `${nombreSize}px sans-serif`;
+    const yNombre = filaSuperiorY + nombreSize;
+    drawTruncado(ctx, item.nombre, colDerechaX, yNombre, colDerechaW, 'left');
+    nombreH = nombreSize + mm(1.2);
+  }
+
   const campos = [
-    item.nombre   && { texto: item.nombre, bold: false, size: mm(2.6) },
+    item.detalle  && { texto: item.detalle,                 bold: false, size: mm(2.5) },
     item.marca    && { texto: `Marca: ${item.marca}`,       bold: false, size: mm(2.5) },
     item.modelo   && { texto: `Modelo: ${item.modelo}`,     bold: false, size: mm(2.5) },
     item.color    && { texto: `Color: ${item.color}`,       bold: false, size: mm(2.5) },
     item.capacidad&& { texto: `Cap: ${item.capacidad}`,     bold: false, size: mm(2.5) },
   ].filter(Boolean);
 
+  // El detalle (campo "Detalle" del producto + Marca/Modelo/Color/Cap) se
+  // centra en el espacio que queda debajo del nombre, no en toda la fila
+  // superior — así queda separado del nombre en vez de tratarse como un
+  // solo bloque. "Detalle" puede ser texto largo: drawTruncado lo corta
+  // con "…" si no entra en el ancho disponible.
   const lineGap = mm(0.6);
   const totalTexto = campos.reduce((s, c) => s + c.size + lineGap, 0) - lineGap;
-  let y = filaSuperiorY + Math.round((filaSuperiorH - totalTexto) / 2) + campos[0]?.size;
+  const detalleAreaY = filaSuperiorY + nombreH;
+  const detalleAreaH = filaSuperiorH - nombreH;
+  let y = detalleAreaY + Math.round((detalleAreaH - totalTexto) / 2) + campos[0]?.size;
   for (const c of campos) {
     ctx.font = `${c.bold ? 'bold ' : ''}${c.size}px sans-serif`;
     drawTruncado(ctx, c.texto, colDerechaX, y, colDerechaW, 'left');
