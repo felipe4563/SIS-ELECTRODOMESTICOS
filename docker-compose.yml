@@ -22,6 +22,7 @@ services:
 
   # ── Backend API ────────────────────────────────────────────────────────────
   backend:
+    image: ghcr.io/felipe4563/sis-electrodomesticos-backend:${TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -52,6 +53,7 @@ services:
 
   # ── Frontend (Vite → Nginx estático) ──────────────────────────────────────
   frontend:
+    image: ghcr.io/felipe4563/sis-electrodomesticos-frontend:${TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -65,6 +67,7 @@ services:
 
   # ── Catálogo Next.js SSR ───────────────────────────────────────────────────
   catalogo:
+    image: ghcr.io/felipe4563/sis-electrodomesticos-catalogo:${TAG:-latest}
     build:
       context: ./catalogo
       dockerfile: Dockerfile
