@@ -64,6 +64,12 @@ yarn.lock
 backend/backups/
 
 # ===============================
+#   Datos de producción (Docker Compose, solo VPS)
+#   ./data/mysql, ./data/uploads, ./data/qrcodes, ./data/backups
+# ===============================
+/data/
+
+# ===============================
 #   SQL (dump y migraciones) — solo local
 # ===============================
 *.sql
