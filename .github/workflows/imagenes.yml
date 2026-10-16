@@ -50,13 +50,32 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Validar variables de build requeridas
+        run: |
+          missing=0
+          if [[ "${{ matrix.service }}" == "frontend" && -z "${{ vars.VITE_API_URL }}" ]]; then
+            echo "::error::Falta la GitHub Variable VITE_API_URL (Settings → Secrets and variables → Actions → Variables)"
+            missing=1
+          fi
+          if [[ "${{ matrix.service }}" == "catalogo" ]]; then
+            if [[ -z "${{ vars.NEXT_PUBLIC_API_URL }}" ]]; then
+              echo "::error::Falta la GitHub Variable NEXT_PUBLIC_API_URL"
+              missing=1
+            fi
+            if [[ -z "${{ vars.UPLOADS_PROXY_URL }}" ]]; then
+              echo "::error::Falta la GitHub Variable UPLOADS_PROXY_URL"
+              missing=1
+            fi
+          fi
+          exit "$missing"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.OWNER }}/sis-electrodomesticos-${{ matrix.service }}
           tags: |
-            type=sha,format=long
+            type=sha,format=long,prefix=
             type=raw,value=latest
 
       - name: Build and push

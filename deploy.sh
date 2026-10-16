@@ -48,6 +48,19 @@ IMAGE_SOURCE_FILTER="label=org.opencontainers.image.source=https://github.com/fe
 PULL_RETRY_INTERVAL=30
 PULL_RETRY_MAX_MINUTES=15
 
+# ── Confirma que la imagen de cada servicio para $TAG existe localmente ───────
+# (docker compose pull puede devolver éxito sin haber descargado nada nuevo
+# cuando el servicio también tiene `build:` definido — algunas versiones de
+# Compose solo advierten en vez de fallar. Esto verifica el estado real.)
+images_present() {
+  local services=("$@")
+  local service
+  for service in "${services[@]}"; do
+    docker image inspect "ghcr.io/felipe4563/sis-electrodomesticos-${service}:${TAG}" >/dev/null 2>&1 || return 1
+  done
+  return 0
+}
+
 # ── Espera reintentando hasta que ghcr.io tenga las imágenes del commit actual ─
 wait_for_images() {
   local services=("$@")
@@ -55,7 +68,7 @@ wait_for_images() {
   local attempt=1
 
   while true; do
-    if docker compose pull "${services[@]}"; then
+    if docker compose pull "${services[@]}" && images_present "${services[@]}"; then
       return 0
     fi
 
@@ -74,14 +87,16 @@ prune_old_images() {
   local label_filter="$1"
   local keep_image_ids candidates
 
-  keep_image_ids=$(docker compose images -q 2>/dev/null || true)
+  # docker images (sin --no-trunc) y docker compose images -q truncan el ID
+  # de forma distinta — se normalizan ambos a 12 caracteres para comparar.
+  keep_image_ids=$(docker compose images -q 2>/dev/null | cut -c1-12 || true)
   candidates=$(docker images --filter "$label_filter" --format '{{.ID}} {{.Repository}}:{{.Tag}}' 2>/dev/null || true)
 
   [[ -z "$candidates" ]] && return 0
 
   while IFS=' ' read -r image_id image_ref; do
     [[ -z "$image_id" ]] && continue
-    if ! grep -q "^${image_id}$" <<< "$keep_image_ids"; then
+    if ! grep -q "^${image_id:0:12}$" <<< "$keep_image_ids"; then
       log "Eliminando imagen vieja: $image_ref ($image_id)"
       docker rmi "$image_id" 2>/dev/null || warn "No se pudo eliminar $image_ref (en uso)"
     fi
@@ -133,8 +148,18 @@ main() {
     warn "Omitiendo git pull (--skip-pull)"
   fi
 
-  export TAG="$(git rev-parse HEAD)"
+  TAG="$(git rev-parse HEAD)"
+  export TAG
   log "TAG de imagen: $TAG"
+
+  # Persistir TAG en .env: si alguien corre `docker compose up -d` a mano
+  # sin pasar por este script, que use la última imagen desplegada en vez
+  # de caer sorpresivamente a :latest (que puede no estar ni descargada).
+  if grep -q '^TAG=' "$APP_DIR/.env" 2>/dev/null; then
+    sed -i "s/^TAG=.*/TAG=${TAG}/" "$APP_DIR/.env"
+  else
+    echo "TAG=${TAG}" >> "$APP_DIR/.env"
+  fi
 
   # ── 3. Base de datos (siempre levantada antes de los servicios) ─────────────
   step "Base de datos"
