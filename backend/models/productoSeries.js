@@ -102,6 +102,22 @@ async function marcarVendida(db, idsSerie, { id_venta_detalle }) {
   if (r.affectedRows !== idsSerie.length) throw new Error('SERIE_NO_DISPONIBLE');
 }
 
+// Revierte una venta (total o parcialmente, al anularla o al editar un
+// borrador que ya tenía series asociadas antes de recrear sus líneas): las
+// unidades VENDIDA vuelven a EN_STOCK en el depósito indicado, liberadas de
+// la línea de venta que las vendió. Simétrico a revertirATransito pero
+// partiendo de VENDIDA en vez de EN_TRANSITO.
+async function revertirVenta(db, idsSerie, { id_deposito_destino }) {
+  if (!idsSerie || !idsSerie.length) return;
+  const [r] = await db.promise().query(
+    `UPDATE compra_detalle_series
+     SET estado = 'EN_STOCK', id_deposito_actual = ?, id_venta_detalle = NULL
+     WHERE id_serie IN (?) AND estado = 'VENDIDA'`,
+    [id_deposito_destino, idsSerie]
+  );
+  if (r.affectedRows !== idsSerie.length) throw new Error('SERIE_NO_DISPONIBLE');
+}
+
 module.exports = {
   listarDisponibles,
   cargarManual,
@@ -109,4 +125,5 @@ module.exports = {
   confirmarRecepcion,
   revertirATransito,
   marcarVendida,
+  revertirVenta,
 };

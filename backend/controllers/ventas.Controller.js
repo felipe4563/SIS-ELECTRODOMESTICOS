@@ -29,13 +29,39 @@ class ApiError extends Error {
   }
 }
 
+// Guarda contra la que ya tropezamos en inventarioOps.Controller.js
+// (asociarSeriesATransferencia, Task 4): productoSeries.marcarVendida solo
+// valida estado='EN_STOCK', así que por sí sola deja vender una serie de
+// OTRO producto, de OTRO depósito (sin relación con el depósito de esta
+// venta), o una que esté reservada por una transferencia todavía activa
+// (id_transferencia_detalle apuntando a una transferencia que no esté
+// ANULADA ni RECIBIDA). Esta función hace el guard + el marcado VENDIDA en
+// una sola UPDATE atómica (mismo patrón que asociarSeriesATransferencia):
+// si la fila no cumple TODAS las condiciones, affectedRows queda en 0 y se
+// lanza SERIE_NO_DISPONIBLE para que el llamador revierta la transacción
+// completa.
+async function marcarVendidaValidada(conn, { idSerie, idProducto, idDeposito, idVentaDetalle }) {
+  const [r] = await conn.query(
+    `UPDATE compra_detalle_series cds
+     LEFT JOIN transferencia_detalle td ON td.id_detalle = cds.id_transferencia_detalle
+     LEFT JOIN transferencias t2 ON t2.id_transferencia = td.id_transferencia
+     SET cds.estado = 'VENDIDA', cds.id_deposito_actual = NULL, cds.id_venta_detalle = ?
+     WHERE cds.id_serie = ? AND cds.estado = 'EN_STOCK'
+       AND cds.id_producto = ? AND cds.id_deposito_actual = ?
+       AND (cds.id_transferencia_detalle IS NULL OR t2.estado IN ('ANULADA', 'RECIBIDA'))`,
+    [idVentaDetalle, idSerie, idProducto, idDeposito]
+  );
+  if (r.affectedRows !== 1) throw new Error('SERIE_NO_DISPONIBLE');
+}
+
 // Inserta una fila de venta_detalle y, si se indicó id_serie, marca esa
-// unidad como vendida dentro de la MISMA transacción (conn): si la serie ya
-// no está disponible (SERIE_NO_DISPONIBLE), la excepción se propaga y el
-// catch del llamador revierte toda la operación, incluida esta fila recién
-// insertada.
+// unidad como vendida dentro de la MISMA transacción (conn), validando que
+// sea realmente del producto y depósito de esta línea (marcarVendidaValidada
+// arriba): si la serie ya no está disponible o no corresponde
+// (SERIE_NO_DISPONIBLE), la excepción se propaga y el catch del llamador
+// revierte toda la operación, incluida esta fila recién insertada.
 async function insertarDetalleVenta(conn, {
-  id_venta, id_producto, cantidad, precio_unitario, precio_base,
+  id_venta, id_producto, id_deposito, cantidad, precio_unitario, precio_base,
   descuento_porc, impuesto_porc, costo_unitario, bono_vendedor, comision_monto,
   id_combo, observacion, numero_serie, id_serie,
 }) {
@@ -55,7 +81,7 @@ async function insertarDetalleVenta(conn, {
   const id_detalle = ins.insertId;
 
   if (id_serie) {
-    await productoSeries.marcarVendida(dbTx(conn), [id_serie], { id_venta_detalle: id_detalle });
+    await marcarVendidaValidada(conn, { idSerie: id_serie, idProducto: id_producto, idDeposito: id_deposito, idVentaDetalle: id_detalle });
   }
 
   return { id_detalle, numero_serie: numero_serie || null };
@@ -75,13 +101,13 @@ async function insertarDetalleVenta(conn, {
 // por el llamador para la línea completa, no por unidad) se prorratean
 // según la cantidad de cada fila para no inflar sus totales al dividir la
 // línea.
-async function insertarLineaVentaConSeries(conn, { id_venta, it, precio_base, costo_unitario, bono_vendedor, comision_monto }) {
+async function insertarLineaVentaConSeries(conn, { id_venta, id_deposito, it, precio_base, costo_unitario, bono_vendedor, comision_monto }) {
   const idsSerie = Array.isArray(it.series) ? it.series.filter(v => v != null) : [];
   const cantidadTotal = Number(it.cantidad);
 
   if (!idsSerie.length) {
     const fila = await insertarDetalleVenta(conn, {
-      id_venta, id_producto: it.id_producto, cantidad: it.cantidad, precio_unitario: it.precio_unitario,
+      id_venta, id_producto: it.id_producto, id_deposito, cantidad: it.cantidad, precio_unitario: it.precio_unitario,
       precio_base, descuento_porc: it.descuento_porc, impuesto_porc: it.impuesto_porc,
       costo_unitario, bono_vendedor, comision_monto,
       id_combo: it.id_combo, observacion: it.observacion, numero_serie: it.numero_serie?.trim() || null,
@@ -100,7 +126,7 @@ async function insertarLineaVentaConSeries(conn, { id_venta, it, precio_base, co
   const filas = [];
   for (const idSerie of idsSerie) {
     const fila = await insertarDetalleVenta(conn, {
-      id_venta, id_producto: it.id_producto, cantidad: 1, precio_unitario: it.precio_unitario,
+      id_venta, id_producto: it.id_producto, id_deposito, cantidad: 1, precio_unitario: it.precio_unitario,
       precio_base, descuento_porc: it.descuento_porc, impuesto_porc: it.impuesto_porc,
       costo_unitario, bono_vendedor: prorratear(bono_vendedor), comision_monto: prorratear(comision_monto),
       id_combo: it.id_combo, observacion: it.observacion,
@@ -112,7 +138,7 @@ async function insertarLineaVentaConSeries(conn, { id_venta, it, precio_base, co
   const restante = cantidadTotal - idsSerie.length;
   if (restante > 0) {
     const fila = await insertarDetalleVenta(conn, {
-      id_venta, id_producto: it.id_producto, cantidad: restante, precio_unitario: it.precio_unitario,
+      id_venta, id_producto: it.id_producto, id_deposito, cantidad: restante, precio_unitario: it.precio_unitario,
       precio_base, descuento_porc: it.descuento_porc, impuesto_porc: it.impuesto_porc,
       costo_unitario,
       bono_vendedor: +((Number(bono_vendedor) || 0) * (restante / cantidadTotal)).toFixed(2),
@@ -123,6 +149,27 @@ async function insertarLineaVentaConSeries(conn, { id_venta, it, precio_base, co
   }
 
   return filas;
+}
+
+// Normaliza el array `series` que puede venir del body de un item del
+// carrito: ids a Number, rechaza cualquier valor que no sea un entero
+// positivo válido y rechaza duplicados dentro del mismo pedido (ambos casos
+// devuelven ok:false para que el llamador responda 400 en vez de seguir
+// silenciosamente). Sin esto, un id mandado como string (ej. "3") no
+// matchea las claves numéricas del Map de numero_serie en
+// insertarLineaVentaConSeries: la serie se marca vendida pero la fila queda
+// con numero_serie=NULL, perdiendo el dato en la factura sin ningún error.
+function normalizarIdsSerie(series) {
+  if (series === undefined || series === null) return { ok: true, ids: [] };
+  if (!Array.isArray(series)) return { ok: false, ids: [] };
+  const ids = [];
+  for (const s of series) {
+    const n = Number(s);
+    if (!Number.isInteger(n) || n <= 0) return { ok: false, ids: [] };
+    ids.push(n);
+  }
+  if (new Set(ids).size !== ids.length) return { ok: false, ids: [] };
+  return { ok: true, ids };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -527,8 +574,13 @@ const createVenta = async (req, res) => {
       if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
       if (Number(it.cantidad) <= 0) return res.status(400).json({ mensaje: 'La cantidad de cada ítem debe ser mayor a 0' });
       if (Number(it.precio_unitario) < 0) return res.status(400).json({ mensaje: 'El precio unitario no puede ser negativo' });
-      if (Array.isArray(it.series) && it.series.length > Number(it.cantidad)) {
-        return res.status(400).json({ mensaje: 'Elegiste más series de las que caben en la cantidad' });
+      if (it.series !== undefined) {
+        const norm = normalizarIdsSerie(it.series);
+        if (!norm.ok) return res.status(400).json({ mensaje: 'Las series elegidas no son válidas' });
+        it.series = norm.ids;
+        if (it.series.length > Number(it.cantidad)) {
+          return res.status(400).json({ mensaje: 'Elegiste más series de las que caben en la cantidad' });
+        }
       }
     }
 
@@ -647,7 +699,7 @@ const createVenta = async (req, res) => {
         const comision_monto = +(sobreprecio * porcentaje_comision / 100).toFixed(2);
 
         const filas = await insertarLineaVentaConSeries(conn, {
-          id_venta, it, precio_base, costo_unitario, bono_vendedor, comision_monto,
+          id_venta, id_deposito, it, precio_base, costo_unitario, bono_vendedor, comision_monto,
         });
         detalleCreado.push(...filas);
       }
@@ -676,7 +728,7 @@ const createVenta = async (req, res) => {
 const updateVenta = async (req, res) => {
   try {
     const { id } = req.params;
-    const [[venta]] = await db.promise().query(`SELECT estado FROM ventas WHERE id_venta = ?`, [id]);
+    const [[venta]] = await db.promise().query(`SELECT estado, id_deposito FROM ventas WHERE id_venta = ?`, [id]);
     if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
     if (venta.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede editar una venta en borrador' });
 
@@ -697,8 +749,13 @@ const updateVenta = async (req, res) => {
       if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
       if (Number(it.cantidad) <= 0) return res.status(400).json({ mensaje: 'La cantidad de cada ítem debe ser mayor a 0' });
       if (Number(it.precio_unitario) < 0) return res.status(400).json({ mensaje: 'El precio unitario no puede ser negativo' });
-      if (Array.isArray(it.series) && it.series.length > Number(it.cantidad)) {
-        return res.status(400).json({ mensaje: 'Elegiste más series de las que caben en la cantidad' });
+      if (it.series !== undefined) {
+        const norm = normalizarIdsSerie(it.series);
+        if (!norm.ok) return res.status(400).json({ mensaje: 'Las series elegidas no son válidas' });
+        it.series = norm.ids;
+        if (it.series.length > Number(it.cantidad)) {
+          return res.status(400).json({ mensaje: 'Elegiste más series de las que caben en la cantidad' });
+        }
       }
     }
 
@@ -749,6 +806,22 @@ const updateVenta = async (req, res) => {
         ]
       );
 
+      // Si el borrador ya tenía líneas con series asociadas, hay que
+      // liberarlas (volver a EN_STOCK) ANTES del DELETE: la FK
+      // fk_cds_venta_detalle es RESTRICT, así que borrar una fila de
+      // venta_detalle todavía referenciada desde compra_detalle_series
+      // rompe con un error de integridad (500), no un 4xx controlado.
+      const [seriesLinkadasRows] = await conn.query(
+        `SELECT id_serie FROM compra_detalle_series
+         WHERE id_venta_detalle IN (SELECT id_detalle FROM venta_detalle WHERE id_venta = ?)`,
+        [id]
+      );
+      if (seriesLinkadasRows.length) {
+        await productoSeries.revertirVenta(dbTx(conn), seriesLinkadasRows.map(r => r.id_serie), {
+          id_deposito_destino: venta.id_deposito,
+        });
+      }
+
       await conn.query(`DELETE FROM venta_detalle WHERE id_venta = ?`, [id]);
       const [[ventaFull]] = await conn.query(
         `SELECT id_deposito, id_vendedor, tipo_venta FROM ventas WHERE id_venta = ?`, [id]
@@ -779,7 +852,7 @@ const updateVenta = async (req, res) => {
         const comision_monto = +(sobreprecio * porcentaje_comision_up / 100).toFixed(2);
 
         await insertarLineaVentaConSeries(conn, {
-          id_venta: id, it, precio_base, costo_unitario, bono_vendedor, comision_monto,
+          id_venta: id, id_deposito: ventaFull.id_deposito, it, precio_base, costo_unitario, bono_vendedor, comision_monto,
         });
       }
 
@@ -1069,49 +1142,72 @@ const anularCobro = async (req, res) => {
 // ── Anular venta ──────────────────────────────────────────────────────────────
 
 const anularVenta = async (req, res) => {
+  const conn = await db.promise().getConnection();
   try {
     const { id } = req.params;
     const motivo = (req.body?.motivo ?? '').trim();
-    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
+    if (!motivo) throw new ApiError(400, 'Debe indicar el motivo de la anulación');
 
-    const [[venta]] = await db.promise().query(
+    const [[venta]] = await conn.query(
       `SELECT v.*, d.id_deposito FROM ventas v JOIN depositos d ON d.id_deposito = v.id_deposito
        WHERE v.id_venta = ?`, [id]
     );
-    if (!venta) return res.status(404).json({ mensaje: 'Venta no encontrada' });
+    if (!venta) throw new ApiError(404, 'Venta no encontrada');
     if (['ANULADA', 'DEVUELTA'].includes(venta.estado)) {
-      return res.status(400).json({ mensaje: 'La venta ya está anulada o devuelta' });
+      throw new ApiError(400, 'La venta ya está anulada o devuelta');
+    }
+
+    await conn.beginTransaction();
+
+    // Las series elegidas quedan VENDIDA desde que se guarda el borrador (no
+    // recién al emitir la venta), así que liberarlas acá aplica igual para
+    // un BORRADOR o una venta ya emitida: vuelven a EN_STOCK en el depósito
+    // de esta venta, sin lo cual quedarían "perdidas" (VENDIDA para siempre,
+    // sin stock normal que las respalde) aunque el resto de la anulación
+    // revierta todo lo demás. Mismo patrón que revertirATransito al anular
+    // una transferencia (inventarioOps.Controller.js).
+    const [seriesVendidasRows] = await conn.query(
+      `SELECT id_serie FROM compra_detalle_series
+       WHERE id_venta_detalle IN (SELECT id_detalle FROM venta_detalle WHERE id_venta = ?)`,
+      [id]
+    );
+    if (seriesVendidasRows.length) {
+      await productoSeries.revertirVenta(dbTx(conn), seriesVendidasRows.map(r => r.id_serie), {
+        id_deposito_destino: venta.id_deposito,
+      });
     }
 
     if (venta.estado === 'BORRADOR') {
-      await db.promise().query(
+      await conn.query(
         `UPDATE ventas SET estado = 'ANULADA', motivo_anulacion = ? WHERE id_venta = ?`,
         [motivo, id]
       );
+      await conn.commit();
+      await auditLog(req.user.id_usuario, 'ventas', id, 'UPDATE', getIp(req));
       return res.json({ mensaje: 'Venta borrador anulada' });
     }
 
-    const [detalle] = await db.promise().query(
+    const [detalle] = await conn.query(
       `SELECT id_producto, cantidad, precio_unitario FROM venta_detalle WHERE id_venta = ?`, [id]
     );
 
     const tm = await tipoMov('DEVOLUCION_VTA');
-    if (!tm) return res.status(500).json({ mensaje: 'Falta tipo_movimiento DEVOLUCION_VTA en la BD' });
+    if (!tm) throw new ApiError(500, 'Falta tipo_movimiento DEVOLUCION_VTA en la BD');
 
     for (const item of detalle) {
-      await db.promise().query(
+      await conn.query(
         `UPDATE stock SET cantidad = cantidad + ?, fecha_ult_movimiento = NOW()
          WHERE id_producto = ? AND id_deposito = ?`,
         [item.cantidad, item.id_producto, venta.id_deposito]
       );
 
-      const [[nuevoStock]] = await db.promise().query(
+      const [[nuevoStock]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS cant, COALESCE(costo_promedio, 0) AS costo
          FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [item.id_producto, venta.id_deposito]
       );
 
-      await db.promise().query(
+      await conn.query(
         `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad, costo_unitario,
           saldo_cantidad, saldo_costo, documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -1125,14 +1221,14 @@ const anularVenta = async (req, res) => {
     }
 
     // Revertir cobros registrados para esta venta
-    const [cobrosExistentes] = await db.promise().query(
+    const [cobrosExistentes] = await conn.query(
       `SELECT id_pago, monto, metodo_pago, id_sucursal FROM pagos_venta WHERE id_venta = ?`,
       [id]
     );
 
     for (const cobro of cobrosExistentes) {
       if (cobro.metodo_pago === 'EFECTIVO') {
-        const [[arqueo]] = await db.promise().query(
+        const [[arqueo]] = await conn.query(
           `SELECT a.id_arqueo FROM arqueos_caja a
            JOIN cajas c ON a.id_caja = c.id_caja
            WHERE a.id_usuario = ? AND a.estado = 'ABIERTA'
@@ -1140,7 +1236,7 @@ const anularVenta = async (req, res) => {
           [req.user.id_usuario]
         );
         if (arqueo) {
-          await db.promise().query(
+          await conn.query(
             `UPDATE arqueos_caja SET monto_cierre_sistema = GREATEST(0, monto_cierre_sistema - ?) WHERE id_arqueo = ?`,
             [cobro.monto, arqueo.id_arqueo]
           );
@@ -1149,8 +1245,8 @@ const anularVenta = async (req, res) => {
     }
 
     // Eliminar cobros y resetear cuotas de esta venta
-    await db.promise().query(`DELETE FROM pagos_venta WHERE id_venta = ?`, [id]);
-    await db.promise().query(
+    await conn.query(`DELETE FROM pagos_venta WHERE id_venta = ?`, [id]);
+    await conn.query(
       `UPDATE venta_cuotas SET monto_pagado = 0, estado = 'PENDIENTE' WHERE id_venta = ?`,
       [id]
     );
@@ -1158,21 +1254,29 @@ const anularVenta = async (req, res) => {
     // saldo_pendiente ya refleja lo que queda por cobrar; el resto fue cobrado y
     // su impacto en saldo_actual se deshizo al borrar los cobros arriba.
     // Revertir solo el saldo pendiente (deuda que nunca se pagó).
-    await db.promise().query(
+    await conn.query(
       `UPDATE clientes SET saldo_actual = GREATEST(0, saldo_actual - ?) WHERE id_cliente = ?`,
       [venta.saldo_pendiente, venta.id_cliente]
     );
 
-    await db.promise().query(
+    await conn.query(
       `UPDATE ventas SET estado = 'ANULADA', motivo_anulacion = ? WHERE id_venta = ?`,
       [motivo, id]
     );
 
+    await conn.commit();
     await auditLog(req.user.id_usuario, 'ventas', id, 'UPDATE', getIp(req));
     res.json({ mensaje: 'Venta anulada correctamente' });
   } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err.message === 'SERIE_NO_DISPONIBLE') {
+      return res.status(409).json({ mensaje: 'No se pudo liberar una de las series de esta venta, intentá de nuevo' });
+    }
+    if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
     console.error('[anularVenta]', err);
     res.status(500).json({ error: 'Error al anular venta' });
+  } finally {
+    conn.release();
   }
 };
 
@@ -1647,30 +1751,60 @@ const actualizarSerie = async (req, res) => {
     const { numero_serie, id_serie } = req.body;
     if (!numero_serie?.trim()) return res.status(400).json({ mensaje: 'El número de serie es requerido' });
 
-    const [[det]] = await db.promise().query(`SELECT id_detalle FROM venta_detalle WHERE id_detalle = ?`, [id_detalle]);
-    if (!det) return res.status(404).json({ mensaje: 'Detalle no encontrado' });
-
-    await db.promise().query(
-      `UPDATE venta_detalle SET numero_serie = ? WHERE id_detalle = ?`,
-      [numero_serie.trim(), id_detalle]
-    );
-
-    // Completar una serie después de que la venta ya está guardada: además
-    // de guardar el texto, enlaza la unidad física elegida y la marca
-    // vendida (dentro de productoSeries, mismo módulo que usa createVenta).
-    if (id_serie) {
-      try {
-        await productoSeries.marcarVendida(db, [id_serie], { id_venta_detalle: id_detalle });
-      } catch (err) {
-        if (err.message === 'SERIE_NO_DISPONIBLE') {
-          return res.status(409).json({ mensaje: 'Esa serie ya no está disponible, volvé a elegir' });
-        }
-        throw err;
+    let idSerieNum = null;
+    if (id_serie !== undefined && id_serie !== null) {
+      idSerieNum = Number(id_serie);
+      if (!Number.isInteger(idSerieNum) || idSerieNum <= 0) {
+        return res.status(400).json({ mensaje: 'La serie elegida no es válida' });
       }
     }
 
+    const [[det]] = await db.promise().query(
+      `SELECT vd.id_detalle, vd.id_producto, v.id_deposito
+       FROM venta_detalle vd JOIN ventas v ON v.id_venta = vd.id_venta
+       WHERE vd.id_detalle = ?`, [id_detalle]
+    );
+    if (!det) return res.status(404).json({ mensaje: 'Detalle no encontrado' });
+
+    // Atómico: si hay id_serie, primero se intenta marcar vendida (validando
+    // que sea del producto y depósito de esta línea, no solo EN_STOCK); el
+    // texto de numero_serie recién se guarda si eso tuvo éxito, y se toma de
+    // compra_detalle_series (el dato real), no del input del cliente -
+    // evita que, si marcarVendida falla, el texto quede guardado en la base
+    // (y se imprima en la factura) para una serie que nunca se vendió.
+    const conn = await db.promise().getConnection();
+    let numeroSerieFinal = numero_serie.trim();
+    try {
+      await conn.beginTransaction();
+
+      if (idSerieNum) {
+        await marcarVendidaValidada(conn, {
+          idSerie: idSerieNum, idProducto: det.id_producto, idDeposito: det.id_deposito, idVentaDetalle: id_detalle,
+        });
+        const [[serieRow]] = await conn.query(
+          `SELECT numero_serie FROM compra_detalle_series WHERE id_serie = ?`, [idSerieNum]
+        );
+        numeroSerieFinal = serieRow?.numero_serie ?? numeroSerieFinal;
+      }
+
+      await conn.query(
+        `UPDATE venta_detalle SET numero_serie = ? WHERE id_detalle = ?`,
+        [numeroSerieFinal, id_detalle]
+      );
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback().catch(() => {});
+      if (err.message === 'SERIE_NO_DISPONIBLE') {
+        return res.status(409).json({ mensaje: 'Esa serie ya no está disponible, volvé a elegir' });
+      }
+      throw err;
+    } finally {
+      conn.release();
+    }
+
     await auditLog(req.user.id_usuario, 'venta_detalle', id_detalle, 'UPDATE', getIp(req));
-    res.json({ numero_serie: numero_serie.trim(), mensaje: 'Número de serie guardado correctamente' });
+    res.json({ numero_serie: numeroSerieFinal, mensaje: 'Número de serie guardado correctamente' });
   } catch (err) {
     console.error('[actualizarSerie]', err);
     res.status(500).json({ error: 'Error al guardar el número de serie' });
