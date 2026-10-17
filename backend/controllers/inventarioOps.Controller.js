@@ -22,6 +22,33 @@ class ApiError extends Error {
   }
 }
 
+// Asocia un lote de series a una línea de transferencia (BORRADOR), validando
+// dentro del propio UPDATE que cada serie sea realmente elegible: EN_STOCK, en
+// el depósito de origen de ESTA transferencia, del producto de ESTA línea, y
+// sin estar ya enganchada a otra transferencia todavía activa (si apunta a una
+// línea de otra transferencia que no esté ANULADA ni RECIBIDA, se rechaza en
+// vez de "robársela" en silencio). Si `affectedRows` no cubre todas las series
+// pedidas, alguna no cumplía y se aborta con 409 (el catch del llamador hace
+// rollback de toda la transacción).
+async function asociarSeriesATransferencia(conn, { idsSerie, idDetalle, idDepositoOrigen, idProducto }) {
+  if (!idsSerie?.length) return;
+  const [r] = await conn.query(
+    `UPDATE compra_detalle_series cds
+     LEFT JOIN transferencia_detalle td ON td.id_detalle = cds.id_transferencia_detalle
+     LEFT JOIN transferencias t2 ON t2.id_transferencia = td.id_transferencia
+     SET cds.id_transferencia_detalle = ?
+     WHERE cds.id_serie IN (?)
+       AND cds.estado = 'EN_STOCK'
+       AND cds.id_deposito_actual = ?
+       AND cds.id_producto = ?
+       AND (cds.id_transferencia_detalle IS NULL OR t2.estado IN ('ANULADA', 'RECIBIDA'))`,
+    [idDetalle, idsSerie, idDepositoOrigen, idProducto]
+  );
+  if (r.affectedRows !== idsSerie.length) {
+    throw new ApiError(409, 'Una de las series elegidas no está disponible para esta transferencia');
+  }
+}
+
 const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
     `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?,?,?,?,?)`,
@@ -175,10 +202,12 @@ const createTransferencia = async (req, res) => {
         [insertId, item.id_producto, item.cantidad, item.observacion ?? null]
       );
       if (item.series?.length) {
-        await conn.query(
-          `UPDATE compra_detalle_series SET id_transferencia_detalle = ? WHERE id_serie IN (?)`,
-          [idDetalle, item.series]
-        );
+        await asociarSeriesATransferencia(conn, {
+          idsSerie: item.series,
+          idDetalle,
+          idDepositoOrigen: id_deposito_origen,
+          idProducto: item.id_producto,
+        });
       }
     }
 
@@ -243,10 +272,12 @@ const updateTransferencia = async (req, res) => {
         [id, item.id_producto, item.cantidad, item.observacion ?? null]
       );
       if (item.series?.length) {
-        await conn.query(
-          `UPDATE compra_detalle_series SET id_transferencia_detalle = ? WHERE id_serie IN (?)`,
-          [idDetalle, item.series]
-        );
+        await asociarSeriesATransferencia(conn, {
+          idsSerie: item.series,
+          idDetalle,
+          idDepositoOrigen: id_deposito_origen,
+          idProducto: item.id_producto,
+        });
       }
     }
 
@@ -584,7 +615,7 @@ const anularTransferencia = async (req, res) => {
       const idsDetalle = detalle.map(d => d.id_detalle);
       if (idsDetalle.length) {
         const [seriesRows] = await conn.query(
-          `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle IN (?)`,
+          `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle IN (?) AND estado = 'EN_TRANSITO'`,
           [idsDetalle]
         );
         if (seriesRows.length) {
