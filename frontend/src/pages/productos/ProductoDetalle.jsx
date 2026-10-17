@@ -414,15 +414,36 @@ function ModalCampoExpandido({ titulo, name, value, editando, guardando, onChang
 
 // ── Tab: Stock por depósito ───────────────────────────────────────────────
 function TabStock({ idProducto }) {
-  const [stock,    setStock]    = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const [stock,       setStock]       = useState([]);
+  const [cargando,    setCargando]    = useState(true);
+  const [seriesInfo,  setSeriesInfo]  = useState({}); // id_deposito -> { cargado, total }
+  const [panelDeposito, setPanelDeposito] = useState(null); // fila de stock con panel abierto, o null
+
+  const cargarSeriesInfo = useCallback((filas) => {
+    const conStock = filas.filter(s => Number(s.cantidad_disponible) > 0);
+    if (conStock.length === 0) return;
+    Promise.all(conStock.map(s =>
+      productosService.getSeriesProducto(idProducto, s.id_deposito)
+        .then(({ data }) => ({ id_deposito: s.id_deposito, cargado: data.series.length, total: data.cantidad_stock }))
+        .catch(() => null)
+    )).then(resultados => {
+      setSeriesInfo(prev => {
+        const next = { ...prev };
+        resultados.filter(Boolean).forEach(r => { next[r.id_deposito] = { cargado: r.cargado, total: r.total }; });
+        return next;
+      });
+    });
+  }, [idProducto]);
 
   const cargar = useCallback(() => {
     productosService.getStock(idProducto)
-      .then(({ data }) => setStock(data.stock))
+      .then(({ data }) => {
+        setStock(data.stock);
+        cargarSeriesInfo(data.stock);
+      })
       .catch(() => {})
       .finally(() => setCargando(false));
-  }, [idProducto]);
+  }, [idProducto, cargarSeriesInfo]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -448,13 +469,16 @@ function TabStock({ idProducto }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-zinc-800">
-                {['Depósito','Disponible','Reservada','Total','Últ. Movimiento'].map(h => (
+                {['Depósito','Disponible','Reservada','Total','Últ. Movimiento','Series'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-              {stock.map(s => (
+              {stock.map(s => {
+                const info = seriesInfo[s.id_deposito];
+                const tieneStock = Number(s.cantidad_disponible) > 0;
+                return (
                 <tr key={s.id_stock} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-gray-900 dark:text-white">{s.deposito_nombre}</p>
@@ -476,12 +500,186 @@ function TabStock({ idProducto }) {
                       ? new Date(s.fecha_ult_movimiento).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })
                       : 'Sin movimientos'}
                   </td>
+                  <td className="px-4 py-3">
+                    {!tieneStock ? (
+                      <span className="text-gray-300 dark:text-zinc-600 text-xs">—</span>
+                    ) : !info ? (
+                      <FaSpinner className="animate-spin h-3 w-3 text-gray-300" />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {info.cargado < info.total ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                            {info.cargado}/{info.total} sin serie
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400">
+                            Completo
+                          </span>
+                        )}
+                        <button onClick={() => setPanelDeposito(s)}
+                          className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline">
+                          Cargar series
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
-              ))}
+              );})}
             </tbody>
           </table>
         </div>
       )}
+
+      {panelDeposito && (
+        <PanelSeriesDeposito
+          idProducto={idProducto}
+          idDeposito={panelDeposito.id_deposito}
+          depositoNombre={panelDeposito.deposito_nombre}
+          cantidadTotal={Number(panelDeposito.cantidad)}
+          onClose={(info) => {
+            setSeriesInfo(prev => ({ ...prev, [panelDeposito.id_deposito]: info }));
+            setPanelDeposito(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Panel lateral: cargar números de serie de stock antiguo ───────────────
+function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadTotal, onClose }) {
+  const [cargando, setCargando] = useState(true);
+  const [series,   setSeries]   = useState([]);
+  const [total,    setTotal]    = useState(cantidadTotal);
+  const [filas,    setFilas]    = useState([]);
+
+  useEffect(() => {
+    productosService.getSeriesProducto(idProducto, idDeposito)
+      .then(({ data }) => {
+        setSeries(data.series);
+        setTotal(data.cantidad_stock);
+        const faltan = Math.max(data.cantidad_stock - data.series.length, 0);
+        setFilas(Array.from({ length: faltan }, (_, i) => ({
+          key: `f-${i}`, numero_serie: '', file: null, guardando: false, error: '',
+        })));
+      })
+      .catch(() => {})
+      .finally(() => setCargando(false));
+  }, [idProducto, idDeposito]);
+
+  const actualizarFila = (key, patch) =>
+    setFilas(prev => prev.map(f => (f.key === key ? { ...f, ...patch } : f)));
+
+  const guardarFila = async (fila) => {
+    if (!fila.numero_serie.trim()) {
+      actualizarFila(fila.key, { error: 'Ingresá el número de serie' });
+      return;
+    }
+    actualizarFila(fila.key, { guardando: true, error: '' });
+    try {
+      const { data } = await productosService.cargarSerieManual(idProducto, idDeposito, fila.numero_serie.trim(), fila.file);
+      setSeries(prev => [...prev, { id_serie: data.id_serie, numero_serie: data.numero_serie, imagen_url: null }]);
+      setFilas(prev => prev.filter(f => f.key !== fila.key));
+    } catch (err) {
+      actualizarFila(fila.key, {
+        guardando: false,
+        error: err.response?.data?.mensaje || err.response?.data?.error || 'Error al guardar',
+      });
+    }
+  };
+
+  const cerrar = () => onClose({ cargado: series.length, total });
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={cerrar}>
+      <div onClick={e => e.stopPropagation()}
+        className="h-full w-full max-w-md bg-white dark:bg-zinc-900 border-l border-gray-200 dark:border-zinc-800 shadow-xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800 flex-shrink-0">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-zinc-300">Números de serie</h3>
+            <p className="text-xs text-gray-400 dark:text-zinc-500">{depositoNombre}</p>
+          </div>
+          <button onClick={cerrar} className="text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 transition-colors">
+            <FaTimes className="h-4 w-4" />
+          </button>
+        </div>
+
+        {cargando ? (
+          <div className="flex items-center justify-center flex-1 text-gray-400">
+            <FaSpinner className="animate-spin h-5 w-5" />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {/* Progreso */}
+            <div>
+              <div className="flex items-center justify-between mb-1 text-xs text-gray-500 dark:text-zinc-400">
+                <span>{series.length} / {total} con serie cargada</span>
+                <span className={series.length === total ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-amber-600 dark:text-amber-400 font-semibold'}>
+                  {series.length === total ? 'Completo' : `Faltan ${total - series.length}`}
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-zinc-800 overflow-hidden">
+                <div className="h-full bg-amber-400 transition-all"
+                  style={{ width: `${total > 0 ? Math.min(100, (series.length / total) * 100) : 0}%` }} />
+              </div>
+            </div>
+
+            {/* Series ya cargadas */}
+            {series.length > 0 && (
+              <div className="grid grid-cols-3 gap-3">
+                {series.map(s => {
+                  const url = s.imagen_url ? buildImgUrl(s.imagen_url) : null;
+                  return (
+                    <div key={s.id_serie} className="flex flex-col items-center">
+                      {url ? (
+                        <img src={url} alt="N° serie" className="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-zinc-700" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg border border-dashed border-gray-200 dark:border-zinc-700 flex items-center justify-center text-gray-300 dark:text-zinc-600 text-[10px] text-center">
+                          Sin foto
+                        </div>
+                      )}
+                      <span className="mt-1 font-mono text-xs text-gray-600 dark:text-zinc-300 text-center break-all">{s.numero_serie}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Filas pendientes: una por unidad faltante, guardado parcial */}
+            {filas.length > 0 && (
+              <div className="pt-3 border-t border-gray-100 dark:border-zinc-800 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Unidades sin serie</p>
+                {filas.map(fila => (
+                  <div key={fila.key} className="flex flex-wrap items-center gap-2 bg-gray-50 dark:bg-zinc-800/60 rounded-xl p-2.5">
+                    <input
+                      type="text"
+                      value={fila.numero_serie}
+                      onChange={e => actualizarFila(fila.key, { numero_serie: e.target.value })}
+                      placeholder="N° de serie"
+                      disabled={fila.guardando}
+                      className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-sm bg-white dark:bg-zinc-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                    />
+                    <label className={`text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${fila.guardando ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {fila.file ? 'Foto ✓' : 'Agregar foto'}
+                      <input type="file" accept="image/*" capture="environment" className="hidden" disabled={fila.guardando}
+                        onChange={e => actualizarFila(fila.key, { file: e.target.files?.[0] ?? null })} />
+                    </label>
+                    <button onClick={() => guardarFila(fila)} disabled={fila.guardando}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-50 transition-colors">
+                      {fila.guardando ? <FaSpinner className="animate-spin h-3 w-3" /> : 'Guardar'}
+                    </button>
+                    {fila.error && <p className="w-full text-xs text-red-500">{fila.error}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {series.length === total && filas.length === 0 && (
+              <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-4">Todas las unidades tienen número de serie.</p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

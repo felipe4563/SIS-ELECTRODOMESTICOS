@@ -30,4 +30,13 @@ export const productosService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  getSeriesProducto: (id_producto, id_deposito) => api.get(`/productos/${id_producto}/series/${id_deposito}`),
+  cargarSerieManual: (id_producto, id_deposito, numero_serie, file) => {
+    const form = new FormData();
+    form.append('id_deposito', id_deposito);
+    form.append('numero_serie', numero_serie);
+    if (file) form.append('imagen', file);
+    return api.post(`/productos/${id_producto}/series`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
