@@ -21,9 +21,12 @@ proyecto; este proyecto solo deja los datos registrados para que exista.
 
 Tres puntos de entrada/movimiento se agregan sobre lo que ya existe:
 
-1. **Inventario → cargar series de stock antiguo**, por depósito, producto
-   por producto, unidad por unidad (ver mockup aprobado:
-   https://claude.ai/artifact/RjKJ5yCDvGJYkjH8vAEtCE).
+1. **Detalle de producto → cargar series de stock antiguo**, en
+   `ProductoDetalle.jsx` (pestaña "Stock", que ya muestra el desglose de
+   stock por depósito — no se toca `Productos.jsx`, el catálogo), unidad
+   por unidad, un depósito a la vez (mismo panel que el mockup aprobado:
+   https://claude.ai/artifact/RjKJ5yCDvGJYkjH8vAEtCE, pero abierto desde
+   la fila del depósito en vez de desde una lista de productos).
 2. **Transferencias → elegir qué series viajan**, opcional, en el carrito
    que ya existe en `TransferenciaForm.jsx`.
 3. **Ventas → elegir qué series salen**, opcional, en el carrito que ya
@@ -48,8 +51,9 @@ Tres puntos de entrada/movimiento se agregan sobre lo que ya existe:
   los datos quedan grabados, pero la pantalla de búsqueda es un proyecto
   aparte.
 - Hacer obligatoria la carga de series en ningún flujo.
-- Tocar `Productos.jsx` o el catálogo — confirmado explícitamente por el
-  usuario que no se toca.
+- Tocar `Productos.jsx` (la lista/catálogo) — confirmado explícitamente
+  por el usuario que no se toca. `ProductoDetalle.jsx` (la página de
+  detalle de un producto, archivo distinto) sí se modifica — ver Flujo 1.
 - Carga masiva (Excel) de series para stock antiguo — se decidió que la
   carga es manual, producto por producto, unidad por unidad.
 - Reportes o dashboards nuevos sobre series.
@@ -141,14 +145,18 @@ conceptual):
 - Una serie nunca se ofrece dos veces: si está `EN_TRANSITO` o `VENDIDA`
   no aparece como elegible en ningún selector.
 
-## Flujo 1 — Inventario: cargar series de stock antiguo
+## Flujo 1 — Detalle de producto: cargar series de stock antiguo
 
-Por depósito, cada producto con stock > 0 muestra cuántas unidades le
-faltan serie (ej. "5/8 sin serie"). Al entrar, un panel lateral muestra
-una fila por cada unidad en stock sin serie, con input de texto + foto
-opcional por fila (igual patrón que ya existe en compras). Se puede
-guardar parcialmente — no hace falta completar todas las filas de una.
-Mockup aprobado: https://claude.ai/artifact/RjKJ5yCDvGJYkjH8vAEtCE
+En `ProductoDetalle.jsx`, pestaña "Stock" (la que ya existe, con la
+tabla "Stock por depósito": depósito, disponible, reservada, total,
+último movimiento). Cada fila de depósito con stock disponible > 0
+muestra cuántas unidades le faltan serie (ej. "5/8 sin serie") y un
+link/botón para cargarlas. Al tocarlo, un panel lateral muestra una fila
+por cada unidad en stock sin serie **de ese depósito**, con input de
+texto + foto opcional por fila (igual patrón que ya existe en compras).
+Se puede guardar parcialmente — no hace falta completar todas las filas
+de una. Mockup aprobado (el panel lateral es el mismo; cambia desde
+dónde se abre): https://claude.ai/artifact/RjKJ5yCDvGJYkjH8vAEtCE
 
 ## Flujo 2 — Transferencias: elegir series al mover stock
 
@@ -167,6 +175,12 @@ se vende. Opcional, no bloquea la venta si no se elige ninguna. Al
 confirmar, completa automáticamente el campo `numero_serie` que ya existe
 en `venta_detalle`, partiendo la línea en varias de cantidad 1 si se
 eligió más de una serie (ver "Decisiones tomadas con el usuario" arriba).
+
+También se puede adjuntar la foto de la serie ahí mismo, en el carrito
+(hoy esa foto solo se puede subir después, desde el detalle de la
+venta ya guardada). Técnicamente sigue siendo en dos pasos — la foto se
+sube recién cuando la venta ya existe, reusando el endpoint que ya hay
+para eso — pero para quien vende es un solo paso, igual que en compras.
 
 **Además**, ya confirmada la venta, se puede completar la serie después
 desde `VentaDetalle.jsx` — mismo patrón "Editar" ya construido en
