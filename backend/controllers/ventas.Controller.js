@@ -1,5 +1,6 @@
 const db    = require('../config/db');
 const { hoyLocal, fechaEnDiasLocal, soloFechaLocal } = require('../utils/fechaLocal');
+const productoSeries = require('../models/productoSeries');
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
 
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -7,6 +8,122 @@ const auditLog = (userId, tabla, id, accion, ip) =>
     `INSERT INTO auditoria (id_usuario, tabla, id_registro, accion, ip_origen) VALUES (?,?,?,?,?)`,
     [userId, tabla, String(id), accion, ip]
   ).catch(e => console.error('[auditLog]', accion, tabla, e.message));
+
+// Adaptador para que las funciones de productoSeries.js (que esperan un
+// objeto con `.promise().query(...)`, el shape del pool mysql2) puedan
+// correr dentro de la MISMA transacción que el resto de la operación,
+// usando una conexión ya tomada de `db.promise().getConnection()` (que no
+// expone `.promise()` porque ya está en modo promesa). Mismo patrón que
+// inventarioOps.Controller.js.
+const dbTx = conn => ({ promise: () => conn });
+
+// Error con código HTTP explícito, para poder usar un único catch que
+// haga rollback + libere la conexión sin repetir esa lógica en cada
+// validación dentro de una transacción. Mismo patrón que
+// inventarioOps.Controller.js.
+class ApiError extends Error {
+  constructor(status, mensaje) {
+    super(mensaje);
+    this.status = status;
+    this.mensaje = mensaje;
+  }
+}
+
+// Inserta una fila de venta_detalle y, si se indicó id_serie, marca esa
+// unidad como vendida dentro de la MISMA transacción (conn): si la serie ya
+// no está disponible (SERIE_NO_DISPONIBLE), la excepción se propaga y el
+// catch del llamador revierte toda la operación, incluida esta fila recién
+// insertada.
+async function insertarDetalleVenta(conn, {
+  id_venta, id_producto, cantidad, precio_unitario, precio_base,
+  descuento_porc, impuesto_porc, costo_unitario, bono_vendedor, comision_monto,
+  id_combo, observacion, numero_serie, id_serie,
+}) {
+  const base = Number(cantidad) * Number(precio_unitario);
+  const desc = base * (Number(descuento_porc ?? 0) / 100);
+  const imp  = (base - desc) * (Number(impuesto_porc ?? 0) / 100);
+  const subtotalItem = +(base - desc + imp).toFixed(2);
+
+  const [ins] = await conn.query(
+    `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
+      descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, id_combo, observacion, numero_serie)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id_venta, id_producto, cantidad, precio_unitario, precio_base,
+      descuento_porc ?? 0, +desc.toFixed(2), impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
+      id_combo ?? null, observacion ?? null, numero_serie || null]
+  );
+  const id_detalle = ins.insertId;
+
+  if (id_serie) {
+    await productoSeries.marcarVendida(dbTx(conn), [id_serie], { id_venta_detalle: id_detalle });
+  }
+
+  return { id_detalle, numero_serie: numero_serie || null };
+}
+
+// Inserta una línea del carrito como una o varias filas de venta_detalle,
+// según si el usuario eligió números de serie específicos (it.series,
+// array de id_serie) para parte o toda la cantidad:
+//  - Sin series elegidas: comportamiento actual, una sola fila.
+//  - Con series elegidas: una fila cantidad=1 por cada id_serie (con el
+//    numero_serie real tomado de compra_detalle_series, no del input del
+//    usuario, y marcada VENDIDA de inmediato) más, si sobra cantidad sin
+//    asignar a una serie (item.cantidad > series.length), una fila final
+//    con esa cantidad restante y numero_serie=NULL.
+// El precio unitario, descuento% e impuesto% se replican sin cambios en
+// cada fila resultante; bono_vendedor y comision_monto (ambos calculados
+// por el llamador para la línea completa, no por unidad) se prorratean
+// según la cantidad de cada fila para no inflar sus totales al dividir la
+// línea.
+async function insertarLineaVentaConSeries(conn, { id_venta, it, precio_base, costo_unitario, bono_vendedor, comision_monto }) {
+  const idsSerie = Array.isArray(it.series) ? it.series.filter(v => v != null) : [];
+  const cantidadTotal = Number(it.cantidad);
+
+  if (!idsSerie.length) {
+    const fila = await insertarDetalleVenta(conn, {
+      id_venta, id_producto: it.id_producto, cantidad: it.cantidad, precio_unitario: it.precio_unitario,
+      precio_base, descuento_porc: it.descuento_porc, impuesto_porc: it.impuesto_porc,
+      costo_unitario, bono_vendedor, comision_monto,
+      id_combo: it.id_combo, observacion: it.observacion, numero_serie: it.numero_serie?.trim() || null,
+    });
+    return [fila];
+  }
+
+  const [seriesRows] = await conn.query(
+    `SELECT id_serie, numero_serie FROM compra_detalle_series WHERE id_serie IN (?)`,
+    [idsSerie]
+  );
+  const numeroPorSerie = new Map(seriesRows.map(r => [r.id_serie, r.numero_serie]));
+
+  const prorratear = valor => cantidadTotal > 0 ? +((Number(valor) || 0) * (1 / cantidadTotal)).toFixed(2) : 0;
+
+  const filas = [];
+  for (const idSerie of idsSerie) {
+    const fila = await insertarDetalleVenta(conn, {
+      id_venta, id_producto: it.id_producto, cantidad: 1, precio_unitario: it.precio_unitario,
+      precio_base, descuento_porc: it.descuento_porc, impuesto_porc: it.impuesto_porc,
+      costo_unitario, bono_vendedor: prorratear(bono_vendedor), comision_monto: prorratear(comision_monto),
+      id_combo: it.id_combo, observacion: it.observacion,
+      numero_serie: numeroPorSerie.get(idSerie) ?? null, id_serie: idSerie,
+    });
+    filas.push(fila);
+  }
+
+  const restante = cantidadTotal - idsSerie.length;
+  if (restante > 0) {
+    const fila = await insertarDetalleVenta(conn, {
+      id_venta, id_producto: it.id_producto, cantidad: restante, precio_unitario: it.precio_unitario,
+      precio_base, descuento_porc: it.descuento_porc, impuesto_porc: it.impuesto_porc,
+      costo_unitario,
+      bono_vendedor: +((Number(bono_vendedor) || 0) * (restante / cantidadTotal)).toFixed(2),
+      comision_monto: +((Number(comision_monto) || 0) * (restante / cantidadTotal)).toFixed(2),
+      id_combo: it.id_combo, observacion: it.observacion, numero_serie: null,
+    });
+    filas.push(fila);
+  }
+
+  return filas;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -410,6 +527,9 @@ const createVenta = async (req, res) => {
       if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
       if (Number(it.cantidad) <= 0) return res.status(400).json({ mensaje: 'La cantidad de cada ítem debe ser mayor a 0' });
       if (Number(it.precio_unitario) < 0) return res.status(400).json({ mensaje: 'El precio unitario no puede ser negativo' });
+      if (Array.isArray(it.series) && it.series.length > Number(it.cantidad)) {
+        return res.status(400).json({ mensaje: 'Elegiste más series de las que caben en la cantidad' });
+      }
     }
 
     // Validate descuentos
@@ -470,71 +590,81 @@ const createVenta = async (req, res) => {
     const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
     const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
 
-    const [ins] = await db.promise().query(
-      `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
-        id_usuario_registro,
-        id_moneda, tipo_cambio, condicion_pago, dias_credito, num_cuotas, fecha_vencimiento,
-        subtotal, descuento_porc, descuento_monto, impuesto, total, saldo_pendiente,
-        estado, requiere_entrega, direccion_entrega, fecha_entrega, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
-      [
-        numero, tipo_venta, id_sucursal, id_deposito, id_cliente,
-        id_vendedor || req.user.id_usuario,
-        req.user.id_usuario,
-        id_moneda, tipo_cambio, condicion_pago, dias_credito, Math.max(1, Number(num_cuotas) || 1),
-        condicion_pago === 'CREDITO' && dias_credito > 0
-          ? fechaEnDiasLocal(dias_credito)
-          : null,
-        subtotal, descuento_porc, descuento_monto, impuesto, total,
-        requiere_entrega,
-        limpiaDireccionEntrega,
-        limpiaFechaEntrega,
-        observaciones ?? null,
-      ]
-    );
-    const id_venta = ins.insertId;
+    // De aquí en más corre dentro de una transacción propia: si alguna serie
+    // elegida ya no está disponible (marcarVendida lanza SERIE_NO_DISPONIBLE),
+    // hay que revertir la venta completa, no solo la fila de esa serie.
+    const conn = await db.promise().getConnection();
+    let id_venta, detalleCreado;
+    try {
+      await conn.beginTransaction();
 
-    // Porcentaje de comisión del vendedor asignado
-    const id_vendedor_real = id_vendedor || req.user.id_usuario;
-    const [[vendedorComision]] = await db.promise().query(
-      `SELECT porcentaje_comision FROM usuarios WHERE id_usuario = ?`, [id_vendedor_real]
-    );
-    const porcentaje_comision = Number(vendedorComision?.porcentaje_comision ?? 0);
-
-    for (const it of items) {
-      const [[st]] = await db.promise().query(
-        `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [it.id_producto, id_deposito]
+      const [ins] = await conn.query(
+        `INSERT INTO ventas (numero, tipo_venta, id_sucursal, id_deposito, id_cliente, id_vendedor,
+          id_usuario_registro,
+          id_moneda, tipo_cambio, condicion_pago, dias_credito, num_cuotas, fecha_vencimiento,
+          subtotal, descuento_porc, descuento_monto, impuesto, total, saldo_pendiente,
+          estado, requiere_entrega, direccion_entrega, fecha_entrega, observaciones)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'BORRADOR',?,?,?,?)`,
+        [
+          numero, tipo_venta, id_sucursal, id_deposito, id_cliente,
+          id_vendedor || req.user.id_usuario,
+          req.user.id_usuario,
+          id_moneda, tipo_cambio, condicion_pago, dias_credito, Math.max(1, Number(num_cuotas) || 1),
+          condicion_pago === 'CREDITO' && dias_credito > 0
+            ? fechaEnDiasLocal(dias_credito)
+            : null,
+          subtotal, descuento_porc, descuento_monto, impuesto, total,
+          requiere_entrega,
+          limpiaDireccionEntrega,
+          limpiaFechaEntrega,
+          observaciones ?? null,
+        ]
       );
-      const costo_unitario = Number(st?.costo ?? 0);
-      const [[prod]] = await db.promise().query(
-        `SELECT bono, precio_publico, precio_mayor FROM productos WHERE id_producto = ?`, [it.id_producto]
-      );
-      const bono_vendedor = Number(prod?.bono ?? 0);
-      const precio_base = +(tipo_venta === 'MAYOR'
-        ? (Number(prod?.precio_mayor) || Number(prod?.precio_publico) || 0)
-        : (Number(prod?.precio_publico) || 0)).toFixed(2);
-      const sobreprecio = Math.max(0, Number(it.precio_unitario) - precio_base);
-      const comision_monto = +(sobreprecio * porcentaje_comision / 100).toFixed(2);
+      id_venta = ins.insertId;
 
-      const base = Number(it.cantidad) * Number(it.precio_unitario);
-      const desc = base * (Number(it.descuento_porc ?? 0) / 100);
-      const imp  = (base - desc) * (Number(it.impuesto_porc ?? 0) / 100);
-      const subtotalItem = +(base - desc + imp).toFixed(2);
-
-      await db.promise().query(
-        `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, id_combo, observacion, numero_serie)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id_venta, it.id_producto, it.cantidad, it.precio_unitario, precio_base,
-          it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
-          it.id_combo ?? null, it.observacion ?? null, it.numero_serie?.trim() || null]
+      // Porcentaje de comisión del vendedor asignado
+      const id_vendedor_real = id_vendedor || req.user.id_usuario;
+      const [[vendedorComision]] = await conn.query(
+        `SELECT porcentaje_comision FROM usuarios WHERE id_usuario = ?`, [id_vendedor_real]
       );
+      const porcentaje_comision = Number(vendedorComision?.porcentaje_comision ?? 0);
+
+      detalleCreado = [];
+      for (const it of items) {
+        const [[st]] = await conn.query(
+          `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock WHERE id_producto = ? AND id_deposito = ?`,
+          [it.id_producto, id_deposito]
+        );
+        const costo_unitario = Number(st?.costo ?? 0);
+        const [[prod]] = await conn.query(
+          `SELECT bono, precio_publico, precio_mayor FROM productos WHERE id_producto = ?`, [it.id_producto]
+        );
+        const bono_vendedor = Number(prod?.bono ?? 0);
+        const precio_base = +(tipo_venta === 'MAYOR'
+          ? (Number(prod?.precio_mayor) || Number(prod?.precio_publico) || 0)
+          : (Number(prod?.precio_publico) || 0)).toFixed(2);
+        const sobreprecio = Math.max(0, Number(it.precio_unitario) - precio_base);
+        const comision_monto = +(sobreprecio * porcentaje_comision / 100).toFixed(2);
+
+        const filas = await insertarLineaVentaConSeries(conn, {
+          id_venta, it, precio_base, costo_unitario, bono_vendedor, comision_monto,
+        });
+        detalleCreado.push(...filas);
+      }
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback().catch(() => {});
+      if (err.message === 'SERIE_NO_DISPONIBLE') {
+        return res.status(409).json({ mensaje: 'Una de las series elegidas ya no está disponible, volvé a elegir' });
+      }
+      throw err;
+    } finally {
+      conn.release();
     }
 
     await auditLog(req.user.id_usuario, 'ventas', id_venta, 'INSERT', getIp(req));
-    res.status(201).json({ id_venta, numero, mensaje: 'Venta creada como borrador' });
+    res.status(201).json({ id_venta, numero, detalle: detalleCreado, mensaje: 'Venta creada como borrador' });
   } catch (err) {
     console.error('[createVenta]', err);
     res.status(500).json({ error: 'Error al crear venta' });
@@ -567,6 +697,9 @@ const updateVenta = async (req, res) => {
       if (!it.id_producto) return res.status(400).json({ mensaje: 'Cada ítem debe tener un producto seleccionado' });
       if (Number(it.cantidad) <= 0) return res.status(400).json({ mensaje: 'La cantidad de cada ítem debe ser mayor a 0' });
       if (Number(it.precio_unitario) < 0) return res.status(400).json({ mensaje: 'El precio unitario no puede ser negativo' });
+      if (Array.isArray(it.series) && it.series.length > Number(it.cantidad)) {
+        return res.status(400).json({ mensaje: 'Elegiste más series de las que caben en la cantidad' });
+      }
     }
 
     // Validate descuentos
@@ -588,70 +721,77 @@ const updateVenta = async (req, res) => {
     const limpiaFechaEntrega = fecha_entrega && fecha_entrega.trim() !== '' ? fecha_entrega : null;
     const limpiaDireccionEntrega = direccion_entrega && direccion_entrega.trim() !== '' ? direccion_entrega : null;
 
-    await db.promise().query(
-      `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, dias_credito=?, num_cuotas=?,
-        fecha_vencimiento=?, subtotal=?, descuento_porc=?, descuento_monto=?, impuesto=?, total=?,
-        requiere_entrega=?, direccion_entrega=?, fecha_entrega=?, observaciones=?,
-        id_vendedor=COALESCE(?,id_vendedor)
-       WHERE id_venta = ?`,
-      [
-        id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito, Math.max(1, Number(num_cuotas) || 1),
-        condicion_pago === 'CREDITO' && dias_credito > 0
-          ? fechaEnDiasLocal(dias_credito)
-          : null,
-        subtotal, descuento_porc, descuento_monto, impuesto, total,
-        requiere_entrega ?? 0,
-        limpiaDireccionEntrega,
-        limpiaFechaEntrega,
-        observaciones ?? null,
-        id_vendedor || null,
-        id,
-      ]
-    );
+    // Igual que en createVenta: si una serie elegida ya no está disponible,
+    // hay que revertir toda la actualización (incluido el UPDATE de ventas y
+    // el DELETE+re-INSERT de venta_detalle), no solo la fila de esa serie.
+    const conn = await db.promise().getConnection();
+    try {
+      await conn.beginTransaction();
 
-    await db.promise().query(`DELETE FROM venta_detalle WHERE id_venta = ?`, [id]);
-    const [[ventaFull]] = await db.promise().query(
-      `SELECT id_deposito, id_vendedor, tipo_venta FROM ventas WHERE id_venta = ?`, [id]
-    );
-
-    // Porcentaje de comisión del vendedor (puede haber cambiado en este update)
-    const id_vendedor_up = id_vendedor || ventaFull.id_vendedor;
-    const [[vendedorComisionUp]] = await db.promise().query(
-      `SELECT porcentaje_comision FROM usuarios WHERE id_usuario = ?`, [id_vendedor_up]
-    );
-    const porcentaje_comision_up = Number(vendedorComisionUp?.porcentaje_comision ?? 0);
-    const tipo_venta_up = ventaFull.tipo_venta;
-
-    for (const it of items) {
-      const [[st]] = await db.promise().query(
-        `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [it.id_producto, ventaFull.id_deposito]
+      await conn.query(
+        `UPDATE ventas SET id_cliente=?, id_moneda=?, tipo_cambio=?, condicion_pago=?, dias_credito=?, num_cuotas=?,
+          fecha_vencimiento=?, subtotal=?, descuento_porc=?, descuento_monto=?, impuesto=?, total=?,
+          requiere_entrega=?, direccion_entrega=?, fecha_entrega=?, observaciones=?,
+          id_vendedor=COALESCE(?,id_vendedor)
+         WHERE id_venta = ?`,
+        [
+          id_cliente, id_moneda, tipo_cambio, condicion_pago, dias_credito, Math.max(1, Number(num_cuotas) || 1),
+          condicion_pago === 'CREDITO' && dias_credito > 0
+            ? fechaEnDiasLocal(dias_credito)
+            : null,
+          subtotal, descuento_porc, descuento_monto, impuesto, total,
+          requiere_entrega ?? 0,
+          limpiaDireccionEntrega,
+          limpiaFechaEntrega,
+          observaciones ?? null,
+          id_vendedor || null,
+          id,
+        ]
       );
-      const costo_unitario = Number(st?.costo ?? 0);
-      const [[prod]] = await db.promise().query(
-        `SELECT bono, precio_publico, precio_mayor FROM productos WHERE id_producto = ?`, [it.id_producto]
-      );
-      const bono_vendedor = Number(prod?.bono ?? 0);
-      const precio_base = +(tipo_venta_up === 'MAYOR'
-        ? (Number(prod?.precio_mayor) || Number(prod?.precio_publico) || 0)
-        : (Number(prod?.precio_publico) || 0)).toFixed(2);
-      const sobreprecio = Math.max(0, Number(it.precio_unitario) - precio_base);
-      const comision_monto = +(sobreprecio * porcentaje_comision_up / 100).toFixed(2);
 
-      const base = Number(it.cantidad) * Number(it.precio_unitario);
-      const desc = base * (Number(it.descuento_porc ?? 0) / 100);
-      const imp  = (base - desc) * (Number(it.impuesto_porc ?? 0) / 100);
-      const subtotalItem = +(base - desc + imp).toFixed(2);
-
-      await db.promise().query(
-        `INSERT INTO venta_detalle (id_venta, id_producto, cantidad, precio_unitario, precio_base,
-          descuento_porc, descuento_monto, impuesto_porc, subtotal, costo_unitario, bono_vendedor, comision_monto, id_combo, observacion, numero_serie)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, it.id_producto, it.cantidad, it.precio_unitario, precio_base,
-          it.descuento_porc ?? 0, +(base * (Number(it.descuento_porc ?? 0) / 100)).toFixed(2),
-          it.impuesto_porc ?? 0, subtotalItem, costo_unitario, bono_vendedor, comision_monto,
-          it.id_combo ?? null, it.observacion ?? null, it.numero_serie?.trim() || null]
+      await conn.query(`DELETE FROM venta_detalle WHERE id_venta = ?`, [id]);
+      const [[ventaFull]] = await conn.query(
+        `SELECT id_deposito, id_vendedor, tipo_venta FROM ventas WHERE id_venta = ?`, [id]
       );
+
+      // Porcentaje de comisión del vendedor (puede haber cambiado en este update)
+      const id_vendedor_up = id_vendedor || ventaFull.id_vendedor;
+      const [[vendedorComisionUp]] = await conn.query(
+        `SELECT porcentaje_comision FROM usuarios WHERE id_usuario = ?`, [id_vendedor_up]
+      );
+      const porcentaje_comision_up = Number(vendedorComisionUp?.porcentaje_comision ?? 0);
+      const tipo_venta_up = ventaFull.tipo_venta;
+
+      for (const it of items) {
+        const [[st]] = await conn.query(
+          `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock WHERE id_producto = ? AND id_deposito = ?`,
+          [it.id_producto, ventaFull.id_deposito]
+        );
+        const costo_unitario = Number(st?.costo ?? 0);
+        const [[prod]] = await conn.query(
+          `SELECT bono, precio_publico, precio_mayor FROM productos WHERE id_producto = ?`, [it.id_producto]
+        );
+        const bono_vendedor = Number(prod?.bono ?? 0);
+        const precio_base = +(tipo_venta_up === 'MAYOR'
+          ? (Number(prod?.precio_mayor) || Number(prod?.precio_publico) || 0)
+          : (Number(prod?.precio_publico) || 0)).toFixed(2);
+        const sobreprecio = Math.max(0, Number(it.precio_unitario) - precio_base);
+        const comision_monto = +(sobreprecio * porcentaje_comision_up / 100).toFixed(2);
+
+        await insertarLineaVentaConSeries(conn, {
+          id_venta: id, it, precio_base, costo_unitario, bono_vendedor, comision_monto,
+        });
+      }
+
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback().catch(() => {});
+      if (err.message === 'SERIE_NO_DISPONIBLE') {
+        return res.status(409).json({ mensaje: 'Una de las series elegidas ya no está disponible, volvé a elegir' });
+      }
+      throw err;
+    } finally {
+      conn.release();
     }
 
     await auditLog(req.user.id_usuario, 'ventas', id, 'UPDATE', getIp(req));
@@ -1504,7 +1644,7 @@ const getStockDeposito = async (req, res) => {
 const actualizarSerie = async (req, res) => {
   try {
     const { id_detalle } = req.params;
-    const { numero_serie } = req.body;
+    const { numero_serie, id_serie } = req.body;
     if (!numero_serie?.trim()) return res.status(400).json({ mensaje: 'El número de serie es requerido' });
 
     const [[det]] = await db.promise().query(`SELECT id_detalle FROM venta_detalle WHERE id_detalle = ?`, [id_detalle]);
@@ -1514,6 +1654,21 @@ const actualizarSerie = async (req, res) => {
       `UPDATE venta_detalle SET numero_serie = ? WHERE id_detalle = ?`,
       [numero_serie.trim(), id_detalle]
     );
+
+    // Completar una serie después de que la venta ya está guardada: además
+    // de guardar el texto, enlaza la unidad física elegida y la marca
+    // vendida (dentro de productoSeries, mismo módulo que usa createVenta).
+    if (id_serie) {
+      try {
+        await productoSeries.marcarVendida(db, [id_serie], { id_venta_detalle: id_detalle });
+      } catch (err) {
+        if (err.message === 'SERIE_NO_DISPONIBLE') {
+          return res.status(409).json({ mensaje: 'Esa serie ya no está disponible, volvé a elegir' });
+        }
+        throw err;
+      }
+    }
+
     await auditLog(req.user.id_usuario, 'venta_detalle', id_detalle, 'UPDATE', getIp(req));
     res.json({ numero_serie: numero_serie.trim(), mensaje: 'Número de serie guardado correctamente' });
   } catch (err) {
