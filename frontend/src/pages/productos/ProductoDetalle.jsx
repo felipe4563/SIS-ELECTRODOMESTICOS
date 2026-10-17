@@ -576,7 +576,11 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
     setGuardando(true); setError('');
     try {
       const { data } = await productosService.cargarSerieManual(idProducto, idDeposito, numeroSerie.trim(), file);
-      setSeries(prev => [...prev, { id_serie: data.id_serie, numero_serie: data.numero_serie, imagen_url: null }]);
+      // El POST no devuelve imagen_url (a diferencia del equivalente de compras);
+      // si se adjuntó foto, usamos un preview local inmediato en vez de "Sin foto"
+      // hasta que se cierre/reabra el panel y el GET traiga la URL real.
+      const previewUrl = file ? URL.createObjectURL(file) : null;
+      setSeries(prev => [...prev, { id_serie: data.id_serie, numero_serie: data.numero_serie, imagen_url: previewUrl, _preview: !!previewUrl }]);
       setNumeroSerie(''); setFile(null);
     } catch (err) {
       setError(err.response?.data?.mensaje || err.response?.data?.error || 'Error al guardar');
@@ -625,7 +629,10 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
             {series.length > 0 && (
               <div className="grid grid-cols-3 gap-3">
                 {series.map(s => {
-                  const url = s.imagen_url ? buildImgUrl(s.imagen_url) : null;
+                  // Las series recién guardadas en esta sesión llevan un preview
+                  // local (blob:) en vez de la URL del servidor — no pasarlo por
+                  // buildImgUrl, que le agregaría el prefijo del backend.
+                  const url = s.imagen_url ? (s._preview ? s.imagen_url : buildImgUrl(s.imagen_url)) : null;
                   return (
                     <div key={s.id_serie} className="flex flex-col items-center">
                       {url ? (
