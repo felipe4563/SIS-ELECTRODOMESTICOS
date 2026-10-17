@@ -39,16 +39,26 @@ async function cargarManual(db, { id_producto, id_deposito, numero_serie, imagen
 }
 
 // Marca las unidades como EN_TRANSITO (salida hacia otro depósito por
-// transferencia). Exige que todas estuvieran EN_STOCK; si alguna ya cambió
-// de estado (o no existe), no se actualiza nada para esa fila y se lanza
-// SERIE_NO_DISPONIBLE para que el llamador revierta la transacción completa.
-async function moverATransito(db, idsSerie, { id_transferencia_detalle } = {}) {
+// transferencia). Exige que todas estuvieran EN_STOCK Y en el depósito de
+// origen esperado (id_deposito_origen) en una sola query atómica: esto
+// cierra la ventana de carrera donde dos transferencias eligen la misma
+// serie antes de que ninguna la envíe — si una ya la recibió en otro
+// depósito (volvió a EN_STOCK ahí), la condición de id_deposito_actual hace
+// que el UPDATE no la toque, y el chequeo de affectedRows abajo lo detecta.
+// Si alguna fila no cumple ambas condiciones (o no existe), no se actualiza
+// nada para esa fila y se lanza SERIE_NO_DISPONIBLE para que el llamador
+// revierta la transacción completa.
+// `id_transferencia_detalle` se acepta por compatibilidad de firma con el
+// llamador (Task 4 lo necesitará para su propio registro), pero esta
+// función no lo persiste: la columna que lo guardaría no existe todavía en
+// compra_detalle_series (llega en una migración de Task 4).
+async function moverATransito(db, idsSerie, { id_transferencia_detalle, id_deposito_origen } = {}) {
   if (!idsSerie || !idsSerie.length) return;
   const [r] = await db.promise().query(
     `UPDATE compra_detalle_series
      SET estado = 'EN_TRANSITO'
-     WHERE id_serie IN (?) AND estado = 'EN_STOCK'`,
-    [idsSerie]
+     WHERE id_serie IN (?) AND estado = 'EN_STOCK' AND id_deposito_actual = ?`,
+    [idsSerie, id_deposito_origen]
   );
   if (r.affectedRows !== idsSerie.length) throw new Error('SERIE_NO_DISPONIBLE');
 }
