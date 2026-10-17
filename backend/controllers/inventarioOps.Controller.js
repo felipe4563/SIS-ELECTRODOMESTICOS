@@ -1,7 +1,26 @@
 'use strict';
 const db = require('../config/db');
+const productoSeries = require('../models/productoSeries');
 
 const getIp = req => req.ip || req.socket?.remoteAddress || null;
+
+// Adaptador para que las funciones de productoSeries.js (que esperan un
+// objeto con `.promise().query(...)`, el shape del pool mysql2) puedan
+// correr dentro de la MISMA transacción que el resto de la operación,
+// usando una conexión ya tomada de `db.promise().getConnection()` (que no
+// expone `.promise()` porque ya está en modo promesa).
+const dbTx = conn => ({ promise: () => conn });
+
+// Error con código HTTP explícito, para poder usar un único catch que
+// haga rollback + libere la conexión sin repetir esa lógica en cada
+// validación temprana dentro de una transacción.
+class ApiError extends Error {
+  constructor(status, mensaje) {
+    super(mensaje);
+    this.status = status;
+    this.mensaje = mensaje;
+  }
+}
 
 const auditLog = (userId, tabla, id, accion, ip) =>
   db.promise().query(
@@ -120,20 +139,29 @@ const getTransferencia = async (req, res) => {
 };
 
 const createTransferencia = async (req, res) => {
+  const conn = await db.promise().getConnection();
   try {
     const userId = req.user.id_usuario;
     const { id_deposito_origen, id_deposito_destino, observaciones, items } = req.body;
 
     if (!id_deposito_origen || !id_deposito_destino || !items?.length) {
-      return res.status(400).json({ mensaje: 'Faltan datos requeridos' });
+      throw new ApiError(400, 'Faltan datos requeridos');
     }
     if (String(id_deposito_origen) === String(id_deposito_destino)) {
-      return res.status(400).json({ mensaje: 'Origen y destino no pueden ser iguales' });
+      throw new ApiError(400, 'Origen y destino no pueden ser iguales');
     }
+    for (const item of items) {
+      if (!item.id_producto || Number(item.cantidad) <= 0) continue;
+      if (item.series?.length > Number(item.cantidad)) {
+        throw new ApiError(400, 'Elegiste más series de las que caben en la cantidad');
+      }
+    }
+
+    await conn.beginTransaction();
 
     const numero = await generarNumero('TRF', 'transferencias');
 
-    const [{ insertId }] = await db.promise().query(
+    const [{ insertId }] = await conn.query(
       `INSERT INTO transferencias (numero, id_deposito_origen, id_deposito_destino, id_usuario_solicita, observaciones)
        VALUES (?, ?, ?, ?, ?)`,
       [numero, id_deposito_origen, id_deposito_destino, userId, observaciones ?? null]
@@ -141,58 +169,97 @@ const createTransferencia = async (req, res) => {
 
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
-      await db.promise().query(
+      const [{ insertId: idDetalle }] = await conn.query(
         `INSERT INTO transferencia_detalle (id_transferencia, id_producto, cantidad_enviada, observacion)
          VALUES (?, ?, ?, ?)`,
         [insertId, item.id_producto, item.cantidad, item.observacion ?? null]
       );
+      if (item.series?.length) {
+        await conn.query(
+          `UPDATE compra_detalle_series SET id_transferencia_detalle = ? WHERE id_serie IN (?)`,
+          [idDetalle, item.series]
+        );
+      }
     }
 
     await auditLog(userId, 'transferencias', insertId, 'INSERT', getIp(req));
+    await conn.commit();
     res.status(201).json({ ok: true, id_transferencia: insertId, numero });
   } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
     console.error(err);
     res.status(500).json({ mensaje: 'Error al crear transferencia' });
+  } finally {
+    conn.release();
   }
 };
 
 const updateTransferencia = async (req, res) => {
+  const conn = await db.promise().getConnection();
   try {
     const { id } = req.params;
     const { id_deposito_origen, id_deposito_destino, observaciones, items } = req.body;
 
-    const [[t]] = await db.promise().query(`SELECT estado FROM transferencias WHERE id_transferencia = ?`, [id]);
-    if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
-    if (t.estado !== 'BORRADOR') return res.status(400).json({ mensaje: 'Solo se puede editar una transferencia en borrador' });
+    const [[t]] = await conn.query(`SELECT estado FROM transferencias WHERE id_transferencia = ?`, [id]);
+    if (!t) throw new ApiError(404, 'Transferencia no encontrada');
+    if (t.estado !== 'BORRADOR') throw new ApiError(400, 'Solo se puede editar una transferencia en borrador');
 
     if (!id_deposito_origen || !id_deposito_destino || !items?.length) {
-      return res.status(400).json({ mensaje: 'Faltan datos requeridos' });
+      throw new ApiError(400, 'Faltan datos requeridos');
     }
     if (String(id_deposito_origen) === String(id_deposito_destino)) {
-      return res.status(400).json({ mensaje: 'Origen y destino no pueden ser iguales' });
+      throw new ApiError(400, 'Origen y destino no pueden ser iguales');
+    }
+    for (const item of items) {
+      if (!item.id_producto || Number(item.cantidad) <= 0) continue;
+      if (item.series?.length > Number(item.cantidad)) {
+        throw new ApiError(400, 'Elegiste más series de las que caben en la cantidad');
+      }
     }
 
-    await db.promise().query(
+    await conn.beginTransaction();
+
+    await conn.query(
       `UPDATE transferencias SET id_deposito_origen = ?, id_deposito_destino = ?, observaciones = ?
        WHERE id_transferencia = ?`,
       [id_deposito_origen, id_deposito_destino, observaciones ?? null, id]
     );
 
-    await db.promise().query(`DELETE FROM transferencia_detalle WHERE id_transferencia = ?`, [id]);
+    // Las líneas viejas van a borrarse y recrearse; si alguna tenía series
+    // asociadas (id_transferencia_detalle las referencia vía FK), hay que
+    // soltar esa asociación primero o el DELETE de abajo falla por la FK.
+    await conn.query(
+      `UPDATE compra_detalle_series SET id_transferencia_detalle = NULL
+       WHERE id_transferencia_detalle IN (SELECT id_detalle FROM transferencia_detalle WHERE id_transferencia = ?)`,
+      [id]
+    );
+    await conn.query(`DELETE FROM transferencia_detalle WHERE id_transferencia = ?`, [id]);
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
-      await db.promise().query(
+      const [{ insertId: idDetalle }] = await conn.query(
         `INSERT INTO transferencia_detalle (id_transferencia, id_producto, cantidad_enviada, observacion)
          VALUES (?, ?, ?, ?)`,
         [id, item.id_producto, item.cantidad, item.observacion ?? null]
       );
+      if (item.series?.length) {
+        await conn.query(
+          `UPDATE compra_detalle_series SET id_transferencia_detalle = ? WHERE id_serie IN (?)`,
+          [idDetalle, item.series]
+        );
+      }
     }
 
     await auditLog(req.user.id_usuario, 'transferencias', id, 'UPDATE', getIp(req));
+    await conn.commit();
     res.json({ ok: true });
   } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
     console.error(err);
     res.status(500).json({ mensaje: 'Error al editar transferencia' });
+  } finally {
+    conn.release();
   }
 };
 
@@ -218,23 +285,24 @@ const emitirTransferencia = async (req, res) => {
 };
 
 const enviarTransferencia = async (req, res) => {
+  const conn = await db.promise().getConnection();
   try {
     const userId = req.user.id_usuario;
     const { id } = req.params;
     const { items, observaciones } = req.body ?? {};
 
-    const [[t]] = await db.promise().query(
+    const [[t]] = await conn.query(
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
     );
-    if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
+    if (!t) throw new ApiError(404, 'Transferencia no encontrada');
     if (!['SOLICITADA', 'EN_TRANSITO'].includes(t.estado)) {
-      return res.status(400).json({ mensaje: `No se puede enviar una transferencia en estado ${t.estado}` });
+      throw new ApiError(400, `No se puede enviar una transferencia en estado ${t.estado}`);
     }
 
     const tm = await tipoMov('TRANSFERENCIA_SAL');
-    if (!tm) return res.status(500).json({ mensaje: "Falta tipo_movimiento con codigo='TRANSFERENCIA_SAL'" });
+    if (!tm) throw new ApiError(500, "Falta tipo_movimiento con codigo='TRANSFERENCIA_SAL'");
 
-    const [detalle] = await db.promise().query(
+    const [detalle] = await conn.query(
       `SELECT td.*, p.producto, p.codigo_interno, p.modelo
        FROM transferencia_detalle td
        JOIN productos p ON p.id_producto = td.id_producto
@@ -259,36 +327,36 @@ const enviarTransferencia = async (req, res) => {
       }
     }
 
-    if (!aEnviar.length) return res.status(400).json({ mensaje: 'No hay cantidades pendientes de despacho' });
+    if (!aEnviar.length) throw new ApiError(400, 'No hay cantidades pendientes de despacho');
 
     for (const item of aEnviar) {
-      const [[st]] = await db.promise().query(
+      const [[st]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS qty FROM stock
          WHERE id_producto = ? AND id_deposito = ?`,
         [item.id_producto, t.id_deposito_origen]
       );
       if (Number(st?.qty ?? 0) < item.cantidad_a_enviar) {
         const nombreProd = [item.producto, item.modelo].filter(Boolean).join(' ');
-        return res.status(400).json({
-          mensaje: `Stock insuficiente para "${nombreProd}" (${item.codigo_interno})`
-        });
+        throw new ApiError(400, `Stock insuficiente para "${nombreProd}" (${item.codigo_interno})`);
       }
     }
 
+    await conn.beginTransaction();
+
     for (const item of aEnviar) {
-      await db.promise().query(
+      await conn.query(
         `UPDATE stock SET cantidad = cantidad - ?, fecha_ult_movimiento = NOW()
          WHERE id_producto = ? AND id_deposito = ?`,
         [item.cantidad_a_enviar, item.id_producto, t.id_deposito_origen]
       );
 
-      const [[stPost]] = await db.promise().query(
+      const [[stPost]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS qty, COALESCE(costo_promedio, 0) AS costo
          FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [item.id_producto, t.id_deposito_origen]
       );
 
-      await db.promise().query(
+      await conn.query(
         `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad,
            costo_unitario, saldo_cantidad, saldo_costo,
            documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
@@ -304,18 +372,33 @@ const enviarTransferencia = async (req, res) => {
         ]
       );
 
-      await db.promise().query(
+      await conn.query(
         `UPDATE transferencia_detalle SET cantidad_despachada = cantidad_despachada + ? WHERE id_detalle = ?`,
         [item.cantidad_a_enviar, item.id_detalle]
       );
+
+      // Series elegidas para esta línea (si las hay): pasan a EN_TRANSITO.
+      // Si alguna ya no está disponible (otra transferencia/venta la tomó
+      // entretanto), moverATransito lanza SERIE_NO_DISPONIBLE y el catch de
+      // abajo revierte toda la operación (stock y kardex incluidos).
+      const [seriesRows] = await conn.query(
+        `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle = ?`,
+        [item.id_detalle]
+      );
+      if (seriesRows.length) {
+        await productoSeries.moverATransito(dbTx(conn), seriesRows.map(r => r.id_serie), {
+          id_transferencia_detalle: item.id_detalle,
+          id_deposito_origen: t.id_deposito_origen,
+        });
+      }
     }
 
-    const [detallesPost] = await db.promise().query(
+    const [detallesPost] = await conn.query(
       `SELECT cantidad_enviada, cantidad_despachada FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
     );
     const todoDespachado = detallesPost.every(d => Number(d.cantidad_despachada) >= Number(d.cantidad_enviada));
 
-    await db.promise().query(
+    await conn.query(
       `UPDATE transferencias
        SET estado = 'EN_TRANSITO',
            fecha_envio = COALESCE(fecha_envio, NOW()),
@@ -326,36 +409,47 @@ const enviarTransferencia = async (req, res) => {
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
+    await conn.commit();
     res.json({ ok: true, mensaje: todoDespachado ? 'Transferencia enviada por completo' : 'Envío parcial registrado', completo: todoDespachado });
   } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err.message === 'SERIE_NO_DISPONIBLE') {
+      return res.status(409).json({ mensaje: 'Una de las series elegidas ya no está disponible, volvé a elegir' });
+    }
+    if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
     console.error(err);
     res.status(500).json({ mensaje: 'Error al enviar transferencia' });
+  } finally {
+    conn.release();
   }
 };
 
 const recibirTransferencia = async (req, res) => {
+  const conn = await db.promise().getConnection();
   try {
     const userId = req.user.id_usuario;
     const { id } = req.params;
     const { items, observaciones } = req.body ?? {};
 
-    const [[t]] = await db.promise().query(
+    const [[t]] = await conn.query(
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
     );
-    if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
+    if (!t) throw new ApiError(404, 'Transferencia no encontrada');
     if (!['EN_TRANSITO', 'PARCIAL'].includes(t.estado)) {
-      return res.status(400).json({ mensaje: `No se puede recibir en estado ${t.estado}` });
+      throw new ApiError(400, `No se puede recibir en estado ${t.estado}`);
     }
-    if (!items?.length) return res.status(400).json({ mensaje: 'Debe especificar ítems a recibir' });
+    if (!items?.length) throw new ApiError(400, 'Debe especificar ítems a recibir');
 
     const tmEntrada = await tipoMov('TRANSFERENCIA_ENT');
-    if (!tmEntrada) return res.status(500).json({ mensaje: "Falta tipo_movimiento con codigo='TRANSFERENCIA_ENT'" });
+    if (!tmEntrada) throw new ApiError(500, "Falta tipo_movimiento con codigo='TRANSFERENCIA_ENT'");
+
+    await conn.beginTransaction();
 
     for (const recv of items) {
       const cantRecibir = Number(recv.cantidad_a_recibir ?? 0);
       if (cantRecibir <= 0) continue;
 
-      const [[det]] = await db.promise().query(
+      const [[det]] = await conn.query(
         `SELECT * FROM transferencia_detalle WHERE id_detalle = ? AND id_transferencia = ?`,
         [recv.id_detalle, id]
       );
@@ -365,12 +459,12 @@ const recibirTransferencia = async (req, res) => {
       const cantFinal  = Math.min(cantRecibir, pendiente);
       if (cantFinal <= 0) continue;
 
-      const [[stDest]] = await db.promise().query(
+      const [[stDest]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS qty, COALESCE(costo_promedio, 0) AS costo
          FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [det.id_producto, t.id_deposito_destino]
       );
-      const [[stOrig]] = await db.promise().query(
+      const [[stOrig]] = await conn.query(
         `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock
          WHERE id_producto = ? AND id_deposito = ?`,
         [det.id_producto, t.id_deposito_origen]
@@ -383,7 +477,7 @@ const recibirTransferencia = async (req, res) => {
         ? ((qtyActual * costoActual) + (cantFinal * costoNuevo)) / (qtyActual + cantFinal)
         : costoNuevo;
 
-      await db.promise().query(
+      await conn.query(
         `INSERT INTO stock (id_producto, id_deposito, cantidad, costo_promedio, fecha_ult_movimiento)
          VALUES (?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE
@@ -393,13 +487,13 @@ const recibirTransferencia = async (req, res) => {
         [det.id_producto, t.id_deposito_destino, cantFinal, +newCosto.toFixed(4), +newCosto.toFixed(4)]
       );
 
-      const [[stPost]] = await db.promise().query(
+      const [[stPost]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS qty, COALESCE(costo_promedio, 0) AS costo
          FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [det.id_producto, t.id_deposito_destino]
       );
 
-      await db.promise().query(
+      await conn.query(
         `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad,
            costo_unitario, saldo_cantidad, saldo_costo,
            documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
@@ -415,19 +509,31 @@ const recibirTransferencia = async (req, res) => {
         ]
       );
 
-      await db.promise().query(
+      await conn.query(
         `UPDATE transferencia_detalle SET cantidad_recibida = cantidad_recibida + ? WHERE id_detalle = ?`,
         [cantFinal, det.id_detalle]
       );
+
+      // Series en tránsito asociadas a esta línea: confirman recepción en
+      // el depósito destino (vuelven a EN_STOCK, ya ubicadas ahí).
+      const [seriesRows] = await conn.query(
+        `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle = ?`,
+        [det.id_detalle]
+      );
+      if (seriesRows.length) {
+        await productoSeries.confirmarRecepcion(dbTx(conn), seriesRows.map(r => r.id_serie), {
+          id_deposito_destino: t.id_deposito_destino,
+        });
+      }
     }
 
-    const [detalles] = await db.promise().query(
+    const [detalles] = await conn.query(
       `SELECT cantidad_enviada, cantidad_recibida FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
     );
     const todosRecibidos = detalles.every(d => Number(d.cantidad_recibida) >= Number(d.cantidad_enviada));
     const nuevoEstado    = todosRecibidos ? 'RECIBIDA' : 'PARCIAL';
 
-    await db.promise().query(
+    await conn.query(
       `UPDATE transferencias
        SET estado = ?, fecha_recepcion = NOW(), id_usuario_recibe = ?,
            observaciones_recepcion = COALESCE(?, observaciones_recepcion)
@@ -436,48 +542,72 @@ const recibirTransferencia = async (req, res) => {
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
+    await conn.commit();
     res.json({ ok: true, estado: nuevoEstado });
   } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err.message === 'SERIE_NO_DISPONIBLE') {
+      return res.status(409).json({ mensaje: 'Una de las series elegidas ya no está disponible, volvé a elegir' });
+    }
+    if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
     console.error(err);
     res.status(500).json({ mensaje: 'Error al recibir transferencia' });
+  } finally {
+    conn.release();
   }
 };
 
 const anularTransferencia = async (req, res) => {
+  const conn = await db.promise().getConnection();
   try {
     const userId = req.user.id_usuario;
     const { id } = req.params;
     const motivo = (req.body?.motivo ?? '').trim();
-    if (!motivo) return res.status(400).json({ mensaje: 'Debe indicar el motivo de la anulación' });
+    if (!motivo) throw new ApiError(400, 'Debe indicar el motivo de la anulación');
 
-    const [[t]] = await db.promise().query(
+    const [[t]] = await conn.query(
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
     );
-    if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
+    if (!t) throw new ApiError(404, 'Transferencia no encontrada');
     if (!['SOLICITADA', 'EN_TRANSITO'].includes(t.estado)) {
-      return res.status(400).json({ mensaje: `No se puede anular una transferencia ${t.estado}` });
+      throw new ApiError(400, `No se puede anular una transferencia ${t.estado}`);
     }
+
+    await conn.beginTransaction();
 
     if (t.estado === 'EN_TRANSITO') {
       const tmEntrada = await tipoMov('TRANSFERENCIA_ENT');
-      const [detalle] = await db.promise().query(
+      const [detalle] = await conn.query(
         `SELECT * FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
       );
 
+      const idsDetalle = detalle.map(d => d.id_detalle);
+      if (idsDetalle.length) {
+        const [seriesRows] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle IN (?)`,
+          [idsDetalle]
+        );
+        if (seriesRows.length) {
+          await productoSeries.revertirATransito(dbTx(conn), seriesRows.map(r => r.id_serie), {
+            id_deposito_origen: t.id_deposito_origen,
+          });
+        }
+      }
+
       for (const item of detalle) {
-        await db.promise().query(
+        await conn.query(
           `UPDATE stock SET cantidad = cantidad + ?, fecha_ult_movimiento = NOW()
            WHERE id_producto = ? AND id_deposito = ?`,
           [item.cantidad_enviada, item.id_producto, t.id_deposito_origen]
         );
 
         if (tmEntrada) {
-          const [[stPost]] = await db.promise().query(
+          const [[stPost]] = await conn.query(
             `SELECT COALESCE(cantidad, 0) AS qty, COALESCE(costo_promedio, 0) AS costo
              FROM stock WHERE id_producto = ? AND id_deposito = ?`,
             [item.id_producto, t.id_deposito_origen]
           );
-          await db.promise().query(
+          await conn.query(
             `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad,
                costo_unitario, saldo_cantidad, saldo_costo,
                documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
@@ -496,16 +626,24 @@ const anularTransferencia = async (req, res) => {
       }
     }
 
-    await db.promise().query(
+    await conn.query(
       `UPDATE transferencias SET estado = 'ANULADA', motivo_anulacion = ? WHERE id_transferencia = ?`,
       [motivo, id]
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
+    await conn.commit();
     res.json({ ok: true, mensaje: 'Transferencia anulada' });
   } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err.message === 'SERIE_NO_DISPONIBLE') {
+      return res.status(409).json({ mensaje: 'Una de las series elegidas ya no está disponible, volvé a elegir' });
+    }
+    if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
     console.error(err);
     res.status(500).json({ mensaje: 'Error al anular transferencia' });
+  } finally {
+    conn.release();
   }
 };
 
