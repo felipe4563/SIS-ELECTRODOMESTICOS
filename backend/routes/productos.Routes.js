@@ -71,5 +71,16 @@ router.delete('/:id/imagenes/:idImagen',
   authMiddleware, checkPermission('editar', 'productos'),
   ctrl.deleteImagen);
 
+// ── Números de serie (backfill de stock antiguo) ─────────────────────────
+router.get('/:id/series/:id_deposito',
+  authMiddleware, checkPermission('ver', 'productos'),
+  ctrl.getSeriesProducto);
+
+router.post('/:id/series',
+  authMiddleware, checkPermission('editar', 'productos'),
+  uploadImg.single('imagen'),
+  validateMagic(IMAGES_ONLY),
+  ctrl.cargarSerieManual);
+
 
 module.exports = router;

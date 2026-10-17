@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { randomBytes } = require('crypto');
+const productoSeries = require('../models/productoSeries');
 
 const getIp    = req => req.ip || req.socket?.remoteAddress || null;
 const auditLog = (userId, tabla, id, accion, ip) =>
@@ -428,6 +429,59 @@ const getStock = async (req, res) => {
   }
 };
 
+// ── Números de serie (backfill de stock antiguo desde el detalle) ─────────
+
+const getSeriesProducto = async (req, res) => {
+  try {
+    const { id, id_deposito } = req.params;
+
+    const [[stockRow]] = await db.promise().query(
+      `SELECT cantidad FROM stock WHERE id_producto = ? AND id_deposito = ?`,
+      [id, id_deposito]
+    );
+    const cantidad_stock = stockRow ? stockRow.cantidad : 0;
+
+    const series = await productoSeries.listarDisponibles(db, {
+      id_producto: id,
+      id_deposito,
+    });
+
+    return res.json({ cantidad_stock, series });
+  } catch (err) {
+    console.error('[getSeriesProducto]', err);
+    return res.status(500).json({ error: 'Error al obtener números de serie' });
+  }
+};
+
+const cargarSerieManual = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { id_deposito, numero_serie } = req.body;
+
+    if (!id_deposito || !numero_serie?.trim()) {
+      return res.status(400).json({ mensaje: 'id_deposito y numero_serie son requeridos' });
+    }
+
+    const imagen_url = req.file ? `/uploads/productos/${req.file.filename}` : null;
+
+    const { id_serie } = await productoSeries.cargarManual(db, {
+      id_producto: id,
+      id_deposito,
+      numero_serie: numero_serie.trim(),
+      imagen_url,
+      id_usuario: req.user.id_usuario,
+    });
+
+    return res.status(201).json({ id_serie, numero_serie: numero_serie.trim() });
+  } catch (err) {
+    if (err.message === 'DUPLICADO') {
+      return res.status(409).json({ mensaje: 'Ya existe ese número de serie para este producto' });
+    }
+    console.error('[cargarSerieManual]', err);
+    return res.status(500).json({ error: 'Error al cargar el número de serie' });
+  }
+};
+
 // ── Importación masiva desde Excel ────────────────────────────────────────
 
 module.exports = {
@@ -435,4 +489,5 @@ module.exports = {
   getProductos, getProducto, createProducto, updateProducto, deleteProducto,
   getHistoricoPrecios, getStock,
   getImagenes, uploadImagen, setPrincipalImagen, deleteImagen,
+  getSeriesProducto, cargarSerieManual,
 };
