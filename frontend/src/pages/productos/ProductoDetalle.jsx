@@ -548,43 +548,40 @@ function TabStock({ idProducto }) {
 
 // ── Panel lateral: cargar números de serie de stock antiguo ───────────────
 function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadTotal, onClose }) {
-  const [cargando, setCargando] = useState(true);
-  const [series,   setSeries]   = useState([]);
-  const [total,    setTotal]    = useState(cantidadTotal);
-  const [filas,    setFilas]    = useState([]);
+  const [cargando,    setCargando]    = useState(true);
+  const [series,      setSeries]      = useState([]);
+  const [total,       setTotal]       = useState(cantidadTotal);
+  const [numeroSerie, setNumeroSerie] = useState('');
+  const [file,        setFile]        = useState(null);
+  const [guardando,   setGuardando]   = useState(false);
+  const [error,       setError]       = useState('');
 
   useEffect(() => {
     productosService.getSeriesProducto(idProducto, idDeposito)
       .then(({ data }) => {
         setSeries(data.series);
         setTotal(data.cantidad_stock);
-        const faltan = Math.max(data.cantidad_stock - data.series.length, 0);
-        setFilas(Array.from({ length: faltan }, (_, i) => ({
-          key: `f-${i}`, numero_serie: '', file: null, guardando: false, error: '',
-        })));
       })
       .catch(() => {})
       .finally(() => setCargando(false));
   }, [idProducto, idDeposito]);
 
-  const actualizarFila = (key, patch) =>
-    setFilas(prev => prev.map(f => (f.key === key ? { ...f, ...patch } : f)));
+  const faltan = Math.max(total - series.length, 0);
 
-  const guardarFila = async (fila) => {
-    if (!fila.numero_serie.trim()) {
-      actualizarFila(fila.key, { error: 'Ingresá el número de serie' });
+  const agregar = async () => {
+    if (!numeroSerie.trim()) {
+      setError('Ingresá el número de serie');
       return;
     }
-    actualizarFila(fila.key, { guardando: true, error: '' });
+    setGuardando(true); setError('');
     try {
-      const { data } = await productosService.cargarSerieManual(idProducto, idDeposito, fila.numero_serie.trim(), fila.file);
+      const { data } = await productosService.cargarSerieManual(idProducto, idDeposito, numeroSerie.trim(), file);
       setSeries(prev => [...prev, { id_serie: data.id_serie, numero_serie: data.numero_serie, imagen_url: null }]);
-      setFilas(prev => prev.filter(f => f.key !== fila.key));
+      setNumeroSerie(''); setFile(null);
     } catch (err) {
-      actualizarFila(fila.key, {
-        guardando: false,
-        error: err.response?.data?.mensaje || err.response?.data?.error || 'Error al guardar',
-      });
+      setError(err.response?.data?.mensaje || err.response?.data?.error || 'Error al guardar');
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -645,36 +642,35 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
               </div>
             )}
 
-            {/* Filas pendientes: una por unidad faltante, guardado parcial */}
-            {filas.length > 0 && (
-              <div className="pt-3 border-t border-gray-100 dark:border-zinc-800 space-y-3">
-                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Unidades sin serie</p>
-                {filas.map(fila => (
-                  <div key={fila.key} className="flex flex-wrap items-center gap-2 bg-gray-50 dark:bg-zinc-800/60 rounded-xl p-2.5">
-                    <input
-                      type="text"
-                      value={fila.numero_serie}
-                      onChange={e => actualizarFila(fila.key, { numero_serie: e.target.value })}
-                      placeholder="N° de serie"
-                      disabled={fila.guardando}
-                      className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-sm bg-white dark:bg-zinc-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                    />
-                    <label className={`text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${fila.guardando ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {fila.file ? 'Foto ✓' : 'Agregar foto'}
-                      <input type="file" accept="image/*" capture="environment" className="hidden" disabled={fila.guardando}
-                        onChange={e => actualizarFila(fila.key, { file: e.target.files?.[0] ?? null })} />
-                    </label>
-                    <button onClick={() => guardarFila(fila)} disabled={fila.guardando}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-50 transition-colors">
-                      {fila.guardando ? <FaSpinner className="animate-spin h-3 w-3" /> : 'Guardar'}
-                    </button>
-                    {fila.error && <p className="w-full text-xs text-red-500">{fila.error}</p>}
-                  </div>
-                ))}
+            {/* Alta: un solo formulario reutilizable, guardado parcial por alta */}
+            {faltan > 0 ? (
+              <div className="pt-3 border-t border-gray-100 dark:border-zinc-800 space-y-2">
+                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Agregar número de serie</p>
+                <div className="flex flex-wrap items-center gap-2 bg-gray-50 dark:bg-zinc-800/60 rounded-xl p-2.5">
+                  <input
+                    type="text"
+                    value={numeroSerie}
+                    onChange={e => setNumeroSerie(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !guardando) agregar(); }}
+                    placeholder="N° de serie"
+                    disabled={guardando}
+                    autoFocus
+                    className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 text-sm bg-white dark:bg-zinc-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                  <label className={`text-xs font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${guardando ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {file ? 'Foto ✓' : 'Agregar foto'}
+                    <input type="file" accept="image/*" capture="environment" className="hidden" disabled={guardando}
+                      onChange={e => setFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                  <button onClick={agregar} disabled={guardando}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-50 transition-colors">
+                    {guardando ? <FaSpinner className="animate-spin h-3 w-3" /> : 'Guardar'}
+                  </button>
+                  {error && <p className="w-full text-xs text-red-500">{error}</p>}
+                </div>
+                <p className="text-xs text-gray-400 dark:text-zinc-500">Faltan {faltan} unidad{faltan === 1 ? '' : 'es'} por cargar.</p>
               </div>
-            )}
-
-            {series.length === total && filas.length === 0 && (
+            ) : (
               <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-4">Todas las unidades tienen número de serie.</p>
             )}
           </div>
