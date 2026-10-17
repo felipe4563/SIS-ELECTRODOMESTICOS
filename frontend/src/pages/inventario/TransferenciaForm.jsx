@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { transferenciasService } from '../../services/transferencias.service';
 import { inventarioService }      from '../../services/inventario.service';
+import { productosService }       from '../../services/productos.service';
 import { FaArrowLeft } from 'react-icons/fa';
 
 const fmtNum = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -71,8 +72,12 @@ function ProductoCard({ p, enCarrito, onAdd, onQuitar }) {
 }
 
 // ── Fila del carrito (compacta, usada en el panel lateral / bottom sheet) ────
-function CartItemRow({ fila, productos, stockOrigen, onChange, onQtyDelta, onRemove }) {
+function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
+  const [seriesAbierto,      setSeriesAbierto]      = useState(false);
+  const [seriesDisponibles,  setSeriesDisponibles]  = useState([]);
+  const [cargandoSeries,     setCargandoSeries]     = useState(false);
+  const [errorSeries,        setErrorSeries]        = useState('');
 
   const filtrados = productos.filter(p => {
     if (!busqueda) return true;
@@ -88,6 +93,41 @@ function CartItemRow({ fila, productos, stockOrigen, onChange, onQtyDelta, onRem
   const disponible  = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
   const excede      = disponible !== null && Number(fila.cantidad) > disponible;
   const sinStock    = disponible !== null && disponible <= 0;
+  const seriesSel   = fila.series ?? [];
+
+  // Si la cantidad baja por debajo de lo ya elegido, recortar la selección.
+  useEffect(() => {
+    if (seriesSel.length > Number(fila.cantidad)) {
+      onChange('series', seriesSel.slice(0, Math.max(0, Number(fila.cantidad))));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fila.cantidad]);
+
+  const toggleSelectorSeries = async () => {
+    const yaAbierto = seriesAbierto;
+    setSeriesAbierto(!yaAbierto);
+    if (yaAbierto || seriesDisponibles.length || cargandoSeries) return;
+    setCargandoSeries(true);
+    setErrorSeries('');
+    try {
+      const { data } = await productosService.getSeriesProducto(fila.id_producto, idDepositoOrigen);
+      setSeriesDisponibles(data.series ?? []);
+    } catch {
+      setErrorSeries('Error al cargar las series');
+    } finally {
+      setCargandoSeries(false);
+    }
+  };
+
+  const toggleSerie = (id_serie) => {
+    const marcada = seriesSel.includes(id_serie);
+    if (marcada) {
+      onChange('series', seriesSel.filter(s => s !== id_serie));
+    } else {
+      if (seriesSel.length >= Number(fila.cantidad)) return;
+      onChange('series', [...seriesSel, id_serie]);
+    }
+  };
 
   return (
     <div className="py-3.5 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
@@ -153,6 +193,50 @@ function CartItemRow({ fila, productos, stockOrigen, onChange, onQtyDelta, onRem
         </div>
       </div>
       {excede && <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 text-right">Supera el disponible</p>}
+
+      {fila.id_producto && idDepositoOrigen && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={toggleSelectorSeries}
+            className="text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+          >
+            {seriesSel.length > 0 ? `Series elegidas (${seriesSel.length}/${fmtNum(fila.cantidad)})` : 'Elegir series'}
+          </button>
+
+          {seriesAbierto && (
+            <div className="mt-1.5 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 max-h-40 overflow-y-auto space-y-1">
+              {cargandoSeries ? (
+                <p className="text-[11px] text-zinc-400 text-center py-2">Cargando series…</p>
+              ) : errorSeries ? (
+                <p className="text-[11px] text-red-500 text-center py-2">{errorSeries}</p>
+              ) : seriesDisponibles.length === 0 ? (
+                <p className="text-[11px] text-zinc-400 text-center py-2">Sin series disponibles en este depósito</p>
+              ) : (
+                seriesDisponibles.map(s => {
+                  const marcada   = seriesSel.includes(s.id_serie);
+                  const bloqueada = !marcada && seriesSel.length >= Number(fila.cantidad);
+                  return (
+                    <label
+                      key={s.id_serie}
+                      className={`flex items-center gap-1.5 text-[11px] px-1.5 py-1 rounded-lg cursor-pointer ${bloqueada ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white dark:hover:bg-zinc-800'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcada}
+                        disabled={bloqueada}
+                        onChange={() => toggleSerie(s.id_serie)}
+                        className="rounded accent-amber-500"
+                      />
+                      <span className="font-mono text-zinc-700 dark:text-zinc-300">{s.numero_serie}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -174,7 +258,7 @@ export default function TransferenciaForm() {
   const [form, setForm] = useState({
     id_deposito_origen: '', id_deposito_destino: '', observaciones: '',
   });
-  const [items,     setItems]     = useState([{ id_producto: '', cantidad: 1 }]);
+  const [items,     setItems]     = useState([{ id_producto: '', cantidad: 1, series: [] }]);
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState('');
   const [busquedaStock, setBusquedaStock] = useState('');
@@ -218,7 +302,7 @@ export default function TransferenciaForm() {
           id_deposito_destino: String(t.id_deposito_destino),
           observaciones: t.observaciones ?? '',
         });
-        setItems((t.detalle ?? []).map(d => ({ id_producto: String(d.id_producto), cantidad: Number(d.cantidad_enviada) })));
+        setItems((t.detalle ?? []).map(d => ({ id_producto: String(d.id_producto), cantidad: Number(d.cantidad_enviada), series: [] })));
         return inventarioService.getStockDeposito(t.id_deposito_origen).then(rs => {
           const map = {};
           (rs.data.stock ?? []).forEach(s => { map[String(s.id_producto)] = s.cantidad_disponible; });
@@ -233,6 +317,7 @@ export default function TransferenciaForm() {
   const handleOrigenChange = async (id) => {
     setForm(p => ({ ...p, id_deposito_origen: id, id_deposito_destino: p.id_deposito_destino === id ? '' : p.id_deposito_destino }));
     setStockOrigen({});
+    setItems(prev => prev.map(it => ({ ...it, series: [] })));
     setBusquedaStock('');
     setFiltroMarca('');
     setFiltroProducto('');
@@ -275,7 +360,7 @@ export default function TransferenciaForm() {
     setFiltroCapacidad('');
   };
 
-  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1 }]);
+  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, series: [] }]);
   const removeItem = i  => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
 
@@ -300,7 +385,7 @@ export default function TransferenciaForm() {
         return prev.map((it, i) => i === idx ? { ...it, cantidad: Number(it.cantidad) + 1 } : it);
       }
       const vacio = prev.findIndex(it => !it.id_producto);
-      const nuevaFila = { id_producto: String(p.id_producto), cantidad: 1 };
+      const nuevaFila = { id_producto: String(p.id_producto), cantidad: 1, series: [] };
       if (vacio >= 0) return prev.map((it, i) => i === vacio ? nuevaFila : it);
       return [...prev, nuevaFila];
     });
@@ -470,6 +555,7 @@ export default function TransferenciaForm() {
               fila={fila}
               productos={productos}
               stockOrigen={stockOrigen}
+              idDepositoOrigen={form.id_deposito_origen}
               onChange={(k, v) => updateItem(i, k, v)}
               onQtyDelta={d => cambiarCantidad(i, d)}
               onRemove={() => removeItem(i)}
