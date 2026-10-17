@@ -1111,7 +1111,7 @@ const agregarSerieDetalle = async (req, res) => {
       return res.status(400).json({ error: 'El número de serie es requerido' });
 
     const [[detalle]] = await db.promise().query(
-      `SELECT cd.id_detalle, cd.cantidad
+      `SELECT cd.id_detalle, cd.cantidad, cd.id_producto
        FROM compra_detalle cd WHERE cd.id_detalle = ? AND cd.id_compra = ?`, [idDetalle, id]
     );
     if (!detalle) return res.status(404).json({ error: 'Línea de compra no encontrada' });
@@ -1123,10 +1123,33 @@ const agregarSerieDetalle = async (req, res) => {
       return res.status(409).json({ error: 'Ya se registraron números de serie para todas las unidades pedidas' });
     }
 
+    // Depósito real de esta compra: mismo criterio que el backfill de la
+    // migración 34 — si todas las recepciones de este detalle comparten un
+    // único depósito lo usamos; si no hay recepciones, el depósito destino
+    // de la cabecera; si hay ambigüedad (recepciones en más de un depósito),
+    // queda NULL ("sin depósito confirmado").
+    const [[depositoRow]] = await db.promise().query(
+      `SELECT
+         (SELECT MIN(cr.id_deposito) FROM compra_recepcion_detalle crd
+            JOIN compra_recepciones cr ON cr.id_recepcion = crd.id_recepcion
+            WHERE crd.id_detalle = cd.id_detalle
+            GROUP BY crd.id_detalle
+            HAVING COUNT(DISTINCT cr.id_deposito) = 1) AS id_deposito_unico,
+         (SELECT COUNT(*) FROM compra_recepcion_detalle crd WHERE crd.id_detalle = cd.id_detalle) AS tiene_recepciones,
+         c.id_deposito_destino
+       FROM compra_detalle cd
+       JOIN compras c ON c.id_compra = cd.id_compra
+       WHERE cd.id_detalle = ?`,
+      [idDetalle]
+    );
+    const idDepositoActual = depositoRow.tiene_recepciones > 0
+      ? (depositoRow.id_deposito_unico ?? null)
+      : depositoRow.id_deposito_destino;
+
     const imagenUrl = req.file ? `/uploads/compras/${req.file.filename}` : null;
     const [r] = await db.promise().query(
-      `INSERT INTO compra_detalle_series (id_detalle, numero_serie, imagen_url, id_usuario) VALUES (?,?,?,?)`,
-      [idDetalle, numero_serie.trim(), imagenUrl, req.user.id_usuario]
+      `INSERT INTO compra_detalle_series (id_detalle, id_producto, numero_serie, imagen_url, id_deposito_actual, id_usuario) VALUES (?,?,?,?,?,?)`,
+      [idDetalle, detalle.id_producto, numero_serie.trim(), imagenUrl, idDepositoActual, req.user.id_usuario]
     );
 
     await auditLog(req.user.id_usuario, 'compra_detalle_series', r.insertId, 'INSERT', getIp(req));
