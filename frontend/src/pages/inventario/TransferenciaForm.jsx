@@ -71,29 +71,22 @@ function ProductoCard({ p, enCarrito, onAdd, onQuitar }) {
   );
 }
 
-// ── Fila del carrito (compacta, usada en el panel lateral / bottom sheet) ────
-function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange, onQtyDelta, onRemove }) {
-  const [busqueda, setBusqueda] = useState('');
-  const [seriesAbierto,      setSeriesAbierto]      = useState(false);
-  const [seriesDisponibles,  setSeriesDisponibles]  = useState([]);
-  const [cargandoSeries,     setCargandoSeries]     = useState(false);
-  const [errorSeries,        setErrorSeries]        = useState('');
+// ── Selector de números de serie para una fila del carrito ───────────────────
+// Montado con `key={fila.id_producto}` desde CartItemRow: así, cuando cambia
+// el producto de la fila (incluido el caso en que la misma posición del
+// carrito pasa a representar otro producto, p.ej. al eliminar una fila
+// anterior y que los índices se corran), React descarta esta instancia y
+// monta una nueva con su estado local en blanco — en vez de tener que
+// sincronizarlo "a mano" con un efecto (lo que además dispara el lint
+// react-hooks/set-state-in-effect por hacer setState incondicional de estado
+// propio dentro de un effect).
+function SeriesSelector({ fila, idDepositoOrigen, onChange }) {
+  const [seriesAbierto,     setSeriesAbierto]     = useState(false);
+  const [seriesDisponibles, setSeriesDisponibles] = useState([]);
+  const [cargandoSeries,    setCargandoSeries]    = useState(false);
+  const [errorSeries,       setErrorSeries]       = useState('');
 
-  const filtrados = productos.filter(p => {
-    if (!busqueda) return true;
-    const q = busqueda.toLowerCase();
-    return p.producto.toLowerCase().includes(q) ||
-      p.codigo_interno.toLowerCase().includes(q) ||
-      p.marca?.toLowerCase().includes(q) ||
-      p.modelo?.toLowerCase().includes(q);
-  });
-  const opciones = filtrados;
-
-  const productoSel = fila.id_producto ? productos.find(p => String(p.id_producto) === String(fila.id_producto)) : null;
-  const disponible  = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
-  const excede      = disponible !== null && Number(fila.cantidad) > disponible;
-  const sinStock    = disponible !== null && disponible <= 0;
-  const seriesSel   = fila.series ?? [];
+  const seriesSel = fila.series ?? [];
 
   // Si la cantidad baja por debajo de lo ya elegido, recortar la selección.
   useEffect(() => {
@@ -130,6 +123,70 @@ function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange,
   };
 
   return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={toggleSelectorSeries}
+        className="text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+      >
+        {seriesSel.length > 0 ? `Series elegidas (${seriesSel.length}/${fmtNum(fila.cantidad)})` : 'Elegir series'}
+      </button>
+
+      {seriesAbierto && (
+        <div className="mt-1.5 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 max-h-40 overflow-y-auto space-y-1">
+          {cargandoSeries ? (
+            <p className="text-[11px] text-zinc-400 text-center py-2">Cargando series…</p>
+          ) : errorSeries ? (
+            <p className="text-[11px] text-red-500 text-center py-2">{errorSeries}</p>
+          ) : seriesDisponibles.length === 0 ? (
+            <p className="text-[11px] text-zinc-400 text-center py-2">Sin series disponibles en este depósito</p>
+          ) : (
+            seriesDisponibles.map(s => {
+              const marcada   = seriesSel.includes(s.id_serie);
+              const bloqueada = !marcada && seriesSel.length >= Number(fila.cantidad);
+              return (
+                <label
+                  key={s.id_serie}
+                  className={`flex items-center gap-1.5 text-[11px] px-1.5 py-1 rounded-lg cursor-pointer ${bloqueada ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white dark:hover:bg-zinc-800'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcada}
+                    disabled={bloqueada}
+                    onChange={() => toggleSerie(s.id_serie)}
+                    className="rounded accent-amber-500"
+                  />
+                  <span className="font-mono text-zinc-700 dark:text-zinc-300">{s.numero_serie}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Fila del carrito (compacta, usada en el panel lateral / bottom sheet) ────
+function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange, onQtyDelta, onRemove }) {
+  const [busqueda, setBusqueda] = useState('');
+
+  const filtrados = productos.filter(p => {
+    if (!busqueda) return true;
+    const q = busqueda.toLowerCase();
+    return p.producto.toLowerCase().includes(q) ||
+      p.codigo_interno.toLowerCase().includes(q) ||
+      p.marca?.toLowerCase().includes(q) ||
+      p.modelo?.toLowerCase().includes(q);
+  });
+  const opciones = filtrados;
+
+  const productoSel = fila.id_producto ? productos.find(p => String(p.id_producto) === String(fila.id_producto)) : null;
+  const disponible  = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
+  const excede      = disponible !== null && Number(fila.cantidad) > disponible;
+  const sinStock    = disponible !== null && disponible <= 0;
+
+  return (
     <div className="py-3.5 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
       {productoSel ? (
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -158,7 +215,7 @@ function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange,
           </div>
           <select
             value={fila.id_producto}
-            onChange={e => { onChange('id_producto', e.target.value); setBusqueda(''); }}
+            onChange={e => { onChange('id_producto', e.target.value); onChange('series', []); setBusqueda(''); }}
             className="w-full px-2 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
           >
             <option value="">— seleccionar producto —</option>
@@ -195,47 +252,12 @@ function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange,
       {excede && <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 text-right">Supera el disponible</p>}
 
       {fila.id_producto && idDepositoOrigen && (
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={toggleSelectorSeries}
-            className="text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-          >
-            {seriesSel.length > 0 ? `Series elegidas (${seriesSel.length}/${fmtNum(fila.cantidad)})` : 'Elegir series'}
-          </button>
-
-          {seriesAbierto && (
-            <div className="mt-1.5 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 max-h-40 overflow-y-auto space-y-1">
-              {cargandoSeries ? (
-                <p className="text-[11px] text-zinc-400 text-center py-2">Cargando series…</p>
-              ) : errorSeries ? (
-                <p className="text-[11px] text-red-500 text-center py-2">{errorSeries}</p>
-              ) : seriesDisponibles.length === 0 ? (
-                <p className="text-[11px] text-zinc-400 text-center py-2">Sin series disponibles en este depósito</p>
-              ) : (
-                seriesDisponibles.map(s => {
-                  const marcada   = seriesSel.includes(s.id_serie);
-                  const bloqueada = !marcada && seriesSel.length >= Number(fila.cantidad);
-                  return (
-                    <label
-                      key={s.id_serie}
-                      className={`flex items-center gap-1.5 text-[11px] px-1.5 py-1 rounded-lg cursor-pointer ${bloqueada ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white dark:hover:bg-zinc-800'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={marcada}
-                        disabled={bloqueada}
-                        onChange={() => toggleSerie(s.id_serie)}
-                        className="rounded accent-amber-500"
-                      />
-                      <span className="font-mono text-zinc-700 dark:text-zinc-300">{s.numero_serie}</span>
-                    </label>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
+        <SeriesSelector
+          key={fila.id_producto}
+          fila={fila}
+          idDepositoOrigen={idDepositoOrigen}
+          onChange={onChange}
+        />
       )}
     </div>
   );
