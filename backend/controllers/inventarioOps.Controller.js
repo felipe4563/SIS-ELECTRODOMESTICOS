@@ -158,6 +158,28 @@ const getTransferencia = async (req, res) => {
        ORDER BY td.id_detalle`, [id]
     );
 
+    // Series ligadas a cada línea. A diferencia de ventas, una línea de
+    // transferencia puede tener varias series (no se parte en filas de 1),
+    // así que en vez de un LEFT JOIN (que duplicaría las líneas) se trae
+    // aparte y se adjunta como array. Sin esto, el modo edición del borrador
+    // no sabe qué series tenía reservadas cada línea y al guardar las suelta.
+    if (detalle.length) {
+      const [seriesRows] = await db.promise().query(
+        `SELECT id_serie, numero_serie, estado, id_transferencia_detalle
+         FROM compra_detalle_series
+         WHERE id_transferencia_detalle IN (?)
+         ORDER BY id_serie`,
+        [detalle.map(d => d.id_detalle)]
+      );
+      const porDetalle = new Map();
+      for (const s of seriesRows) {
+        const k = String(s.id_transferencia_detalle);
+        if (!porDetalle.has(k)) porDetalle.set(k, []);
+        porDetalle.get(k).push({ id_serie: s.id_serie, numero_serie: s.numero_serie, estado: s.estado });
+      }
+      for (const d of detalle) d.series = porDetalle.get(String(d.id_detalle)) ?? [];
+    }
+
     res.json({ ...t, detalle });
   } catch (err) {
     console.error(err);
@@ -408,13 +430,20 @@ const enviarTransferencia = async (req, res) => {
         [item.cantidad_a_enviar, item.id_detalle]
       );
 
-      // Series elegidas para esta línea (si las hay): pasan a EN_TRANSITO.
+      // Series elegidas para esta línea (si las hay): pasan a EN_TRANSITO
+      // solo tantas como unidades salen en ESTE envío (envío parcial): las
+      // demás quedan EN_STOCK para un despacho posterior. Sin el filtro de
+      // estado + LIMIT, un envío parcial movía todas las series y el envío
+      // del resto fallaba siempre con 409 (sin salida desde la UI).
       // Si alguna ya no está disponible (otra transferencia/venta la tomó
       // entretanto), moverATransito lanza SERIE_NO_DISPONIBLE y el catch de
       // abajo revierte toda la operación (stock y kardex incluidos).
       const [seriesRows] = await conn.query(
-        `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle = ?`,
-        [item.id_detalle]
+        `SELECT id_serie FROM compra_detalle_series
+         WHERE id_transferencia_detalle = ? AND estado = 'EN_STOCK'
+         ORDER BY id_serie
+         LIMIT ?`,
+        [item.id_detalle, Math.floor(Number(item.cantidad_a_enviar))]
       );
       if (seriesRows.length) {
         await productoSeries.moverATransito(dbTx(conn), seriesRows.map(r => r.id_serie), {
@@ -546,10 +575,15 @@ const recibirTransferencia = async (req, res) => {
       );
 
       // Series en tránsito asociadas a esta línea: confirman recepción en
-      // el depósito destino (vuelven a EN_STOCK, ya ubicadas ahí).
+      // el depósito destino (vuelven a EN_STOCK, ya ubicadas ahí). Solo
+      // tantas como unidades se reciben en ESTA llamada (recepción parcial):
+      // el resto sigue EN_TRANSITO para la próxima recepción.
       const [seriesRows] = await conn.query(
-        `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle = ?`,
-        [det.id_detalle]
+        `SELECT id_serie FROM compra_detalle_series
+         WHERE id_transferencia_detalle = ? AND estado = 'EN_TRANSITO'
+         ORDER BY id_serie
+         LIMIT ?`,
+        [det.id_detalle, Math.floor(cantFinal)]
       );
       if (seriesRows.length) {
         await productoSeries.confirmarRecepcion(dbTx(conn), seriesRows.map(r => r.id_serie), {
@@ -625,11 +659,16 @@ const anularTransferencia = async (req, res) => {
         }
       }
 
+      // Se devuelve al origen lo que realmente salió (cantidad_despachada),
+      // no lo pedido (cantidad_enviada): tras un envío parcial, devolver lo
+      // pedido creaba stock fantasma en el origen.
       for (const item of detalle) {
+        const devolver = Number(item.cantidad_despachada);
+        if (!(devolver > 0)) continue;
         await conn.query(
           `UPDATE stock SET cantidad = cantidad + ?, fecha_ult_movimiento = NOW()
            WHERE id_producto = ? AND id_deposito = ?`,
-          [item.cantidad_enviada, item.id_producto, t.id_deposito_origen]
+          [devolver, item.id_producto, t.id_deposito_origen]
         );
 
         if (tmEntrada) {
@@ -645,7 +684,7 @@ const anularTransferencia = async (req, res) => {
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               item.id_producto, t.id_deposito_origen, tmEntrada.id_tipo_movimiento,
-              Number(item.cantidad_enviada),
+              devolver,
               Number(stPost?.costo ?? 0),
               Number(stPost?.qty   ?? 0),
               Number(stPost?.costo ?? 0),

@@ -11,12 +11,36 @@
 
 // Lista las series EN_STOCK de un producto en un depósito determinado
 // (p.ej. para ofrecerlas como origen de una transferencia o venta).
-async function listarDisponibles(db, { id_producto, id_deposito }) {
+// Excluye las que estén reservadas por una transferencia todavía activa
+// (id_transferencia_detalle apuntando a una transferencia que no esté
+// ANULADA ni RECIBIDA): es el mismo guard que aplican
+// asociarSeriesATransferencia y marcarVendidaValidada al elegirlas, así que
+// ofrecerlas solo llevaba a un 409 seguro.
+// `excluirTransferencia` (opcional, id_transferencia): las series reservadas
+// por ESA transferencia sí se listan, para que su propio modo edición pueda
+// mostrar (y conservar) las que ya tenía elegidas.
+// `incluirReservadas` (opcional): no aplica el filtro de reserva. Lo usa solo
+// el panel de backfill del detalle de producto, que compara la cantidad de
+// series EN_STOCK contra el stock físico del depósito (que todavía incluye
+// las unidades reservadas por una transferencia no enviada): si las
+// excluyera, mostraría "faltan series" falsos e invitaría a cargar a mano
+// un número que ya existe (DUPLICADO).
+async function listarDisponibles(db, { id_producto, id_deposito, excluirTransferencia = null, incluirReservadas = false }) {
+  const filtroReserva = incluirReservadas ? '' : `
+       AND (cds.id_transferencia_detalle IS NULL
+            OR t2.estado IN ('ANULADA', 'RECIBIDA')
+            OR t2.id_transferencia = ?)`;
+  const params = incluirReservadas
+    ? [id_producto, id_deposito]
+    : [id_producto, id_deposito, excluirTransferencia];
   const [rows] = await db.promise().query(
-    `SELECT id_serie, numero_serie, imagen_url
-     FROM compra_detalle_series
-     WHERE id_producto = ? AND id_deposito_actual = ? AND estado = 'EN_STOCK'`,
-    [id_producto, id_deposito]
+    `SELECT cds.id_serie, cds.numero_serie, cds.imagen_url
+     FROM compra_detalle_series cds
+     LEFT JOIN transferencia_detalle td ON td.id_detalle = cds.id_transferencia_detalle
+     LEFT JOIN transferencias t2 ON t2.id_transferencia = td.id_transferencia
+     WHERE cds.id_producto = ? AND cds.id_deposito_actual = ? AND cds.estado = 'EN_STOCK'${filtroReserva}
+     ORDER BY cds.id_serie`,
+    params
   );
   return rows;
 }

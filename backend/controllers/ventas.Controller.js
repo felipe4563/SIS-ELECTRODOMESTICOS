@@ -506,12 +506,18 @@ const getVenta = async (req, res) => {
     const [detalle] = await db.promise().query(
       `SELECT vd.*, p.producto, p.codigo_interno, p.codigo_barras, p.imagen_url,
               p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca,
-              um.nombre AS unidad_nombre
+              um.nombre AS unidad_nombre,
+              cds.id_serie, cds.numero_serie AS serie_numero_inventario
        FROM venta_detalle vd
        JOIN productos       p  ON p.id_producto = vd.id_producto
        JOIN marcas          m  ON m.id_marca    = p.id_marca
        JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
-       WHERE vd.id_venta = ?`, [id]
+       -- Serie del inventario ligada a esta fila (a lo sumo una: cada fila con
+       -- serie es de cantidad 1). Sin esto, el modo edición del borrador no
+       -- sabe qué serie tenía cada fila y al guardar la libera en silencio.
+       LEFT JOIN compra_detalle_series cds ON cds.id_venta_detalle = vd.id_detalle
+       WHERE vd.id_venta = ?
+       ORDER BY vd.id_detalle`, [id]
     );
 
     const [cuotas] = await db.promise().query(
@@ -945,16 +951,29 @@ const emitirVenta = async (req, res) => {
     );
     const permitirSinStock = cfgStock?.valor === 'true' || cfgStock?.valor === '1';
 
-    // Validate stock for all items
+    // Validate stock for all items. Se suma la cantidad por producto antes de
+    // comparar: una misma línea del carrito puede haberse partido en varias
+    // filas de venta_detalle (una por cada serie elegida, más el resto), y el
+    // mismo producto también puede aparecer en dos líneas distintas. Comparar
+    // fila por fila aprobaría cada una por separado aunque el total supere el
+    // disponible.
+    const requeridoPorProducto = new Map();
     for (const item of detalle) {
+      const prev = requeridoPorProducto.get(item.id_producto);
+      requeridoPorProducto.set(item.id_producto, {
+        producto: item.producto,
+        cantidad: (prev?.cantidad ?? 0) + Number(item.cantidad),
+      });
+    }
+    for (const [id_producto, req_] of requeridoPorProducto) {
       const [[st]] = await db.promise().query(
         `SELECT COALESCE(cantidad_disponible, 0) AS disponible FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [item.id_producto, venta.id_deposito]
+        [id_producto, venta.id_deposito]
       );
       const disponible = Number(st?.disponible ?? 0);
-      if (!permitirSinStock && disponible < Number(item.cantidad)) {
+      if (!permitirSinStock && disponible < req_.cantidad) {
         return res.status(400).json({
-          mensaje: `Stock insuficiente para "${item.producto}". Disponible: ${disponible}, requerido: ${item.cantidad}`
+          mensaje: `Stock insuficiente para "${req_.producto}". Disponible: ${disponible}, requerido: ${req_.cantidad}`
         });
       }
     }
@@ -1760,11 +1779,27 @@ const actualizarSerie = async (req, res) => {
     }
 
     const [[det]] = await db.promise().query(
-      `SELECT vd.id_detalle, vd.id_producto, v.id_deposito
+      `SELECT vd.id_detalle, vd.id_producto, vd.cantidad, v.id_deposito, v.estado AS venta_estado
        FROM venta_detalle vd JOIN ventas v ON v.id_venta = vd.id_venta
        WHERE vd.id_detalle = ?`, [id_detalle]
     );
     if (!det) return res.status(404).json({ mensaje: 'Detalle no encontrado' });
+
+    // Enganchar una serie del inventario a esta línea solo tiene sentido en
+    // una venta viva, en una línea de 1 unidad y que todavía no tenga serie:
+    //  - En una venta ANULADA/DEVUELTA la serie quedaría VENDIDA ligada a una
+    //    venta muerta (anularVenta no puede volver a correr para liberarla),
+    //    perdiendo la unidad del inventario para siempre.
+    //  - Una fila de cantidad > 1 no corresponde a una sola unidad física.
+    //  - Si ya hay una serie ligada, se le sumaría una segunda a la misma fila.
+    if (idSerieNum) {
+      if (['ANULADA', 'DEVUELTA'].includes(det.venta_estado)) {
+        return res.status(400).json({ mensaje: `No se puede asignar una serie a una venta ${det.venta_estado.toLowerCase()}` });
+      }
+      if (Number(det.cantidad) !== 1) {
+        return res.status(400).json({ mensaje: 'Solo se puede asignar una serie a una línea de cantidad 1' });
+      }
+    }
 
     // Atómico: si hay id_serie, primero se intenta marcar vendida (validando
     // que sea del producto y depósito de esta línea, no solo EN_STOCK); el
@@ -1778,6 +1813,16 @@ const actualizarSerie = async (req, res) => {
       await conn.beginTransaction();
 
       if (idSerieNum) {
+        // Chequeo de "ya tiene serie" dentro de la transacción, con la fila
+        // de venta_detalle bloqueada, para que dos asignaciones simultáneas
+        // a la misma línea no pasen ambas.
+        await conn.query(`SELECT id_detalle FROM venta_detalle WHERE id_detalle = ? FOR UPDATE`, [id_detalle]);
+        const [[{ ligadas }]] = await conn.query(
+          `SELECT COUNT(*) AS ligadas FROM compra_detalle_series WHERE id_venta_detalle = ?`, [id_detalle]
+        );
+        if (Number(ligadas) > 0) {
+          throw new ApiError(400, 'Esta línea ya tiene una serie asignada');
+        }
         await marcarVendidaValidada(conn, {
           idSerie: idSerieNum, idProducto: det.id_producto, idDeposito: det.id_deposito, idVentaDetalle: id_detalle,
         });
@@ -1798,6 +1843,7 @@ const actualizarSerie = async (req, res) => {
       if (err.message === 'SERIE_NO_DISPONIBLE') {
         return res.status(409).json({ mensaje: 'Esa serie ya no está disponible, volvé a elegir' });
       }
+      if (err instanceof ApiError) return res.status(err.status).json({ mensaje: err.mensaje });
       throw err;
     } finally {
       conn.release();

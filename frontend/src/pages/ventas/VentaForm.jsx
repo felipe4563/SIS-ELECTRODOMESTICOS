@@ -221,6 +221,14 @@ function SeriesSelector({ fila, idDeposito, onChange }) {
 
   const seriesSel = fila.series ?? []; // [{id_serie, numero_serie}]
 
+  // Al editar un borrador, sus series ya están marcadas VENDIDA (ligadas a
+  // esta venta) y por eso no vienen en el listado de disponibles: se suman
+  // al principio para que se vean tildadas y se puedan destildar.
+  const seriesListado = [
+    ...seriesSel.filter(x => !seriesDisponibles.some(s => s.id_serie === x.id_serie)),
+    ...seriesDisponibles,
+  ];
+
   // Si la cantidad baja por debajo de lo ya elegido, recortar la selección.
   useEffect(() => {
     if (seriesSel.length > Number(fila.cantidad)) {
@@ -343,10 +351,10 @@ function SeriesSelector({ fila, idDeposito, onChange }) {
             <p className="text-[11px] text-zinc-400 text-center py-2">Cargando series…</p>
           ) : errorSeries ? (
             <p className="text-[11px] text-red-500 text-center py-2">{errorSeries}</p>
-          ) : seriesDisponibles.length === 0 ? (
+          ) : seriesListado.length === 0 ? (
             <p className="text-[11px] text-zinc-400 text-center py-2">Sin series disponibles en este depósito</p>
           ) : (
-            seriesDisponibles.map(s => {
+            seriesListado.map(s => {
               const marcada   = seriesSel.some(x => x.id_serie === s.id_serie);
               const bloqueada = !marcada && seriesSel.length >= Number(fila.cantidad);
               return (
@@ -676,7 +684,12 @@ export default function VentaForm() {
             id_impuesto:   d.id_impuesto ? String(d.id_impuesto) : '',
             impuesto_porc: d.impuesto_porc ?? 0,
             numero_serie:  d.numero_serie ?? '',
-            series:        [],
+            // Serie del inventario ya ligada a esta fila (getVenta la devuelve):
+            // si quedara en [], cualquier guardado del borrador la liberaría
+            // en silencio mientras el texto seguiría impreso en la venta.
+            series:        d.id_serie
+              ? [{ id_serie: d.id_serie, numero_serie: d.serie_numero_inventario ?? d.numero_serie ?? '' }]
+              : [],
             fotoSerie:     null,
           })));
         })

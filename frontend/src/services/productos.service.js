@@ -31,7 +31,15 @@ export const productosService = {
     });
   },
 
-  getSeriesProducto: (id_producto, id_deposito) => api.get(`/productos/${id_producto}/series/${id_deposito}`),
+  // opts.excluirTransferencia: id de la transferencia en edición (ve también
+  // sus propias series reservadas). opts.incluirReservadas: sin filtro de
+  // reserva (solo el panel de backfill del detalle de producto).
+  getSeriesProducto: (id_producto, id_deposito, opts = {}) => {
+    const params = {};
+    if (opts.excluirTransferencia) params.excluir_transferencia = opts.excluirTransferencia;
+    if (opts.incluirReservadas) params.incluir_reservadas = 1;
+    return api.get(`/productos/${id_producto}/series/${id_deposito}`, { params });
+  },
   cargarSerieManual: (id_producto, id_deposito, numero_serie, file) => {
     const form = new FormData();
     form.append('id_deposito', id_deposito);

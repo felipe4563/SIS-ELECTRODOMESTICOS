@@ -80,7 +80,7 @@ function ProductoCard({ p, enCarrito, onAdd, onQuitar }) {
 // sincronizarlo "a mano" con un efecto (lo que además dispara el lint
 // react-hooks/set-state-in-effect por hacer setState incondicional de estado
 // propio dentro de un effect).
-function SeriesSelector({ fila, idDepositoOrigen, onChange }) {
+function SeriesSelector({ fila, idDepositoOrigen, idTransferencia, onChange }) {
   const [seriesAbierto,     setSeriesAbierto]     = useState(false);
   const [seriesDisponibles, setSeriesDisponibles] = useState([]);
   const [cargandoSeries,    setCargandoSeries]    = useState(false);
@@ -103,7 +103,12 @@ function SeriesSelector({ fila, idDepositoOrigen, onChange }) {
     setCargandoSeries(true);
     setErrorSeries('');
     try {
-      const { data } = await productosService.getSeriesProducto(fila.id_producto, idDepositoOrigen);
+      // En edición, pedir también las series que esta misma transferencia ya
+      // reservó (el listado excluye por defecto las reservadas por cualquier
+      // transferencia activa).
+      const { data } = await productosService.getSeriesProducto(fila.id_producto, idDepositoOrigen, {
+        excluirTransferencia: idTransferencia,
+      });
       setSeriesDisponibles(data.series ?? []);
     } catch {
       setErrorSeries('Error al cargar las series');
@@ -168,7 +173,7 @@ function SeriesSelector({ fila, idDepositoOrigen, onChange }) {
 }
 
 // ── Fila del carrito (compacta, usada en el panel lateral / bottom sheet) ────
-function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange, onQtyDelta, onRemove }) {
+function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, idTransferencia, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p => {
@@ -256,6 +261,7 @@ function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, onChange,
           key={fila.id_producto}
           fila={fila}
           idDepositoOrigen={idDepositoOrigen}
+          idTransferencia={idTransferencia}
           onChange={onChange}
         />
       )}
@@ -324,7 +330,13 @@ export default function TransferenciaForm() {
           id_deposito_destino: String(t.id_deposito_destino),
           observaciones: t.observaciones ?? '',
         });
-        setItems((t.detalle ?? []).map(d => ({ id_producto: String(d.id_producto), cantidad: Number(d.cantidad_enviada), series: [] })));
+        // Hidratar las series ya reservadas por cada línea: si quedaran en []
+        // cualquier guardado del borrador las soltaría en silencio.
+        setItems((t.detalle ?? []).map(d => ({
+          id_producto: String(d.id_producto),
+          cantidad: Number(d.cantidad_enviada),
+          series: (d.series ?? []).map(s => s.id_serie),
+        })));
         return inventarioService.getStockDeposito(t.id_deposito_origen).then(rs => {
           const map = {};
           (rs.data.stock ?? []).forEach(s => { map[String(s.id_producto)] = s.cantidad_disponible; });
@@ -578,6 +590,7 @@ export default function TransferenciaForm() {
               productos={productos}
               stockOrigen={stockOrigen}
               idDepositoOrigen={form.id_deposito_origen}
+              idTransferencia={esEdicion ? id : null}
               onChange={(k, v) => updateItem(i, k, v)}
               onQtyDelta={d => cambiarCantidad(i, d)}
               onRemove={() => removeItem(i)}

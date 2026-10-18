@@ -441,9 +441,16 @@ const getSeriesProducto = async (req, res) => {
     );
     const cantidad_stock = stockRow ? stockRow.cantidad : 0;
 
+    // ?excluir_transferencia=<id>: lo usa el modo edición de una transferencia
+    // en borrador para ver también las series que ella misma ya reservó.
+    // ?incluir_reservadas=1: lo usa el panel de backfill del detalle de
+    // producto (cuenta series contra stock físico, ver listarDisponibles).
+    const excluirTransferencia = Number(req.query.excluir_transferencia);
     const series = await productoSeries.listarDisponibles(db, {
       id_producto: id,
       id_deposito,
+      excluirTransferencia: Number.isInteger(excluirTransferencia) && excluirTransferencia > 0 ? excluirTransferencia : null,
+      incluirReservadas: req.query.incluir_reservadas === '1',
     });
 
     return res.json({ cantidad_stock, series });

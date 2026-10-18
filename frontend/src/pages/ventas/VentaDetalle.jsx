@@ -286,6 +286,10 @@ export default function VentaDetalle() {
   const puedeDevolver    = puede('devolucion_crear', 'ventas') && ['EMITIDA', 'PARCIAL', 'PAGADA'].includes(venta.estado);
   const puedeImprimir    = puede('imprimir',         'ventas') && venta.estado !== 'BORRADOR';
   const puedePreview     = venta.estado === 'BORRADOR';
+  // En una venta anulada/devuelta no se ofrece cargar serie: el backend lo
+  // rechaza (la serie quedaría VENDIDA ligada a una venta muerta, perdida
+  // del inventario). Lo que ya esté cargado se sigue mostrando.
+  const ventaCerrada     = ['ANULADA', 'DEVUELTA'].includes(venta.estado);
   const puedeVerUtilidad = puede('ver_utilidad',     'ventas');
   const tieneSeriesSinFoto = (venta.detalle ?? []).some(d => d.numero_serie && !d.imagen_serie_url);
 
@@ -481,7 +485,7 @@ export default function VentaDetalle() {
                             </button>
                           )}
                         </div>
-                      ) : editandoSerie === d.id_detalle ? (
+                      ) : ventaCerrada ? null : editandoSerie === d.id_detalle ? (
                         <div className="mt-1 flex flex-col gap-1">
                           <div className="flex items-center gap-1.5">
                             <input
@@ -505,7 +509,7 @@ export default function VentaDetalle() {
                           </div>
                           {cargandoSeriesEdit ? (
                             <p className="text-[10px] text-zinc-400">Cargando series…</p>
-                          ) : seriesDisponiblesEdit.length > 0 && (
+                          ) : seriesDisponiblesEdit.length > 0 && Number(d.cantidad) === 1 && (
                             <select
                               value={serieIdElegida ?? ''}
                               onChange={e => {
@@ -626,7 +630,7 @@ export default function VentaDetalle() {
                   )}
                 </div>
                 {/* Serie en mobile */}
-                {!d.numero_serie && (
+                {!d.numero_serie && !ventaCerrada && (
                   editandoSerie === d.id_detalle ? (
                     <div className="mt-1.5 flex flex-col gap-1">
                       <div className="flex items-center gap-1.5">
@@ -651,7 +655,7 @@ export default function VentaDetalle() {
                       </div>
                       {cargandoSeriesEdit ? (
                         <p className="text-[10px] text-zinc-400">Cargando series…</p>
-                      ) : seriesDisponiblesEdit.length > 0 && (
+                      ) : seriesDisponiblesEdit.length > 0 && Number(d.cantidad) === 1 && (
                         <select
                           value={serieIdElegida ?? ''}
                           onChange={e => {

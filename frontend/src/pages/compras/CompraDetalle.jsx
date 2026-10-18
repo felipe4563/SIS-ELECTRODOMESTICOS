@@ -276,7 +276,13 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
                   return (
                     <div key={s.id_serie} className="relative flex flex-col items-center">
                       {editable && !editandoEsta && (
-                        <button onClick={() => onEliminar(s.id_serie)}
+                        <button onClick={async () => {
+                          setErr('');
+                          // El backend rechaza (409) borrar una unidad vendida,
+                          // en tránsito o reservada por una transferencia.
+                          try { await onEliminar(s.id_serie); }
+                          catch (e) { setErr(e?.response?.data?.error ?? 'Error al eliminar'); }
+                        }}
                           className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 rounded-full bg-zinc-700 text-white text-xs leading-none flex items-center justify-center hover:bg-red-500 transition-colors">
                           ×
                         </button>

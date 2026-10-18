@@ -1103,6 +1103,22 @@ const subirImagenDetalle = async (req, res) => {
 
 // ── Agregar número de serie + foto de una unidad recibida ─────────────────────
 
+// Una serie solo se puede renombrar o borrar desde la compra mientras sea una
+// unidad "quieta": EN_STOCK y sin reserva de una transferencia todavía activa
+// (no ANULADA ni RECIBIDA). Si ya se vendió o está en tránsito/reservada,
+// borrarla destruye justamente el registro que la trazabilidad debe conservar,
+// y renombrarla hace que deje de coincidir con lo que muestra la venta o la
+// transferencia. Devuelve el motivo del rechazo, o null si se puede tocar.
+function motivoSerieNoEditable(serie) {
+  if (serie.estado === 'VENDIDA') return 'Esta unidad ya fue vendida: su número de serie no se puede modificar ni eliminar';
+  if (serie.estado === 'EN_TRANSITO') return 'Esta unidad está en tránsito por una transferencia: su número de serie no se puede modificar ni eliminar';
+  if (serie.estado !== 'EN_STOCK') return 'El número de serie no se puede modificar en su estado actual';
+  if (Number(serie.reservada_transferencia)) return 'Esta unidad está reservada por una transferencia activa: su número de serie no se puede modificar ni eliminar';
+  return null;
+}
+
+const MSG_SERIE_DUPLICADA = 'Ya existe ese número de serie para este producto';
+
 const agregarSerieDetalle = async (req, res) => {
   try {
     const { id, idDetalle } = req.params;
@@ -1147,10 +1163,17 @@ const agregarSerieDetalle = async (req, res) => {
       : depositoRow.id_deposito_destino;
 
     const imagenUrl = req.file ? `/uploads/compras/${req.file.filename}` : null;
-    const [r] = await db.promise().query(
-      `INSERT INTO compra_detalle_series (id_detalle, id_producto, numero_serie, imagen_url, id_deposito_actual, id_usuario) VALUES (?,?,?,?,?,?)`,
-      [idDetalle, detalle.id_producto, numero_serie.trim(), imagenUrl, idDepositoActual, req.user.id_usuario]
-    );
+    let r;
+    try {
+      [r] = await db.promise().query(
+        `INSERT INTO compra_detalle_series (id_detalle, id_producto, numero_serie, imagen_url, id_deposito_actual, id_usuario) VALUES (?,?,?,?,?,?)`,
+        [idDetalle, detalle.id_producto, numero_serie.trim(), imagenUrl, idDepositoActual, req.user.id_usuario]
+      );
+    } catch (err) {
+      // UNIQUE (id_producto, numero_serie): mismo criterio que cargarManual.
+      if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: MSG_SERIE_DUPLICADA });
+      throw err;
+    }
 
     await auditLog(req.user.id_usuario, 'compra_detalle_series', r.insertId, 'INSERT', getIp(req));
     res.status(201).json({ id_serie: r.insertId, numero_serie: numero_serie.trim(), imagen_url: imagenUrl });
@@ -1168,27 +1191,44 @@ const editarSerieDetalle = async (req, res) => {
       return res.status(400).json({ error: 'El número de serie es requerido' });
 
     const [[serie]] = await db.promise().query(
-      `SELECT s.id_serie, s.imagen_url FROM compra_detalle_series s
+      `SELECT s.id_serie, s.imagen_url, s.estado,
+              (s.id_transferencia_detalle IS NOT NULL AND t2.estado NOT IN ('ANULADA', 'RECIBIDA')) AS reservada_transferencia
+       FROM compra_detalle_series s
        JOIN compra_detalle cd ON cd.id_detalle = s.id_detalle
+       LEFT JOIN transferencia_detalle td ON td.id_detalle = s.id_transferencia_detalle
+       LEFT JOIN transferencias t2 ON t2.id_transferencia = td.id_transferencia
        WHERE s.id_serie = ? AND s.id_detalle = ? AND cd.id_compra = ?`, [idSerie, idDetalle, id]
     );
     if (!serie) return res.status(404).json({ error: 'Número de serie no encontrado' });
+    const motivo = motivoSerieNoEditable(serie);
+    if (motivo) return res.status(409).json({ error: motivo });
 
+    // El UPDATE repite la condición (EN_STOCK) para no pisar una serie que
+    // se vendió/envió entre el SELECT de arriba y este UPDATE.
     const imagenNueva = req.file ? `/uploads/compras/${req.file.filename}` : null;
-    if (imagenNueva) {
-      await db.promise().query(
-        `UPDATE compra_detalle_series SET numero_serie = ?, imagen_url = ? WHERE id_serie = ?`,
-        [numero_serie.trim(), imagenNueva, idSerie]
-      );
-      if (serie.imagen_url) {
-        const archivo = path.join(__dirname, '..', serie.imagen_url.replace(/^\/+/, ''));
-        fs.unlink(archivo, () => {});
+    let upd;
+    try {
+      if (imagenNueva) {
+        [upd] = await db.promise().query(
+          `UPDATE compra_detalle_series SET numero_serie = ?, imagen_url = ? WHERE id_serie = ? AND estado = 'EN_STOCK'`,
+          [numero_serie.trim(), imagenNueva, idSerie]
+        );
+      } else {
+        [upd] = await db.promise().query(
+          `UPDATE compra_detalle_series SET numero_serie = ? WHERE id_serie = ? AND estado = 'EN_STOCK'`,
+          [numero_serie.trim(), idSerie]
+        );
       }
-    } else {
-      await db.promise().query(
-        `UPDATE compra_detalle_series SET numero_serie = ? WHERE id_serie = ?`,
-        [numero_serie.trim(), idSerie]
-      );
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: MSG_SERIE_DUPLICADA });
+      throw err;
+    }
+    if (upd.affectedRows !== 1) {
+      return res.status(409).json({ error: 'La unidad cambió de estado mientras se editaba; recargá e intentá de nuevo' });
+    }
+    if (imagenNueva && serie.imagen_url) {
+      const archivo = path.join(__dirname, '..', serie.imagen_url.replace(/^\/+/, ''));
+      fs.unlink(archivo, () => {});
     }
 
     await auditLog(req.user.id_usuario, 'compra_detalle_series', idSerie, 'UPDATE', getIp(req));
@@ -1203,13 +1243,27 @@ const eliminarSerieDetalle = async (req, res) => {
   try {
     const { id, idDetalle, idSerie } = req.params;
     const [[serie]] = await db.promise().query(
-      `SELECT s.imagen_url FROM compra_detalle_series s
+      `SELECT s.imagen_url, s.estado,
+              (s.id_transferencia_detalle IS NOT NULL AND t2.estado NOT IN ('ANULADA', 'RECIBIDA')) AS reservada_transferencia
+       FROM compra_detalle_series s
        JOIN compra_detalle cd ON cd.id_detalle = s.id_detalle
+       LEFT JOIN transferencia_detalle td ON td.id_detalle = s.id_transferencia_detalle
+       LEFT JOIN transferencias t2 ON t2.id_transferencia = td.id_transferencia
        WHERE s.id_serie = ? AND s.id_detalle = ? AND cd.id_compra = ?`, [idSerie, idDetalle, id]
     );
     if (!serie) return res.status(404).json({ error: 'Número de serie no encontrado' });
+    const motivo = motivoSerieNoEditable(serie);
+    if (motivo) return res.status(409).json({ error: motivo });
 
-    await db.promise().query(`DELETE FROM compra_detalle_series WHERE id_serie = ?`, [idSerie]);
+    // Misma condición en el DELETE (EN_STOCK, sin venta ligada) por si cambió
+    // de estado entre el SELECT y acá.
+    const [del] = await db.promise().query(
+      `DELETE FROM compra_detalle_series WHERE id_serie = ? AND estado = 'EN_STOCK' AND id_venta_detalle IS NULL`,
+      [idSerie]
+    );
+    if (del.affectedRows !== 1) {
+      return res.status(409).json({ error: 'La unidad cambió de estado mientras se eliminaba; recargá e intentá de nuevo' });
+    }
     if (serie.imagen_url) {
       const archivo = path.join(__dirname, '..', serie.imagen_url.replace(/^\/+/, ''));
       fs.unlink(archivo, () => {});

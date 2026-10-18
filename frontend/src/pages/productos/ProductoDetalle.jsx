@@ -423,7 +423,7 @@ function TabStock({ idProducto }) {
     const conStock = filas.filter(s => Number(s.cantidad_disponible) > 0);
     if (conStock.length === 0) return;
     Promise.all(conStock.map(s =>
-      productosService.getSeriesProducto(idProducto, s.id_deposito)
+      productosService.getSeriesProducto(idProducto, s.id_deposito, { incluirReservadas: true })
         .then(({ data }) => ({ id_deposito: s.id_deposito, cargado: data.series.length, total: data.cantidad_stock }))
         .catch(() => null)
     )).then(resultados => {
@@ -557,7 +557,7 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
   const [error,       setError]       = useState('');
 
   useEffect(() => {
-    productosService.getSeriesProducto(idProducto, idDeposito)
+    productosService.getSeriesProducto(idProducto, idDeposito, { incluirReservadas: true })
       .then(({ data }) => {
         setSeries(data.series);
         setTotal(data.cantidad_stock);
