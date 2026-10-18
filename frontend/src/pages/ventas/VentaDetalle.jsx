@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
+import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useEmpresa } from '../../contexts/EmpresaContext';
 import { descargarVentaPDF } from './VentaPDF';
@@ -98,20 +99,52 @@ export default function VentaDetalle() {
   const [previewSerie,     setPreviewSerie]     = useState(null); // { url, id_detalle }
   const [editandoSerie,    setEditandoSerie]    = useState(null); // id_detalle con el input abierto
   const [serieTexto,       setSerieTexto]       = useState('');
+  const [serieIdElegida,   setSerieIdElegida]   = useState(null); // id_serie elegido del selector (opcional)
   const [guardandoSerie,   setGuardandoSerie]   = useState(null); // id_detalle guardando
+  const [seriesDisponiblesEdit, setSeriesDisponiblesEdit] = useState([]);
+  const [cargandoSeriesEdit,    setCargandoSeriesEdit]    = useState(false);
   const serieInputRef = useRef(null);
   const serieDetalleRef = useRef(null);
   const backendBase = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+
+  // Al abrir el editor de serie de una línea, cargar las series EN_STOCK de
+  // ese producto en el depósito de esta venta — para ofrecer elegir de una
+  // lista además de tipear a mano (comportamiento manual sin cambios).
+  useEffect(() => {
+    if (!editandoSerie || !venta) return;
+    const detalle = (venta.detalle ?? []).find(d => d.id_detalle === editandoSerie);
+    if (!detalle) return;
+    (async () => {
+      setCargandoSeriesEdit(true);
+      try {
+        const r = await productosService.getSeriesProducto(detalle.id_producto, venta.id_deposito);
+        setSeriesDisponiblesEdit(r.data.series ?? []);
+      } catch {
+        setSeriesDisponiblesEdit([]);
+      } finally {
+        setCargandoSeriesEdit(false);
+      }
+    })();
+  }, [editandoSerie]); // eslint-disable-line
+
+  const cancelarEdicionSerie = () => {
+    setEditandoSerie(null);
+    setSerieTexto('');
+    setSerieIdElegida(null);
+  };
 
   const handleGuardarSerie = async (id_detalle) => {
     if (!serieTexto.trim()) return;
     setGuardandoSerie(id_detalle);
     try {
-      await ventasService.actualizarSerie(id_detalle, serieTexto.trim());
+      await ventasService.actualizarSerie(id_detalle, serieTexto.trim(), serieIdElegida ?? undefined);
       setEditandoSerie(null);
       setSerieTexto('');
+      setSerieIdElegida(null);
       await cargar();
-    } catch { /* silencioso */ }
+    } catch (err) {
+      setPageError(err.response?.data?.mensaje ?? 'Error al guardar el número de serie');
+    }
     finally { setGuardandoSerie(null); }
   };
 
@@ -449,29 +482,50 @@ export default function VentaDetalle() {
                           )}
                         </div>
                       ) : editandoSerie === d.id_detalle ? (
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <input
-                            type="text" autoFocus value={serieTexto}
-                            onChange={e => setSerieTexto(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
-                            placeholder="N° de serie"
-                            className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
-                          />
-                          <button
-                            onClick={() => handleGuardarSerie(d.id_detalle)}
-                            disabled={guardandoSerie === d.id_detalle}
-                            className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
-                            {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
-                          </button>
-                          <button
-                            onClick={() => { setEditandoSerie(null); setSerieTexto(''); }}
-                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
-                            cancelar
-                          </button>
+                        <div className="mt-1 flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text" autoFocus value={serieTexto}
+                              onChange={e => { setSerieTexto(e.target.value); setSerieIdElegida(null); }}
+                              onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
+                              placeholder="N° de serie"
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
+                            />
+                            <button
+                              onClick={() => handleGuardarSerie(d.id_detalle)}
+                              disabled={guardandoSerie === d.id_detalle}
+                              className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                              {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
+                            </button>
+                            <button
+                              onClick={cancelarEdicionSerie}
+                              className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                              cancelar
+                            </button>
+                          </div>
+                          {cargandoSeriesEdit ? (
+                            <p className="text-[10px] text-zinc-400">Cargando series…</p>
+                          ) : seriesDisponiblesEdit.length > 0 && (
+                            <select
+                              value={serieIdElegida ?? ''}
+                              onChange={e => {
+                                const idSerie = e.target.value;
+                                const s = seriesDisponiblesEdit.find(x => String(x.id_serie) === idSerie);
+                                setSerieIdElegida(idSerie ? Number(idSerie) : null);
+                                setSerieTexto(s ? s.numero_serie : '');
+                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-40"
+                            >
+                              <option value="">— o elegir de la lista —</option>
+                              {seriesDisponiblesEdit.map(s => (
+                                <option key={s.id_serie} value={s.id_serie}>{s.numero_serie}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       ) : (
                         <button
-                          onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); }}
+                          onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); setSerieIdElegida(null); }}
                           className="text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 mt-0.5 italic underline">
                           + agregar serie
                         </button>
@@ -574,29 +628,50 @@ export default function VentaDetalle() {
                 {/* Serie en mobile */}
                 {!d.numero_serie && (
                   editandoSerie === d.id_detalle ? (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <input
-                        type="text" autoFocus value={serieTexto}
-                        onChange={e => setSerieTexto(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
-                        placeholder="N° de serie"
-                        className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
-                      />
-                      <button
-                        onClick={() => handleGuardarSerie(d.id_detalle)}
-                        disabled={guardandoSerie === d.id_detalle}
-                        className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
-                        {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
-                      </button>
-                      <button
-                        onClick={() => { setEditandoSerie(null); setSerieTexto(''); }}
-                        className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
-                        cancelar
-                      </button>
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text" autoFocus value={serieTexto}
+                          onChange={e => { setSerieTexto(e.target.value); setSerieIdElegida(null); }}
+                          onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
+                          placeholder="N° de serie"
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
+                        />
+                        <button
+                          onClick={() => handleGuardarSerie(d.id_detalle)}
+                          disabled={guardandoSerie === d.id_detalle}
+                          className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                          {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
+                        </button>
+                        <button
+                          onClick={cancelarEdicionSerie}
+                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                          cancelar
+                        </button>
+                      </div>
+                      {cargandoSeriesEdit ? (
+                        <p className="text-[10px] text-zinc-400">Cargando series…</p>
+                      ) : seriesDisponiblesEdit.length > 0 && (
+                        <select
+                          value={serieIdElegida ?? ''}
+                          onChange={e => {
+                            const idSerie = e.target.value;
+                            const s = seriesDisponiblesEdit.find(x => String(x.id_serie) === idSerie);
+                            setSerieIdElegida(idSerie ? Number(idSerie) : null);
+                            setSerieTexto(s ? s.numero_serie : '');
+                          }}
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-40"
+                        >
+                          <option value="">— o elegir de la lista —</option>
+                          {seriesDisponiblesEdit.map(s => (
+                            <option key={s.id_serie} value={s.id_serie}>{s.numero_serie}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); }}
+                      onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); setSerieIdElegida(null); }}
                       className="mt-1.5 text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 italic underline">
                       + agregar serie
                     </button>

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { cajaService } from '../../services/caja.service';
 import { clientesService } from '../../services/clientes.service';
+import { productosService } from '../../services/productos.service';
 import api from '../../api/axios';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
@@ -200,8 +201,179 @@ function CartLineaCombo({ fila, onQtyDelta, onRemove }) {
   );
 }
 
+// ── Selector de números de serie para una línea del carrito de venta ────────
+// Mismo patrón que TransferenciaForm.jsx (Task 5): checkboxes limitados a
+// fila.cantidad, acento amber. Guarda fila.series como array de
+// {id_serie, numero_serie} (no solo el id) para poder mostrar el texto
+// elegido en el campo "N° de serie" (de solo lectura mientras haya series
+// elegidas) sin depender de que este componente siga montado. Además
+// permite adjuntar una foto opcional (fila.fotoSerie = {numero_serie, file})
+// para una de las series elegidas (o para el número tipeado a mano) — el
+// archivo se sube recién después de crear la venta (ver guardar()).
+function SeriesSelector({ fila, idDeposito, onChange }) {
+  const [seriesAbierto,       setSeriesAbierto]       = useState(false);
+  const [seriesDisponibles,   setSeriesDisponibles]   = useState([]);
+  const [cargandoSeries,      setCargandoSeries]      = useState(false);
+  const [errorSeries,         setErrorSeries]         = useState('');
+  const [fotoObjetivoAbierto, setFotoObjetivoAbierto] = useState(false);
+  const fileInputRef    = useRef(null);
+  const fotoObjetivoRef = useRef(null);
+
+  const seriesSel = fila.series ?? []; // [{id_serie, numero_serie}]
+
+  // Si la cantidad baja por debajo de lo ya elegido, recortar la selección.
+  useEffect(() => {
+    if (seriesSel.length > Number(fila.cantidad)) {
+      const recortado = seriesSel.slice(0, Math.max(0, Number(fila.cantidad)));
+      onChange({ series: recortado, numero_serie: recortado.map(s => s.numero_serie).join(', ') });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fila.cantidad]);
+
+  // Opciones válidas para adjuntar la foto: las series elegidas, o el
+  // número tipeado a mano si no se eligió ninguna por el selector.
+  const opcionesFoto = seriesSel.length
+    ? seriesSel.map(s => s.numero_serie)
+    : (fila.numero_serie?.trim() ? [fila.numero_serie.trim()] : []);
+
+  // Si la foto quedó apuntando a un número que ya no es válido (se
+  // destildó esa serie o se editó el texto a mano), se descarta.
+  useEffect(() => {
+    if (fila.fotoSerie && !opcionesFoto.includes(fila.fotoSerie.numero_serie)) {
+      onChange({ fotoSerie: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fila.series, fila.numero_serie]);
+
+  const toggleSelectorSeries = async () => {
+    const yaAbierto = seriesAbierto;
+    setSeriesAbierto(!yaAbierto);
+    if (yaAbierto || seriesDisponibles.length || cargandoSeries) return;
+    setCargandoSeries(true);
+    setErrorSeries('');
+    try {
+      const { data } = await productosService.getSeriesProducto(fila.id_producto, idDeposito);
+      setSeriesDisponibles(data.series ?? []);
+    } catch {
+      setErrorSeries('Error al cargar las series');
+    } finally {
+      setCargandoSeries(false);
+    }
+  };
+
+  const toggleSerie = (s) => {
+    const marcada = seriesSel.some(x => x.id_serie === s.id_serie);
+    let nuevo;
+    if (marcada) {
+      nuevo = seriesSel.filter(x => x.id_serie !== s.id_serie);
+    } else {
+      if (seriesSel.length >= Number(fila.cantidad)) return;
+      nuevo = [...seriesSel, { id_serie: s.id_serie, numero_serie: s.numero_serie }];
+    }
+    onChange({ series: nuevo, numero_serie: nuevo.map(x => x.numero_serie).join(', ') });
+  };
+
+  const elegirArchivoPara = (numeroSerie) => {
+    fotoObjetivoRef.current = numeroSerie;
+    fileInputRef.current?.click();
+  };
+
+  const onArchivoElegido = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    onChange({ fotoSerie: { numero_serie: fotoObjetivoRef.current, file } });
+  };
+
+  return (
+    <div className="mt-2 col-span-2">
+      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={onArchivoElegido} />
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          type="button"
+          onClick={toggleSelectorSeries}
+          className="text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+        >
+          {seriesSel.length > 0 ? `Series elegidas (${seriesSel.length}/${fila.cantidad})` : 'Elegir series'}
+        </button>
+
+        {fila.fotoSerie ? (
+          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400">
+            <Ic id="camera" size={11} /> {fila.fotoSerie.numero_serie || 'foto'}
+            <button type="button" onClick={() => onChange({ fotoSerie: null })} className="ml-0.5 text-amber-500 hover:text-amber-700">×</button>
+          </span>
+        ) : opcionesFoto.length === 1 ? (
+          <button
+            type="button"
+            onClick={() => elegirArchivoPara(opcionesFoto[0])}
+            className="text-[11px] px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 inline-flex items-center gap-1 transition-colors"
+          >
+            <Ic id="camera" size={11} /> + Foto
+          </button>
+        ) : opcionesFoto.length > 1 ? (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFotoObjetivoAbierto(v => !v)}
+              className="text-[11px] px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 inline-flex items-center gap-1 transition-colors"
+            >
+              <Ic id="camera" size={11} /> + Foto
+            </button>
+            {fotoObjetivoAbierto && (
+              <div className="absolute z-10 mt-1 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg space-y-0.5 whitespace-nowrap">
+                {opcionesFoto.map(n => (
+                  <button
+                    key={n} type="button"
+                    onClick={() => { setFotoObjetivoAbierto(false); elegirArchivoPara(n); }}
+                    className="block w-full text-left text-[11px] px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-700 font-mono text-zinc-700 dark:text-zinc-300"
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {seriesAbierto && (
+        <div className="mt-1.5 p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40 max-h-40 overflow-y-auto space-y-1">
+          {cargandoSeries ? (
+            <p className="text-[11px] text-zinc-400 text-center py-2">Cargando series…</p>
+          ) : errorSeries ? (
+            <p className="text-[11px] text-red-500 text-center py-2">{errorSeries}</p>
+          ) : seriesDisponibles.length === 0 ? (
+            <p className="text-[11px] text-zinc-400 text-center py-2">Sin series disponibles en este depósito</p>
+          ) : (
+            seriesDisponibles.map(s => {
+              const marcada   = seriesSel.some(x => x.id_serie === s.id_serie);
+              const bloqueada = !marcada && seriesSel.length >= Number(fila.cantidad);
+              return (
+                <label
+                  key={s.id_serie}
+                  className={`flex items-center gap-1.5 text-[11px] px-1.5 py-1 rounded-lg cursor-pointer ${bloqueada ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white dark:hover:bg-zinc-800'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcada}
+                    disabled={bloqueada}
+                    onChange={() => toggleSerie(s)}
+                    className="rounded accent-amber-500"
+                  />
+                  <span className="font-mono text-zinc-700 dark:text-zinc-300">{s.numero_serie}</span>
+                </label>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Línea del carrito (panel de orden) ─────────────────────────────────── */
-function CartLinea({ fila, prod, disponible, impuestos, tipoVenta, expandido, onToggleExpand, onQtyDelta, onChange, onRemove }) {
+function CartLinea({ fila, prod, disponible, impuestos, tipoVenta, idDeposito, expandido, onToggleExpand, onQtyDelta, onChange, onRemove }) {
   const precioBase   = resolverPrecio(prod, tipoVenta);
   const sobreprecio  = Math.max(0, Number(fila.precio_unitario) - precioBase);
   const base         = Number(fila.cantidad ?? 0) * Number(fila.precio_unitario ?? 0);
@@ -301,10 +473,17 @@ function CartLinea({ fila, prod, disponible, impuestos, tipoVenta, expandido, on
             <label className="block text-[10px] text-zinc-400 mb-1">N° de serie</label>
             <input
               type="text" value={fila.numero_serie ?? ''} placeholder="Opcional"
+              readOnly={Boolean(fila.series?.length)}
               onChange={e => onChange({ numero_serie: e.target.value })}
-              className="w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono"
+              className={`w-full px-2 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-yellow-400 font-mono ${
+                fila.series?.length ? 'bg-zinc-100 dark:bg-zinc-700/60 cursor-not-allowed' : 'bg-white dark:bg-zinc-800'
+              }`}
             />
           </div>
+
+          {idDeposito && (
+            <SeriesSelector fila={fila} idDeposito={idDeposito} onChange={onChange} />
+          )}
         </div>
       )}
     </div>
@@ -497,6 +676,8 @@ export default function VentaForm() {
             id_impuesto:   d.id_impuesto ? String(d.id_impuesto) : '',
             impuesto_porc: d.impuesto_porc ?? 0,
             numero_serie:  d.numero_serie ?? '',
+            series:        [],
+            fotoSerie:     null,
           })));
         })
         .catch(() => navigate('/ventas'))
@@ -585,6 +766,8 @@ export default function VentaForm() {
         id_impuesto:     impDef ? String(impDef.id_impuesto) : '',
         impuesto_porc:   impDef ? Number(impDef.porcentaje) : 0,
         numero_serie:    '',
+        series:          [],
+        fotoSerie:       null,
       }];
     });
   }, [stockMap, form.tipo_venta, promociones, impuestos]);
@@ -677,16 +860,52 @@ export default function VentaForm() {
       .map(it => ({ id_combo: it.id_combo, cantidad: it.cantidad }));
     if (!itemsValidos.length && !comboItemsValidos.length) return setError('Agregá al menos un producto o combo con cantidad válida');
 
+    // El payload que espera el backend (Task 6) manda `series` como array de
+    // id_serie por línea — `fotoSerie` (un File, no serializable) nunca va
+    // en este payload, se sube aparte recién cuando ya existe el id_detalle.
+    const itemsPayload = itemsValidos.map(it => {
+      const resto = { ...it };
+      delete resto.fotoSerie;
+      resto.series = it.series?.length ? it.series.map(s => s.id_serie) : undefined;
+      return resto;
+    });
+
     setGuardando(true);
     try {
-      const payload = { ...form, items: [...itemsValidos, ...comboItemsValidos] };
+      const payload = { ...form, items: [...itemsPayload, ...comboItemsValidos] };
       let ventaId = id;
+      let detalleCreado = null;
       if (esEdicion) {
         await ventasService.update(id, payload);
       } else {
         const res = await ventasService.create(payload);
         ventaId = res.data.id_venta;
+        detalleCreado = res.data.detalle ?? null;
       }
+
+      // Subir las fotos de serie pendientes (quedaron en memoria mientras se
+      // armaba el carrito), emparejando cada línea con la fila de `detalle`
+      // cuyo numero_serie coincide — puede haber más filas de detalle que
+      // items enviados (una línea con series elegidas se puede dividir en
+      // varias venta_detalle). Si una sube falla, la venta ya quedó creada:
+      // se avisa cuál línea quedó sin foto para completarla después.
+      const lineasConFoto = itemsValidos.filter(it => it.fotoSerie);
+      const fallosFoto = [];
+      if (!esEdicion && detalleCreado && lineasConFoto.length) {
+        for (const it of lineasConFoto) {
+          const entrada = detalleCreado.find(d => d.numero_serie === it.fotoSerie.numero_serie);
+          if (!entrada) { fallosFoto.push(it.fotoSerie.numero_serie); continue; }
+          try {
+            await ventasService.subirImagenSerie(entrada.id_detalle, it.fotoSerie.file);
+          } catch {
+            fallosFoto.push(it.fotoSerie.numero_serie);
+          }
+        }
+      }
+      if (fallosFoto.length) {
+        window.alert(`La venta se creó correctamente, pero no se pudo subir la foto de la(s) serie(s): ${fallosFoto.join(', ')}. Podés agregarla luego desde el detalle de la venta.`);
+      }
+
       const tieneSeries = itemsValidos.some(it => it.numero_serie?.trim());
       navigate(`/ventas/${ventaId}${tieneSeries ? '?series=1' : ''}`);
     } catch (err) {
@@ -1432,6 +1651,7 @@ export default function VentaForm() {
                         disponible={stockMap[fila.id_producto] ?? null}
                         impuestos={impuestos}
                         tipoVenta={form.tipo_venta}
+                        idDeposito={form.id_deposito}
                         expandido={expandidos.has(fila._key)}
                         onToggleExpand={() => toggleExpandido(fila._key)}
                         onQtyDelta={d => cambiarCantidad(i, d)}
