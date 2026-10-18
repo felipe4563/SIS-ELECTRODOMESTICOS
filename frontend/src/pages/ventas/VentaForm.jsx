@@ -889,12 +889,22 @@ export default function VentaForm() {
       // items enviados (una línea con series elegidas se puede dividir en
       // varias venta_detalle). Si una sube falla, la venta ya quedó creada:
       // se avisa cuál línea quedó sin foto para completarla después.
+      //
+      // Dos líneas distintas pueden terminar con el mismo texto de
+      // numero_serie si se tipeó a mano (sin pasar por el selector, que sí
+      // evita duplicados dentro de una venta vía id_serie — no hay
+      // constraint real de unicidad en el campo de texto libre). Por eso
+      // cada entrada de detalleCreado usada se descarta del pool (`usados`)
+      // antes de buscar la siguiente: así ninguna fila puede recibir dos
+      // fotos ni pisar en silencio el target de otra línea.
       const lineasConFoto = itemsValidos.filter(it => it.fotoSerie);
       const fallosFoto = [];
       if (!esEdicion && detalleCreado && lineasConFoto.length) {
+        const usados = new Set();
         for (const it of lineasConFoto) {
-          const entrada = detalleCreado.find(d => d.numero_serie === it.fotoSerie.numero_serie);
+          const entrada = detalleCreado.find(d => !usados.has(d.id_detalle) && d.numero_serie === it.fotoSerie.numero_serie);
           if (!entrada) { fallosFoto.push(it.fotoSerie.numero_serie); continue; }
+          usados.add(entrada.id_detalle);
           try {
             await ventasService.subirImagenSerie(entrada.id_detalle, it.fotoSerie.file);
           } catch {
