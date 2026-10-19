@@ -165,7 +165,7 @@ const getTransferencia = async (req, res) => {
     // no sabe qué series tenía reservadas cada línea y al guardar las suelta.
     if (detalle.length) {
       const [seriesRows] = await db.promise().query(
-        `SELECT id_serie, numero_serie, estado, id_transferencia_detalle
+        `SELECT id_serie, numero_serie, estado, id_transferencia_detalle, id_deposito_actual
          FROM compra_detalle_series
          WHERE id_transferencia_detalle IN (?)
          ORDER BY id_serie`,
@@ -175,7 +175,7 @@ const getTransferencia = async (req, res) => {
       for (const s of seriesRows) {
         const k = String(s.id_transferencia_detalle);
         if (!porDetalle.has(k)) porDetalle.set(k, []);
-        porDetalle.get(k).push({ id_serie: s.id_serie, numero_serie: s.numero_serie, estado: s.estado });
+        porDetalle.get(k).push({ id_serie: s.id_serie, numero_serie: s.numero_serie, estado: s.estado, id_deposito_actual: s.id_deposito_actual });
       }
       for (const d of detalle) d.series = porDetalle.get(String(d.id_detalle)) ?? [];
     }
@@ -348,7 +348,7 @@ const enviarTransferencia = async (req, res) => {
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
     );
     if (!t) throw new ApiError(404, 'Transferencia no encontrada');
-    if (!['SOLICITADA', 'EN_TRANSITO'].includes(t.estado)) {
+    if (!['SOLICITADA', 'EN_TRANSITO', 'PARCIAL'].includes(t.estado)) {
       throw new ApiError(400, `No se puede enviar una transferencia en estado ${t.estado}`);
     }
 
@@ -371,7 +371,7 @@ const enviarTransferencia = async (req, res) => {
         if (!item) continue;
         const pendienteDespacho = Number(item.cantidad_enviada) - Number(item.cantidad_despachada);
         const cant = Math.min(Number(it.cantidad_a_enviar ?? 0), pendienteDespacho);
-        if (cant > 0) aEnviar.push({ ...item, cantidad_a_enviar: cant });
+        if (cant > 0) aEnviar.push({ ...item, cantidad_a_enviar: cant, series_elegidas: it.series });
       }
     } else {
       for (const item of detalle) {
@@ -435,18 +435,40 @@ const enviarTransferencia = async (req, res) => {
       // demás quedan EN_STOCK para un despacho posterior. Sin el filtro de
       // estado + LIMIT, un envío parcial movía todas las series y el envío
       // del resto fallaba siempre con 409 (sin salida desde la UI).
+      // El filtro por id_deposito_actual = origen es igual de necesario:
+      // confirmarRecepcion() no limpia id_transferencia_detalle, así que una
+      // serie ya recibida en un envío parcial anterior queda EN_STOCK pero
+      // en el depósito DESTINO, todavía "enganchada" a esta línea. Sin este
+      // filtro, un envío posterior la volvía a elegir (está EN_STOCK) y
+      // moverATransito fallaba con 409 porque ya no estaba en el origen.
       // Si alguna ya no está disponible (otra transferencia/venta la tomó
       // entretanto), moverATransito lanza SERIE_NO_DISPONIBLE y el catch de
       // abajo revierte toda la operación (stock y kardex incluidos).
-      const [seriesRows] = await conn.query(
-        `SELECT id_serie FROM compra_detalle_series
-         WHERE id_transferencia_detalle = ? AND estado = 'EN_STOCK'
-         ORDER BY id_serie
-         LIMIT ?`,
-        [item.id_detalle, Math.floor(Number(item.cantidad_a_enviar))]
-      );
-      if (seriesRows.length) {
-        await productoSeries.moverATransito(dbTx(conn), seriesRows.map(r => r.id_serie), {
+      // Si el usuario eligió explícitamente cuáles series despacha en este
+      // envío (item.series_elegidas), se respeta esa elección en vez de
+      // tomar las primeras por id; se valida que sigan EN_STOCK en el
+      // origen antes de usarlas.
+      let idsSerieEnviar;
+      if (Array.isArray(item.series_elegidas) && item.series_elegidas.length) {
+        idsSerieEnviar = item.series_elegidas.slice(0, Math.floor(Number(item.cantidad_a_enviar)));
+        const [chk] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series
+           WHERE id_serie IN (?) AND id_transferencia_detalle = ? AND estado = 'EN_STOCK' AND id_deposito_actual = ?`,
+          [idsSerieEnviar, item.id_detalle, t.id_deposito_origen]
+        );
+        if (chk.length !== idsSerieEnviar.length) throw new Error('SERIE_NO_DISPONIBLE');
+      } else {
+        const [seriesRows] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series
+           WHERE id_transferencia_detalle = ? AND estado = 'EN_STOCK' AND id_deposito_actual = ?
+           ORDER BY id_serie
+           LIMIT ?`,
+          [item.id_detalle, t.id_deposito_origen, Math.floor(Number(item.cantidad_a_enviar))]
+        );
+        idsSerieEnviar = seriesRows.map(r => r.id_serie);
+      }
+      if (idsSerieEnviar.length) {
+        await productoSeries.moverATransito(dbTx(conn), idsSerieEnviar, {
           id_transferencia_detalle: item.id_detalle,
           id_deposito_origen: t.id_deposito_origen,
         });
@@ -454,18 +476,23 @@ const enviarTransferencia = async (req, res) => {
     }
 
     const [detallesPost] = await conn.query(
-      `SELECT cantidad_enviada, cantidad_despachada FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
+      `SELECT cantidad_enviada, cantidad_despachada, cantidad_recibida FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
     );
     const todoDespachado = detallesPost.every(d => Number(d.cantidad_despachada) >= Number(d.cantidad_enviada));
+    // Si ya se había recibido algo antes de este envío (transferencia PARCIAL),
+    // un nuevo despacho no debe "ocultar" esa recepción volviendo a EN_TRANSITO:
+    // se mantiene PARCIAL para que el estado siga reflejando lo ya recibido.
+    const hayRecibido = detallesPost.some(d => Number(d.cantidad_recibida) > 0);
+    const nuevoEstadoEnvio = hayRecibido ? 'PARCIAL' : 'EN_TRANSITO';
 
     await conn.query(
       `UPDATE transferencias
-       SET estado = 'EN_TRANSITO',
+       SET estado = ?,
            fecha_envio = COALESCE(fecha_envio, NOW()),
            id_usuario_envia = ?,
            observaciones_envio = COALESCE(?, observaciones_envio)
        WHERE id_transferencia = ?`,
-      [userId, observaciones ?? null, id]
+      [nuevoEstadoEnvio, userId, observaciones ?? null, id]
     );
 
     await auditLog(userId, 'transferencias', id, 'UPDATE', getIp(req));
@@ -578,15 +605,30 @@ const recibirTransferencia = async (req, res) => {
       // el depósito destino (vuelven a EN_STOCK, ya ubicadas ahí). Solo
       // tantas como unidades se reciben en ESTA llamada (recepción parcial):
       // el resto sigue EN_TRANSITO para la próxima recepción.
-      const [seriesRows] = await conn.query(
-        `SELECT id_serie FROM compra_detalle_series
-         WHERE id_transferencia_detalle = ? AND estado = 'EN_TRANSITO'
-         ORDER BY id_serie
-         LIMIT ?`,
-        [det.id_detalle, Math.floor(cantFinal)]
-      );
-      if (seriesRows.length) {
-        await productoSeries.confirmarRecepcion(dbTx(conn), seriesRows.map(r => r.id_serie), {
+      // Si el usuario eligió explícitamente cuáles series está recibiendo
+      // (recv.series), se respeta esa elección en vez de tomar las primeras
+      // por id; se valida que sigan EN_TRANSITO en esta línea antes de usarlas.
+      let idsSerie;
+      if (Array.isArray(recv.series) && recv.series.length) {
+        idsSerie = recv.series.slice(0, Math.floor(cantFinal));
+        const [chk] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series
+           WHERE id_serie IN (?) AND id_transferencia_detalle = ? AND estado = 'EN_TRANSITO'`,
+          [idsSerie, det.id_detalle]
+        );
+        if (chk.length !== idsSerie.length) throw new Error('SERIE_NO_DISPONIBLE');
+      } else {
+        const [seriesRows] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series
+           WHERE id_transferencia_detalle = ? AND estado = 'EN_TRANSITO'
+           ORDER BY id_serie
+           LIMIT ?`,
+          [det.id_detalle, Math.floor(cantFinal)]
+        );
+        idsSerie = seriesRows.map(r => r.id_serie);
+      }
+      if (idsSerie.length) {
+        await productoSeries.confirmarRecepcion(dbTx(conn), idsSerie, {
           id_deposito_destino: t.id_deposito_destino,
         });
       }
@@ -634,13 +676,13 @@ const anularTransferencia = async (req, res) => {
       `SELECT * FROM transferencias WHERE id_transferencia = ?`, [id]
     );
     if (!t) throw new ApiError(404, 'Transferencia no encontrada');
-    if (!['SOLICITADA', 'EN_TRANSITO'].includes(t.estado)) {
+    if (!['SOLICITADA', 'EN_TRANSITO', 'PARCIAL'].includes(t.estado)) {
       throw new ApiError(400, `No se puede anular una transferencia ${t.estado}`);
     }
 
     await conn.beginTransaction();
 
-    if (t.estado === 'EN_TRANSITO') {
+    if (['EN_TRANSITO', 'PARCIAL'].includes(t.estado)) {
       const tmEntrada = await tipoMov('TRANSFERENCIA_ENT');
       const [detalle] = await conn.query(
         `SELECT * FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
@@ -659,11 +701,12 @@ const anularTransferencia = async (req, res) => {
         }
       }
 
-      // Se devuelve al origen lo que realmente salió (cantidad_despachada),
-      // no lo pedido (cantidad_enviada): tras un envío parcial, devolver lo
-      // pedido creaba stock fantasma en el origen.
+      // Se devuelve al origen lo que salió y todavía está en tránsito
+      // (despachado - recibido), no todo lo despachado: lo ya recibido en
+      // destino (transferencia PARCIAL) no debe volver también al origen,
+      // o se duplicaría ese stock en ambos depósitos.
       for (const item of detalle) {
-        const devolver = Number(item.cantidad_despachada);
+        const devolver = Number(item.cantidad_despachada) - Number(item.cantidad_recibida);
         if (!(devolver > 0)) continue;
         await conn.query(
           `UPDATE stock SET cantidad = cantidad + ?, fecha_ult_movimiento = NOW()
