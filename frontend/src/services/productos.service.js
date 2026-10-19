@@ -34,6 +34,7 @@ export const productosService = {
   // opts.excluirTransferencia: id de la transferencia en edición (ve también
   // sus propias series reservadas). opts.incluirReservadas: sin filtro de
   // reserva (solo el panel de backfill del detalle de producto).
+  getSeriesParaEtiquetas: (id_producto) => api.get(`/productos/${id_producto}/series`),
   getSeriesProducto: (id_producto, id_deposito, opts = {}) => {
     const params = {};
     if (opts.excluirTransferencia) params.excluir_transferencia = opts.excluirTransferencia;
@@ -46,5 +47,11 @@ export const productosService = {
     form.append('numero_serie', numero_serie);
     if (file) form.append('imagen', file);
     return api.post(`/productos/${id_producto}/series`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  editarSerieManual: (id_producto, id_serie, numero_serie, file) => {
+    const form = new FormData();
+    form.append('numero_serie', numero_serie);
+    if (file) form.append('imagen', file);
+    return api.put(`/productos/${id_producto}/series/${id_serie}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 };

@@ -168,7 +168,29 @@ const getStockConsolidado = async (req, res) => {
           cantidad_reservada:  r.cantidad_reservada,
           cantidad_disponible: r.cantidad_disponible,
           costo_promedio:      r.costo_promedio,
+          series_cargadas:     0,
+          series_numeros:      [],
         };
+      }
+
+      // Unidades con número de serie cargado, por producto y depósito — para
+      // mostrar "X/Y con serie" y listar los números reales junto al
+      // disponible de cada depósito.
+      const [seriesRows] = await db.promise().query(
+        `SELECT id_producto, id_deposito_actual AS id_deposito, numero_serie
+         FROM compra_detalle_series
+         WHERE estado = 'EN_STOCK'
+           AND id_producto IN (${pageProductIds.map(() => '?').join(',')})
+           AND id_deposito_actual IN (${depositoIds.map(() => '?').join(',')})
+         ORDER BY numero_serie`,
+        [...pageProductIds, ...depositoIds]
+      );
+      for (const r of seriesRows) {
+        const p = porProducto.get(r.id_producto);
+        if (!p || !p.stock[r.id_deposito]) continue;
+        const celda = p.stock[r.id_deposito];
+        celda.series_cargadas += 1;
+        celda.series_numeros.push(r.numero_serie);
       }
     }
 

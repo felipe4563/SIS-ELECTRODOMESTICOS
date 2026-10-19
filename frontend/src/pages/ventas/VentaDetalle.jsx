@@ -455,37 +455,7 @@ export default function VentaDetalle() {
                         </p>
                       )}
                       {/* N° de serie */}
-                      {d.numero_serie ? (
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded">
-                            Serie: {d.numero_serie}
-                          </span>
-                          {d.imagen_serie_url ? (
-                            <>
-                              <button
-                                onClick={() => setPreviewSerie({ url: d.imagen_serie_url, id_detalle: d.id_detalle })}
-                                className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
-                                ver foto
-                              </button>
-                              <span className="text-[10px] text-zinc-300 dark:text-zinc-600">·</span>
-                              <button
-                                onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
-                                disabled={uploadingSerie === d.id_detalle}
-                                className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
-                                {uploadingSerie === d.id_detalle ? 'subiendo…' : 'cambiar'}
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
-                              disabled={uploadingSerie === d.id_detalle}
-                              className="text-[10px] text-zinc-400 hover:text-yellow-600 dark:hover:text-yellow-400 underline"
-                            >
-                              {uploadingSerie === d.id_detalle ? 'subiendo…' : '+ foto serie'}
-                            </button>
-                          )}
-                        </div>
-                      ) : ventaCerrada ? null : editandoSerie === d.id_detalle ? (
+                      {editandoSerie === d.id_detalle ? (
                         <div className="mt-1 flex flex-col gap-1">
                           <div className="flex items-center gap-1.5">
                             <input
@@ -527,7 +497,47 @@ export default function VentaDetalle() {
                             </select>
                           )}
                         </div>
-                      ) : (
+                      ) : d.numero_serie ? (
+                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded">
+                            Serie: {d.numero_serie}
+                          </span>
+                          {d.imagen_serie_url ? (
+                            <>
+                              <button
+                                onClick={() => setPreviewSerie({ url: d.imagen_serie_url, id_detalle: d.id_detalle })}
+                                className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                                ver foto
+                              </button>
+                              <span className="text-[10px] text-zinc-300 dark:text-zinc-600">·</span>
+                              <button
+                                onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
+                                disabled={uploadingSerie === d.id_detalle}
+                                className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                                {uploadingSerie === d.id_detalle ? 'subiendo…' : 'cambiar foto'}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
+                              disabled={uploadingSerie === d.id_detalle}
+                              className="text-[10px] text-zinc-400 hover:text-yellow-600 dark:hover:text-yellow-400 underline"
+                            >
+                              {uploadingSerie === d.id_detalle ? 'subiendo…' : '+ foto serie'}
+                            </button>
+                          )}
+                          {!ventaCerrada && (
+                            <>
+                              <span className="text-[10px] text-zinc-300 dark:text-zinc-600">·</span>
+                              <button
+                                onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(d.numero_serie); setSerieIdElegida(null); }}
+                                className="text-[10px] text-zinc-400 hover:text-yellow-600 dark:hover:text-yellow-400 underline">
+                                editar
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : ventaCerrada ? null : (
                         <button
                           onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); setSerieIdElegida(null); }}
                           className="text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 mt-0.5 italic underline">
@@ -630,59 +640,50 @@ export default function VentaDetalle() {
                   )}
                 </div>
                 {/* Serie en mobile */}
-                {!d.numero_serie && !ventaCerrada && (
-                  editandoSerie === d.id_detalle ? (
-                    <div className="mt-1.5 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text" autoFocus value={serieTexto}
-                          onChange={e => { setSerieTexto(e.target.value); setSerieIdElegida(null); }}
-                          onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
-                          placeholder="N° de serie"
-                          className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
-                        />
-                        <button
-                          onClick={() => handleGuardarSerie(d.id_detalle)}
-                          disabled={guardandoSerie === d.id_detalle}
-                          className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
-                          {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
-                        </button>
-                        <button
-                          onClick={cancelarEdicionSerie}
-                          className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
-                          cancelar
-                        </button>
-                      </div>
-                      {cargandoSeriesEdit ? (
-                        <p className="text-[10px] text-zinc-400">Cargando series…</p>
-                      ) : seriesDisponiblesEdit.length > 0 && Number(d.cantidad) === 1 && (
-                        <select
-                          value={serieIdElegida ?? ''}
-                          onChange={e => {
-                            const idSerie = e.target.value;
-                            const s = seriesDisponiblesEdit.find(x => String(x.id_serie) === idSerie);
-                            setSerieIdElegida(idSerie ? Number(idSerie) : null);
-                            setSerieTexto(s ? s.numero_serie : '');
-                          }}
-                          className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-40"
-                        >
-                          <option value="">— o elegir de la lista —</option>
-                          {seriesDisponiblesEdit.map(s => (
-                            <option key={s.id_serie} value={s.id_serie}>{s.numero_serie}</option>
-                          ))}
-                        </select>
-                      )}
+                {editandoSerie === d.id_detalle ? (
+                  <div className="mt-1.5 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text" autoFocus value={serieTexto}
+                        onChange={e => { setSerieTexto(e.target.value); setSerieIdElegida(null); }}
+                        onKeyDown={e => e.key === 'Enter' && handleGuardarSerie(d.id_detalle)}
+                        placeholder="N° de serie"
+                        className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-28"
+                      />
+                      <button
+                        onClick={() => handleGuardarSerie(d.id_detalle)}
+                        disabled={guardandoSerie === d.id_detalle}
+                        className="text-[10px] text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 underline">
+                        {guardandoSerie === d.id_detalle ? 'guardando…' : 'guardar'}
+                      </button>
+                      <button
+                        onClick={cancelarEdicionSerie}
+                        className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
+                        cancelar
+                      </button>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); setSerieIdElegida(null); }}
-                      className="mt-1.5 text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 italic underline">
-                      + agregar serie
-                    </button>
-                  )
-                )}
-                {d.numero_serie && (
-                  <div className="mt-1.5 flex items-center gap-2">
+                    {cargandoSeriesEdit ? (
+                      <p className="text-[10px] text-zinc-400">Cargando series…</p>
+                    ) : seriesDisponiblesEdit.length > 0 && Number(d.cantidad) === 1 && (
+                      <select
+                        value={serieIdElegida ?? ''}
+                        onChange={e => {
+                          const idSerie = e.target.value;
+                          const s = seriesDisponiblesEdit.find(x => String(x.id_serie) === idSerie);
+                          setSerieIdElegida(idSerie ? Number(idSerie) : null);
+                          setSerieTexto(s ? s.numero_serie : '');
+                        }}
+                        className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 w-40"
+                      >
+                        <option value="">— o elegir de la lista —</option>
+                        {seriesDisponiblesEdit.map(s => (
+                          <option key={s.id_serie} value={s.id_serie}>{s.numero_serie}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                ) : d.numero_serie ? (
+                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 px-1.5 py-0.5 rounded">
                       Serie: {d.numero_serie}
                     </span>
@@ -698,7 +699,7 @@ export default function VentaDetalle() {
                           onClick={() => { serieDetalleRef.current = d.id_detalle; serieInputRef.current?.click(); }}
                           disabled={uploadingSerie === d.id_detalle}
                           className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline">
-                          {uploadingSerie === d.id_detalle ? 'subiendo…' : 'cambiar'}
+                          {uploadingSerie === d.id_detalle ? 'subiendo…' : 'cambiar foto'}
                         </button>
                       </>
                     ) : (
@@ -710,7 +711,23 @@ export default function VentaDetalle() {
                         {uploadingSerie === d.id_detalle ? 'subiendo…' : '+ foto serie'}
                       </button>
                     )}
+                    {!ventaCerrada && (
+                      <>
+                        <span className="text-[10px] text-zinc-300 dark:text-zinc-600">·</span>
+                        <button
+                          onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(d.numero_serie); setSerieIdElegida(null); }}
+                          className="text-[10px] text-zinc-400 hover:text-yellow-600 dark:hover:text-yellow-400 underline">
+                          editar
+                        </button>
+                      </>
+                    )}
                   </div>
+                ) : !ventaCerrada && (
+                  <button
+                    onClick={() => { setEditandoSerie(d.id_detalle); setSerieTexto(''); setSerieIdElegida(null); }}
+                    className="mt-1.5 text-[10px] text-zinc-300 dark:text-zinc-600 hover:text-yellow-600 dark:hover:text-yellow-400 italic underline">
+                    + agregar serie
+                  </button>
                 )}
               </div>
             );

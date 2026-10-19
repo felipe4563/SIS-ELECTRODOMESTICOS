@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaSpinner, FaEdit, FaSave, FaTimes, FaBoxOpen, FaStar, FaTrash, FaPlus, FaExpandAlt } from 'react-icons/fa';
+import { HiQrCode } from 'react-icons/hi2';
 import { productosService } from '../../services/productos.service';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../api/axios';
@@ -413,11 +414,33 @@ function ModalCampoExpandido({ titulo, name, value, editando, guardando, onChang
 }
 
 // ── Tab: Stock por depósito ───────────────────────────────────────────────
-function TabStock({ idProducto }) {
+function TabStock({ idProducto, producto }) {
+  const navigate = useNavigate();
   const [stock,       setStock]       = useState([]);
   const [cargando,    setCargando]    = useState(true);
   const [seriesInfo,  setSeriesInfo]  = useState({}); // id_deposito -> { cargado, total }
   const [panelDeposito, setPanelDeposito] = useState(null); // fila de stock con panel abierto, o null
+  const [imprimiendo, setImprimiendo] = useState(null); // id_deposito en curso, o null
+
+  // Etiquetas solo de ese depósito: una por cada serie cargada ahí, o
+  // (si no tiene series) tantas copias en blanco como unidades totales.
+  const imprimirDeposito = async (s) => {
+    setImprimiendo(s.id_deposito);
+    try {
+      const { data } = await productosService.getSeriesProducto(idProducto, s.id_deposito, { incluirReservadas: true });
+      const base = {
+        nombre: producto.producto, detalle: producto.detalle, codigo_interno: producto.codigo_interno,
+        marca: producto.marca_nombre, modelo: producto.modelo, color: producto.color, capacidad: producto.capacidad,
+        copias: Math.max(1, Math.trunc(Number(s.cantidad)) || 1),
+      };
+      const etiqueta = data.series?.length ? { ...base, series: data.series } : base;
+      navigate('/productos/etiquetas', { state: { etiquetas: [etiqueta] } });
+    } catch {
+      /* si falla la consulta de series, no navegamos */
+    } finally {
+      setImprimiendo(null);
+    }
+  };
 
   const cargarSeriesInfo = useCallback((filas) => {
     const conStock = filas.filter(s => Number(s.cantidad_disponible) > 0);
@@ -449,6 +472,36 @@ function TabStock({ idProducto }) {
 
   const total = stock.reduce((s, r) => s + Number(r.cantidad), 0);
 
+  const celdaSeries = (s) => {
+    const info = seriesInfo[s.id_deposito];
+    const tieneStock = Number(s.cantidad_disponible) > 0;
+    if (!tieneStock) return <span className="text-gray-300 dark:text-zinc-600 text-xs">—</span>;
+    if (!info) return <FaSpinner className="animate-spin h-3 w-3 text-gray-300" />;
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        {info.cargado < info.total ? (
+          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            {info.cargado}/{Math.trunc(info.total)} sin serie
+          </span>
+        ) : (
+          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400">
+            Completo
+          </span>
+        )}
+        <button onClick={() => setPanelDeposito(s)}
+          className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline">
+          Cargar series
+        </button>
+        <button onClick={() => imprimirDeposito(s)} disabled={imprimiendo === s.id_deposito}
+          title="Imprimir QR de este depósito"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors disabled:opacity-50">
+          {imprimiendo === s.id_deposito ? <FaSpinner className="animate-spin h-3.5 w-3.5" /> : <HiQrCode className="h-3.5 w-3.5" />}
+          Imprimir QR
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800">
@@ -465,69 +518,78 @@ function TabStock({ idProducto }) {
           <p className="text-sm">Sin registros de stock</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-zinc-800">
-                {['Depósito','Disponible','Reservada','Total','Últ. Movimiento','Series'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
+        <>
+          {/* Vista tabla — escritorio */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-zinc-800">
+                  {['Depósito','Disponible','Reservada','Total','Últ. Movimiento','Series'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
+                {stock.map(s => (
+                  <tr key={s.id_stock} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-gray-900 dark:text-white">{s.deposito_nombre}</p>
+                      <p className="text-xs text-gray-400 dark:text-zinc-500 font-mono">{s.deposito_codigo}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-bold text-sm ${Number(s.cantidad_disponible) > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {Number(s.cantidad_disponible).toLocaleString('es-BO')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-amber-600 dark:text-amber-400 font-medium">
+                      {Number(s.cantidad_reservada).toLocaleString('es-BO')}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">
+                      {Number(s.cantidad).toLocaleString('es-BO')}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-400 dark:text-zinc-500">
+                      {s.fecha_ult_movimiento
+                        ? new Date(s.fecha_ult_movimiento).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : 'Sin movimientos'}
+                    </td>
+                    <td className="px-4 py-3">{celdaSeries(s)}</td>
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-              {stock.map(s => {
-                const info = seriesInfo[s.id_deposito];
-                const tieneStock = Number(s.cantidad_disponible) > 0;
-                return (
-                <tr key={s.id_stock} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                  <td className="px-4 py-3">
+              </tbody>
+            </table>
+          </div>
+
+          {/* Vista tarjetas — móvil */}
+          <div className="md:hidden divide-y divide-gray-50 dark:divide-zinc-800">
+            {stock.map(s => (
+              <div key={s.id_stock} className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="font-semibold text-gray-900 dark:text-white">{s.deposito_nombre}</p>
                     <p className="text-xs text-gray-400 dark:text-zinc-500 font-mono">{s.deposito_codigo}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`font-bold text-sm ${Number(s.cantidad_disponible) > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {Number(s.cantidad_disponible).toLocaleString('es-BO')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-amber-600 dark:text-amber-400 font-medium">
-                    {Number(s.cantidad_reservada).toLocaleString('es-BO')}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">
-                    {Number(s.cantidad).toLocaleString('es-BO')}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-400 dark:text-zinc-500">
+                  </div>
+                  <p className="text-[11px] text-gray-400 dark:text-zinc-500">
                     {s.fecha_ult_movimiento
                       ? new Date(s.fecha_ult_movimiento).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' })
                       : 'Sin movimientos'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {!tieneStock ? (
-                      <span className="text-gray-300 dark:text-zinc-600 text-xs">—</span>
-                    ) : !info ? (
-                      <FaSpinner className="animate-spin h-3 w-3 text-gray-300" />
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        {info.cargado < info.total ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                            {info.cargado}/{info.total} sin serie
-                          </span>
-                        ) : (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400">
-                            Completo
-                          </span>
-                        )}
-                        <button onClick={() => setPanelDeposito(s)}
-                          className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline">
-                          Cargar series
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );})}
-            </tbody>
-          </table>
-        </div>
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className={`font-bold ${Number(s.cantidad_disponible) > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
+                    Disp: {Number(s.cantidad_disponible).toLocaleString('es-BO')}
+                  </span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                    Reserv: {Number(s.cantidad_reservada).toLocaleString('es-BO')}
+                  </span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    Total: {Number(s.cantidad).toLocaleString('es-BO')}
+                  </span>
+                </div>
+                {celdaSeries(s)}
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {panelDeposito && (
@@ -550,17 +612,23 @@ function TabStock({ idProducto }) {
 function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadTotal, onClose }) {
   const [cargando,    setCargando]    = useState(true);
   const [series,      setSeries]      = useState([]);
-  const [total,       setTotal]       = useState(cantidadTotal);
+  const [total,       setTotal]       = useState(Math.trunc(cantidadTotal));
   const [numeroSerie, setNumeroSerie] = useState('');
   const [file,        setFile]        = useState(null);
   const [guardando,   setGuardando]   = useState(false);
   const [error,       setError]       = useState('');
+  const [editandoId,  setEditandoId]  = useState(null);
+  const [editValor,   setEditValor]   = useState('');
+  const [editFile,    setEditFile]    = useState(null);
+  const [editError,   setEditError]   = useState('');
+  const [editGuardando, setEditGuardando] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState(null); // url de la foto en visor de pantalla completa, o null
 
   useEffect(() => {
     productosService.getSeriesProducto(idProducto, idDeposito, { incluirReservadas: true })
       .then(({ data }) => {
         setSeries(data.series);
-        setTotal(data.cantidad_stock);
+        setTotal(Math.trunc(data.cantidad_stock));
       })
       .catch(() => {})
       .finally(() => setCargando(false));
@@ -591,10 +659,41 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
 
   const cerrar = () => onClose({ cargado: series.length, total });
 
+  const iniciarEdicion = (s) => {
+    setEditandoId(s.id_serie);
+    setEditValor(s.numero_serie);
+    setEditFile(null);
+    setEditError('');
+  };
+
+  const cancelarEdicion = () => {
+    setEditandoId(null); setEditFile(null); setEditError('');
+  };
+
+  const guardarEdicion = async (idSerie) => {
+    if (!editValor.trim()) { setEditError('Ingresá el número de serie'); return; }
+    setEditGuardando(true); setEditError('');
+    try {
+      const { data } = await productosService.editarSerieManual(idProducto, idSerie, editValor.trim(), editFile);
+      const previewUrl = editFile ? URL.createObjectURL(editFile) : null;
+      setSeries(prev => prev.map(s => s.id_serie !== idSerie ? s : {
+        ...s,
+        numero_serie: data.numero_serie,
+        imagen_url: previewUrl ?? s.imagen_url,
+        _preview: previewUrl ? true : s._preview,
+      }));
+      setEditandoId(null); setEditFile(null);
+    } catch (err) {
+      setEditError(err.response?.data?.mensaje || err.response?.data?.error || 'Error al editar');
+    } finally {
+      setEditGuardando(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={cerrar}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={cerrar}>
       <div onClick={e => e.stopPropagation()}
-        className="h-full w-full max-w-md bg-white dark:bg-zinc-900 border-l border-gray-200 dark:border-zinc-800 shadow-xl flex flex-col">
+        className="w-full max-w-lg max-h-[85vh] bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-zinc-800 flex-shrink-0">
           <div>
             <h3 className="text-sm font-semibold text-gray-700 dark:text-zinc-300">Números de serie</h3>
@@ -606,7 +705,7 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
         </div>
 
         {cargando ? (
-          <div className="flex items-center justify-center flex-1 text-gray-400">
+          <div className="flex items-center justify-center flex-1 text-gray-400 py-12">
             <FaSpinner className="animate-spin h-5 w-5" />
           </div>
         ) : (
@@ -633,6 +732,7 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
                   // local (blob:) en vez de la URL del servidor — no pasarlo por
                   // buildImgUrl, que le agregaría el prefijo del backend.
                   const url = s.imagen_url ? (s._preview ? s.imagen_url : buildImgUrl(s.imagen_url)) : null;
+                  const editandoEsta = editandoId === s.id_serie;
                   return (
                     <div key={s.id_serie} className="flex flex-col items-center">
                       {url ? (
@@ -642,7 +742,45 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
                           Sin foto
                         </div>
                       )}
-                      <span className="mt-1 font-mono text-xs text-gray-600 dark:text-zinc-300 text-center break-all">{s.numero_serie}</span>
+                      {editandoEsta ? (
+                        <div className="mt-1.5 w-full flex flex-col items-center gap-1">
+                          <input type="text" value={editValor} onChange={e => setEditValor(e.target.value)}
+                            disabled={editGuardando} autoFocus
+                            className="w-full px-1.5 py-1 rounded-lg border border-gray-200 dark:border-zinc-700 text-xs font-mono text-center bg-white dark:bg-zinc-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                          <label className={`text-[10px] font-semibold cursor-pointer text-amber-600 dark:text-amber-400 hover:underline ${editGuardando ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {editFile ? 'Foto nueva ✓' : (url ? 'Cambiar foto' : 'Agregar foto')}
+                            <input type="file" accept="image/*" capture="environment" className="hidden" disabled={editGuardando}
+                              onChange={e => setEditFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                          <div className="flex gap-1.5">
+                            <button onClick={() => guardarEdicion(s.id_serie)} disabled={editGuardando}
+                              className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50">
+                              {editGuardando ? 'Guardando…' : 'Guardar'}
+                            </button>
+                            <button onClick={cancelarEdicion} disabled={editGuardando}
+                              className="text-[10px] text-gray-400 hover:underline disabled:opacity-50">
+                              Cancelar
+                            </button>
+                          </div>
+                          {editError && <p className="text-[10px] text-red-500 text-center">{editError}</p>}
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex flex-col items-center gap-0.5">
+                          <span className="font-mono text-xs text-gray-600 dark:text-zinc-300 text-center break-all">{s.numero_serie}</span>
+                          <div className="flex items-center gap-1.5">
+                            {url && (
+                              <button onClick={() => setFotoAmpliada(url)}
+                                className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0">
+                                Ver foto
+                              </button>
+                            )}
+                            <button onClick={() => iniciarEdicion(s)}
+                              className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline shrink-0">
+                              Editar
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -683,6 +821,21 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
           </div>
         )}
       </div>
+
+      {fotoAmpliada && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setFotoAmpliada(null)}
+        >
+          <button
+            onClick={() => setFotoAmpliada(null)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors"
+          >
+            <FaTimes className="h-6 w-6" />
+          </button>
+          <img src={fotoAmpliada} alt="Foto del número de serie" className="max-w-full max-h-full rounded-lg object-contain" />
+        </div>
+      )}
     </div>
   );
 }
@@ -980,7 +1133,7 @@ export default function ProductoDetalle() {
       </div>
 
       {tabActivo === 0 && <TabDatos producto={producto} onActualizar={cargarProducto} />}
-      {tabActivo === 1 && <TabStock idProducto={id} />}
+      {tabActivo === 1 && <TabStock idProducto={id} producto={producto} />}
       {tabActivo === 2 && puede('ver_historico_precios', 'productos') && <TabHistorico idProducto={id} />}
     </div>
   );

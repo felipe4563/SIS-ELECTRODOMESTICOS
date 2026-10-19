@@ -4,10 +4,35 @@ import { usePermission }     from '../../hooks/usePermission';
 import { useEmpresa }        from '../../contexts/EmpresaContext';
 import { descargarStockReportePDF } from './StockReporte';
 import StockImprimirBoton from './StockImprimirBoton';
+import Modal from '../../components/ui/Modal';
 
 const toNum  = n => { const v = Number(n ?? 0); return isNaN(v) ? 0 : v; };
 const fmtNum = n => toNum(n).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const specLinea = p => [p.modelo && `Mod: ${p.modelo}`, p.color && `Color: ${p.color}`, p.capacidad && `Cap: ${p.capacidad}`].filter(Boolean).join('  ·  ');
+
+// Indicador de series para una celda de depósito: un punto chico (no texto,
+// para no ensanchar la columna) — verde si está completo, ámbar si faltan
+// unidades por cargar. Si hay números cargados, es clickeable y abre el
+// modal con el detalle. Null si no hay nada que mostrar (sin stock
+// disponible y sin series).
+function SeriesInfoCelda({ disp, cargadas, onVer }) {
+  if (disp === 0) return null;
+  const faltan = disp - cargadas;
+  if (cargadas === 0 && faltan === 0) return null;
+  const color = faltan > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-green-500 dark:text-green-400';
+  const titulo = faltan > 0
+    ? `${fmtNum(cargadas)}/${fmtNum(disp)} con serie cargada`
+    : `${fmtNum(cargadas)} con serie cargada`;
+  if (cargadas === 0) {
+    return <span className={`block text-[10px] leading-none mt-0.5 ${color}`} title={titulo}>●</span>;
+  }
+  return (
+    <button type="button" onClick={onVer} title={titulo}
+      className={`block text-[10px] leading-none mt-0.5 ${color} hover:opacity-70`}>
+      ●
+    </button>
+  );
+}
 
 const RESUMEN_VACIO = { total: 0, unidades: 0, sinStock: 0, bajoMin: 0, ok: 0 };
 const FACETAS_VACIAS = { marcas: [], productos: [], modelos: [], colores: [], capacidades: [] };
@@ -103,6 +128,7 @@ export default function StockConsolidado() {
 
   const [cargando,  setCargando]  = useState(true);
   const [error,     setError]     = useState(null);
+  const [modalSeries, setModalSeries] = useState(null); // { producto, deposito, numeros } | null
   const [busqueda,  setBusqueda]  = useState('');
   const [filMarca,  setFilMarca]  = useState('');
   const [filProducto, setFilProducto] = useState('');
@@ -114,6 +140,7 @@ export default function StockConsolidado() {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [productosExport, setProductosExport] = useState([]);
   const [depositosVisibles, setDepositosVisibles] = useState(null); // null = todos (default backend)
+  const [mostrarReservado, setMostrarReservado] = useState(false); // oculto por defecto: ahorra la mitad del ancho por depósito
 
   // Mismos filtros que usa `cargar`, sin page/limit — para el listado paginado
   // y para la exportación completa (impresión/PDF) comparten exactamente los
@@ -278,6 +305,13 @@ export default function StockConsolidado() {
                 · Toca Stock Mín. para editar
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setMostrarReservado(v => !v)}
+              className="hidden md:inline ml-1 text-amber-600 dark:text-amber-400 font-medium hover:underline"
+            >
+              · {mostrarReservado ? 'Ocultar' : 'Mostrar'} reservado
+            </button>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -464,14 +498,21 @@ export default function StockConsolidado() {
                       {depositosMostrados.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {depositosMostrados.map(d => {
-                            const disp = toNum(p.stock[d.id_deposito]?.cantidad_disponible);
+                            const s        = p.stock[d.id_deposito];
+                            const disp     = toNum(s?.cantidad_disponible);
+                            const cargadas = toNum(s?.series_cargadas);
+                            const numeros  = s?.series_numeros ?? [];
                             return (
                               <div key={d.id_deposito}
-                                className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800 rounded-lg px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">{d.codigo}</span>
-                                <span className={`text-sm font-mono font-bold tabular-nums ${disp === 0 ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-100'}`}>
-                                  {fmtNum(disp)}
-                                </span>
+                                className="flex flex-col gap-0.5 bg-zinc-50 dark:bg-zinc-800 rounded-lg px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-700">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">{d.codigo}</span>
+                                  <span className={`text-sm font-mono font-bold tabular-nums ${disp === 0 ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-100'}`}>
+                                    {fmtNum(disp)}
+                                  </span>
+                                </div>
+                                <SeriesInfoCelda disp={disp} cargadas={cargadas} numeros={numeros}
+                                  onVer={() => setModalSeries({ producto: p.producto, deposito: d.nombre, numeros })} />
                               </div>
                             );
                           })}
@@ -532,30 +573,30 @@ export default function StockConsolidado() {
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">
                       <th className="sticky left-0 z-10 w-1 p-0 bg-zinc-50 dark:bg-zinc-800/60" aria-hidden />
-                      <th className="sticky left-1 z-10 text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[260px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">Producto</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Stock Mín.</th>
+                      <th className="sticky left-1 z-10 text-left px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[200px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">Producto</th>
+                      <th className="text-right px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap">Stock Mín.</th>
                       {depositosMostrados.map(d => (
-                        <th key={d.id_deposito} colSpan={2}
-                          className="text-center px-4 py-2 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700">
+                        <th key={d.id_deposito} colSpan={mostrarReservado ? 2 : 1}
+                          className="text-center px-2 py-2 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700">
                           <span className="block text-[10px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-400">{d.codigo}</span>
                           <span className="block text-[10px] text-zinc-400 dark:text-zinc-500 truncate max-w-[100px]">{d.nombre}</span>
                         </th>
                       ))}
-                      <th className="sticky right-[110px] z-10 text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700 w-[96px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">Total</th>
-                      <th className="sticky right-0 z-10 text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[110px] bg-zinc-50 dark:bg-zinc-800/60">Estado</th>
+                      <th className="sticky right-[96px] z-10 text-right px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap border-l border-zinc-200 dark:border-zinc-700 w-[80px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">Total</th>
+                      <th className="sticky right-0 z-10 text-center px-3 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 whitespace-nowrap w-[96px] bg-zinc-50 dark:bg-zinc-800/60">Estado</th>
                     </tr>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
                       <td className="sticky left-0 z-10 w-1 p-0 bg-zinc-50/50 dark:bg-zinc-800/30" aria-hidden />
-                      <td className="sticky left-1 z-10 w-[260px] bg-zinc-50/50 dark:bg-zinc-800/30" />
+                      <td className="sticky left-1 z-10 w-[200px] bg-zinc-50/50 dark:bg-zinc-800/30" />
                       <td />
                       {depositosMostrados.map(d => (
                         <Fragment key={d.id_deposito}>
-                          <td className="text-right px-3 py-1.5 border-l border-zinc-200 dark:border-zinc-700">Disp.</td>
-                          <td className="text-right px-3 py-1.5">Res.</td>
+                          <td className="text-right px-2 py-1.5 border-l border-zinc-200 dark:border-zinc-700">Disp.</td>
+                          {mostrarReservado && <td className="text-right px-2 py-1.5">Res.</td>}
                         </Fragment>
                       ))}
-                      <td className="sticky right-[110px] z-10 w-[96px] bg-zinc-50/50 dark:bg-zinc-800/30" />
-                      <td className="sticky right-0 z-10 w-[110px] bg-zinc-50/50 dark:bg-zinc-800/30" />
+                      <td className="sticky right-[96px] z-10 w-[80px] bg-zinc-50/50 dark:bg-zinc-800/30" />
+                      <td className="sticky right-0 z-10 w-[96px] bg-zinc-50/50 dark:bg-zinc-800/30" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -570,7 +611,7 @@ export default function StockConsolidado() {
                           <td className="sticky left-0 z-10 w-1 p-0 bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40">
                             <div className={`w-[3px] h-full min-h-[44px] ${est.bar}`} />
                           </td>
-                          <td className="sticky left-1 z-10 px-4 py-2.5 w-[260px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                          <td className="sticky left-1 z-10 px-3 py-2.5 w-[200px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                             <p className="font-medium text-zinc-900 dark:text-white leading-tight truncate" title={p.producto}>{p.producto}</p>
                             <p className="font-mono text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
                               {p.codigo_interno}{p.codigo_barras ? ` · ${p.codigo_barras}` : ''}
@@ -585,7 +626,7 @@ export default function StockConsolidado() {
                               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">{specLinea(p)}</p>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap text-right text-zinc-700 dark:text-zinc-300">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-right text-zinc-700 dark:text-zinc-300">
                             <StockMinCell
                               id_producto={p.id_producto}
                               value={p.stock_minimo}
@@ -594,24 +635,30 @@ export default function StockConsolidado() {
                             />
                           </td>
                           {depositosMostrados.map(d => {
-                            const s    = p.stock[d.id_deposito];
-                            const disp = toNum(s?.cantidad_disponible);
-                            const res  = toNum(s?.cantidad_reservada);
+                            const s        = p.stock[d.id_deposito];
+                            const disp     = toNum(s?.cantidad_disponible);
+                            const res      = toNum(s?.cantidad_reservada);
+                            const cargadas = toNum(s?.series_cargadas);
+                            const numeros  = s?.series_numeros ?? [];
                             return (
                               <Fragment key={d.id_deposito}>
-                                <td className={`px-3 py-2.5 text-right whitespace-nowrap font-mono tabular-nums border-l border-zinc-100 dark:border-zinc-800 ${disp === 0 ? 'text-zinc-300 dark:text-zinc-700' : 'text-zinc-800 dark:text-zinc-100 font-semibold'}`}>
+                                <td className={`px-2 py-2.5 text-right whitespace-nowrap font-mono tabular-nums border-l border-zinc-100 dark:border-zinc-800 ${disp === 0 ? 'text-zinc-300 dark:text-zinc-700' : 'text-zinc-800 dark:text-zinc-100 font-semibold'}`}>
                                   {fmtNum(disp)}
+                                  <SeriesInfoCelda disp={disp} cargadas={cargadas}
+                                    onVer={() => setModalSeries({ producto: p.producto, deposito: d.nombre, numeros })} />
                                 </td>
-                                <td className="px-3 py-2.5 text-right whitespace-nowrap font-mono tabular-nums text-zinc-400 dark:text-zinc-600">
-                                  {res > 0 ? fmtNum(res) : '—'}
-                                </td>
+                                {mostrarReservado && (
+                                  <td className="px-2 py-2.5 text-right whitespace-nowrap font-mono tabular-nums text-zinc-400 dark:text-zinc-600">
+                                    {res > 0 ? fmtNum(res) : '—'}
+                                  </td>
+                                )}
                               </Fragment>
                             );
                           })}
-                          <td className="sticky right-[110px] z-10 px-4 py-2.5 whitespace-nowrap text-right font-mono tabular-nums font-bold text-zinc-900 dark:text-white border-l border-zinc-200 dark:border-zinc-700 w-[96px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                          <td className="sticky right-[96px] z-10 px-3 py-2.5 whitespace-nowrap text-right font-mono tabular-nums font-bold text-zinc-900 dark:text-white border-l border-zinc-200 dark:border-zinc-700 w-[80px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                             {fmtNum(totalDisp)}
                           </td>
-                          <td className="sticky right-0 z-10 px-4 py-2.5 whitespace-nowrap text-center w-[110px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40">
+                          <td className="sticky right-0 z-10 px-3 py-2.5 whitespace-nowrap text-center w-[96px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${est.badge}`}>
                               {est.label}
                             </span>
@@ -680,6 +727,24 @@ export default function StockConsolidado() {
           )}
         </>
       )}
+
+      <Modal open={!!modalSeries} onClose={() => setModalSeries(null)} title="Números de serie" maxWidth="max-w-sm">
+        {modalSeries && (
+          <div className="space-y-3">
+            <div>
+              <p className="font-medium text-zinc-900 dark:text-white">{modalSeries.producto}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">{modalSeries.deposito}</p>
+            </div>
+            <ul className="space-y-1.5 max-h-72 overflow-y-auto">
+              {modalSeries.numeros.map(n => (
+                <li key={n} className="font-mono text-sm text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 rounded-lg px-3 py-1.5">
+                  {n}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Modal>
 
     </div>
   );

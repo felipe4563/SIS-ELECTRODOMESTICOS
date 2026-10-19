@@ -219,6 +219,7 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
   const [editValor,    setEditValor]    = useState('');
   const [editFile,     setEditFile]     = useState(null);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState(null); // url de la foto en visor de pantalla completa, o null
 
   if (maxCantidad <= 0) return null;
   const puedeAgregar = editable && series.length < maxCantidad;
@@ -288,9 +289,7 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
                         </button>
                       )}
                       {url ? (
-                        <a href={url} target="_blank" rel="noreferrer">
-                          <img src={url} alt="N° serie" className="w-20 h-20 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
-                        </a>
+                        <img src={url} alt="N° serie" className="w-20 h-20 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
                       ) : (
                         <div className="w-20 h-20 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-300 dark:text-zinc-600 text-[10px] text-center">
                           Sin foto
@@ -318,16 +317,24 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-1.5 flex items-center gap-1">
+                        <div className="mt-1.5 flex flex-col items-center gap-0.5">
                           <span className="font-mono text-xs text-zinc-600 dark:text-zinc-300 text-center break-all">
                             {s.numero_serie}
                           </span>
-                          {editable && (
-                            <button onClick={() => iniciarEdicion(s)}
-                              className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline shrink-0">
-                              Editar
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {url && (
+                              <button onClick={() => setFotoAmpliada(url)}
+                                className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0">
+                                Ver foto
+                              </button>
+                            )}
+                            {editable && (
+                              <button onClick={() => iniciarEdicion(s)}
+                                className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline shrink-0">
+                                Editar
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -357,6 +364,21 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
             {err && <p className="text-xs text-red-500">{err}</p>}
           </div>
         </Modal>
+      )}
+
+      {fotoAmpliada && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setFotoAmpliada(null)}
+        >
+          <button
+            onClick={() => setFotoAmpliada(null)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none transition-colors"
+          >
+            ×
+          </button>
+          <img src={fotoAmpliada} alt="Foto del número de serie" className="max-w-full max-h-full rounded-lg object-contain" />
+        </div>
       )}
     </>
   );

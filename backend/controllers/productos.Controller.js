@@ -460,6 +460,89 @@ const getSeriesProducto = async (req, res) => {
   }
 };
 
+// Todas las series EN_STOCK de un producto, en cualquier depósito — para
+// imprimir una etiqueta por unidad desde el catálogo (sin depender de un
+// depósito puntual como getSeriesProducto).
+const listarSeriesParaEtiquetas = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [series] = await db.promise().query(
+      `SELECT id_serie, numero_serie FROM compra_detalle_series
+       WHERE id_producto = ? AND estado = 'EN_STOCK'
+       ORDER BY id_serie`,
+      [id]
+    );
+    return res.json({ series });
+  } catch (err) {
+    console.error('[listarSeriesParaEtiquetas]', err);
+    return res.status(500).json({ error: 'Error al obtener números de serie' });
+  }
+};
+
+// Una serie solo se puede renombrar desde acá mientras sea una unidad
+// "quieta": EN_STOCK y sin reserva de una transferencia todavía activa (no
+// ANULADA ni RECIBIDA) — mismo criterio que compras.Controller.js.
+function motivoSerieNoEditable(serie) {
+  if (serie.estado === 'VENDIDA') return 'Esta unidad ya fue vendida: su número de serie no se puede modificar';
+  if (serie.estado === 'EN_TRANSITO') return 'Esta unidad está en tránsito por una transferencia: su número de serie no se puede modificar';
+  if (serie.estado !== 'EN_STOCK') return 'El número de serie no se puede modificar en su estado actual';
+  if (Number(serie.reservada_transferencia)) return 'Esta unidad está reservada por una transferencia activa: su número de serie no se puede modificar';
+  return null;
+}
+
+const editarSerieManual = async (req, res) => {
+  try {
+    const { id, idSerie } = req.params;
+    const { numero_serie } = req.body;
+    if (!numero_serie?.trim())
+      return res.status(400).json({ mensaje: 'El número de serie es requerido' });
+
+    const [[serie]] = await db.promise().query(
+      `SELECT s.id_serie, s.imagen_url, s.estado,
+              (s.id_transferencia_detalle IS NOT NULL AND t2.estado NOT IN ('ANULADA', 'RECIBIDA')) AS reservada_transferencia
+       FROM compra_detalle_series s
+       LEFT JOIN transferencia_detalle td ON td.id_detalle = s.id_transferencia_detalle
+       LEFT JOIN transferencias t2 ON t2.id_transferencia = td.id_transferencia
+       WHERE s.id_serie = ? AND s.id_producto = ?`, [idSerie, id]
+    );
+    if (!serie) return res.status(404).json({ mensaje: 'Número de serie no encontrado' });
+    const motivo = motivoSerieNoEditable(serie);
+    if (motivo) return res.status(409).json({ mensaje: motivo });
+
+    const imagenNueva = req.file ? `/uploads/productos/${req.file.filename}` : null;
+    let upd;
+    try {
+      if (imagenNueva) {
+        [upd] = await db.promise().query(
+          `UPDATE compra_detalle_series SET numero_serie = ?, imagen_url = ? WHERE id_serie = ? AND estado = 'EN_STOCK'`,
+          [numero_serie.trim(), imagenNueva, idSerie]
+        );
+      } else {
+        [upd] = await db.promise().query(
+          `UPDATE compra_detalle_series SET numero_serie = ? WHERE id_serie = ? AND estado = 'EN_STOCK'`,
+          [numero_serie.trim(), idSerie]
+        );
+      }
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ mensaje: 'Ya existe ese número de serie para este producto' });
+      throw err;
+    }
+    if (upd.affectedRows !== 1) {
+      return res.status(409).json({ mensaje: 'La unidad cambió de estado mientras se editaba; recargá e intentá de nuevo' });
+    }
+    if (imagenNueva && serie.imagen_url) {
+      const archivo = require('path').join(__dirname, '..', serie.imagen_url.replace(/^\/+/, ''));
+      require('fs').unlink(archivo, () => {});
+    }
+
+    await auditLog(req.user.id_usuario, 'compra_detalle_series', idSerie, 'UPDATE', getIp(req));
+    res.json({ id_serie: Number(idSerie), numero_serie: numero_serie.trim(), imagen_url: imagenNueva ?? serie.imagen_url });
+  } catch (err) {
+    console.error('[editarSerieManual]', err);
+    res.status(500).json({ mensaje: 'Error al editar el número de serie' });
+  }
+};
+
 const cargarSerieManual = async (req, res) => {
   try {
     const { id } = req.params;
@@ -496,5 +579,5 @@ module.exports = {
   getProductos, getProducto, createProducto, updateProducto, deleteProducto,
   getHistoricoPrecios, getStock,
   getImagenes, uploadImagen, setPrincipalImagen, deleteImagen,
-  getSeriesProducto, cargarSerieManual,
+  getSeriesProducto, cargarSerieManual, editarSerieManual, listarSeriesParaEtiquetas,
 };

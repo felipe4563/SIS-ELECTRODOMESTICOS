@@ -3,7 +3,7 @@ import { inventarioService } from '../../services/inventario.service';
 import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
 const fmtNum   = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 const EFECTO_BADGE = {
@@ -390,16 +390,16 @@ export default function Kardex() {
         ) : (
           <>
             {/* ── Tabla — md+ ── */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden min-[1360px]:block overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60">
-                    {['Fecha', 'Tipo', 'Producto', 'Depósito', 'Documento', 'Cantidad', 'Costo Unit.', 'Saldo Cant.', 'Saldo Costo', 'Usuario', 'Obs.'].map(h => (
+                    {['Fecha', 'Tipo', 'Producto', 'Depósito', 'Documento', 'Cantidad', 'Saldo', 'Usuario', 'Obs.'].map(h => (
                       <th
                         key={h}
-                        className={`text-left px-4 py-3 font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap ${
+                        className={`text-left px-2 py-3 font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap ${
                           h === 'Producto'
-                            ? 'sticky left-0 z-10 w-[200px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]'
+                            ? 'sticky left-0 z-10 w-[140px] bg-zinc-50 dark:bg-zinc-800/60 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]'
                             : ''
                         }`}
                       >
@@ -419,38 +419,41 @@ export default function Kardex() {
                       : Number(f.cantidad) >= 0;
                     return (
                       <tr key={f.id_kardex} className="group hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                        <td className="px-4 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400 text-xs">{fmtFecha(f.fecha)}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
+                        <td className="px-2 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400 text-[11px]">{fmtFecha(f.fecha)}</td>
+                        <td className="px-2 py-2.5 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${badge.cls}`}>
                             {f.tipo_movimiento || badge.label}
                           </span>
                         </td>
-                        <td className="sticky left-0 z-10 px-4 py-2.5 whitespace-nowrap w-[200px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                        <td className="sticky left-0 z-10 px-2 py-2.5 whitespace-nowrap w-[140px] bg-white dark:bg-zinc-900 group-hover:bg-zinc-50 dark:group-hover:bg-zinc-800/40 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                           <p className="font-medium text-zinc-900 dark:text-white truncate" title={f.producto_nombre}>{f.producto_nombre}</p>
                           <p className="text-[11px] text-zinc-400 font-mono">{f.codigo_interno}</p>
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
+                        <td className="px-2 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
                           <p>{f.deposito_nombre}</p>
                           <p className="text-[11px] font-mono text-zinc-400">{f.deposito_codigo}</p>
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
+                        <td className="px-2 py-2.5 whitespace-nowrap">
                           <p className="text-zinc-700 dark:text-zinc-300">{f.documento_tipo}</p>
                           {f.documento_numero && (
                             <p className="text-[11px] font-mono text-zinc-400">{f.documento_numero}</p>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right font-mono font-semibold">
-                          <span className={esEntrada ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                        <td className="px-2 py-2.5 whitespace-nowrap text-right font-mono">
+                          <p className={`font-semibold ${esEntrada ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                             {esEntrada ? '+' : '−'}{fmtNum(Math.abs(f.cantidad))}
-                          </span>
+                          </p>
+                          <p className="text-[11px] text-zinc-400">c/u {fmtNum(f.costo_unitario)}</p>
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right font-mono text-zinc-600 dark:text-zinc-400">{fmtNum(f.costo_unitario)}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right font-mono font-semibold text-zinc-900 dark:text-white">{fmtNum(f.saldo_cantidad)}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right font-mono text-zinc-600 dark:text-zinc-400">{fmtNum(f.saldo_costo)}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
+                        <td className="px-2 py-2.5 whitespace-nowrap text-right font-mono">
+                          <p className="font-semibold text-zinc-900 dark:text-white">{fmtNum(f.saldo_cantidad)}</p>
+                          <p className="text-[11px] text-zinc-400">Bs {fmtNum(f.saldo_costo)}</p>
+                        </td>
+                        <td className="px-2 py-2.5 whitespace-nowrap max-w-[110px] truncate text-zinc-600 dark:text-zinc-400"
+                          title={f.usuario_nombres ? `${f.usuario_nombres} ${f.usuario_apellidos}` : ''}>
                           {f.usuario_nombres ? `${f.usuario_nombres} ${f.usuario_apellidos}` : '—'}
                         </td>
-                        <td className="px-4 py-2.5 max-w-[160px] text-zinc-500 dark:text-zinc-400 text-xs truncate"
+                        <td className="px-2 py-2.5 max-w-[100px] text-zinc-500 dark:text-zinc-400 text-xs truncate"
                           title={f.observaciones ?? ''}>
                           {f.observaciones || '—'}
                         </td>
@@ -461,8 +464,8 @@ export default function Kardex() {
               </table>
             </div>
 
-            {/* ── Tarjetas — móvil < md ── */}
-            <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+            {/* ── Tarjetas — móvil/tablet < 1360px (la tabla no entra cómoda antes) ── */}
+            <div className="min-[1360px]:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
               {filas.map(f => {
                 const badge = EFECTO_BADGE[f.efecto] ?? { label: f.efecto, cls: 'bg-zinc-100 text-zinc-600' };
                 const esEntrada = f.efecto === 'ENTRADA';
@@ -531,7 +534,7 @@ export default function Kardex() {
 
             {/* Paginación desktop */}
             {totalPages > 1 && (
-              <div className="hidden md:flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="hidden min-[1360px]:flex items-center justify-between px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
                 <p className="text-xs text-zinc-400">
                   <span className="font-semibold text-zinc-700 dark:text-zinc-300">{(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)}</span>
                   {' '}de{' '}
@@ -555,7 +558,7 @@ export default function Kardex() {
 
             {/* Paginación mobile */}
             {totalPages > 1 && (
-              <div className="md:hidden flex items-center justify-between gap-3 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="min-[1360px]:hidden flex items-center justify-between gap-3 px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
                 <button
                   disabled={page === 1}
                   onClick={() => buscar(page - 1)}

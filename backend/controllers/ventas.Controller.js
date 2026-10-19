@@ -1786,12 +1786,13 @@ const actualizarSerie = async (req, res) => {
     if (!det) return res.status(404).json({ mensaje: 'Detalle no encontrado' });
 
     // Enganchar una serie del inventario a esta línea solo tiene sentido en
-    // una venta viva, en una línea de 1 unidad y que todavía no tenga serie:
+    // una venta viva y en una línea de 1 unidad:
     //  - En una venta ANULADA/DEVUELTA la serie quedaría VENDIDA ligada a una
     //    venta muerta (anularVenta no puede volver a correr para liberarla),
     //    perdiendo la unidad del inventario para siempre.
     //  - Una fila de cantidad > 1 no corresponde a una sola unidad física.
-    //  - Si ya hay una serie ligada, se le sumaría una segunda a la misma fila.
+    // Si la línea ya tenía otra unidad ligada, se libera (vuelve a EN_STOCK)
+    // antes de ligar la nueva — ver más abajo.
     if (idSerieNum) {
       if (['ANULADA', 'DEVUELTA'].includes(det.venta_estado)) {
         return res.status(400).json({ mensaje: `No se puede asignar una serie a una venta ${det.venta_estado.toLowerCase()}` });
@@ -1813,19 +1814,26 @@ const actualizarSerie = async (req, res) => {
       await conn.beginTransaction();
 
       if (idSerieNum) {
-        // Chequeo de "ya tiene serie" dentro de la transacción, con la fila
-        // de venta_detalle bloqueada, para que dos asignaciones simultáneas
-        // a la misma línea no pasen ambas.
+        // Lectura + chequeo de "qué tiene ligado ahora" dentro de la
+        // transacción, con la fila de venta_detalle bloqueada, para que dos
+        // asignaciones simultáneas a la misma línea no pisen una a la otra.
         await conn.query(`SELECT id_detalle FROM venta_detalle WHERE id_detalle = ? FOR UPDATE`, [id_detalle]);
-        const [[{ ligadas }]] = await conn.query(
-          `SELECT COUNT(*) AS ligadas FROM compra_detalle_series WHERE id_venta_detalle = ?`, [id_detalle]
+        const [ligadasRows] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series WHERE id_venta_detalle = ?`, [id_detalle]
         );
-        if (Number(ligadas) > 0) {
-          throw new ApiError(400, 'Esta línea ya tiene una serie asignada');
+        const idSerieActual = ligadasRows[0]?.id_serie ?? null;
+
+        if (idSerieActual !== idSerieNum) {
+          // Si ya había otra unidad ligada a esta línea, se libera primero
+          // (vuelve a EN_STOCK en el depósito de esta venta) para no dejar
+          // dos unidades de inventario enganchadas a la misma línea.
+          if (idSerieActual) {
+            await productoSeries.revertirVenta(dbTx(conn), [idSerieActual], { id_deposito_destino: det.id_deposito });
+          }
+          await marcarVendidaValidada(conn, {
+            idSerie: idSerieNum, idProducto: det.id_producto, idDeposito: det.id_deposito, idVentaDetalle: id_detalle,
+          });
         }
-        await marcarVendidaValidada(conn, {
-          idSerie: idSerieNum, idProducto: det.id_producto, idDeposito: det.id_deposito, idVentaDetalle: id_detalle,
-        });
         const [[serieRow]] = await conn.query(
           `SELECT numero_serie FROM compra_detalle_series WHERE id_serie = ?`, [idSerieNum]
         );
