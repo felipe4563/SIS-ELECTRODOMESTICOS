@@ -220,9 +220,16 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
   const [editFile,     setEditFile]     = useState(null);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState(null); // url de la foto en visor de pantalla completa, o null
+  const [paginaSeries, setPaginaSeries] = useState(1);
+  const POR_PAGINA_SERIES = 9;
 
   if (maxCantidad <= 0) return null;
   const puedeAgregar = editable && series.length < maxCantidad;
+  // Clamp en el render (no en un effect): si se eliminó una serie y la
+  // página actual quedó vacía, se recalcula a partir de `series` sin
+  // necesitar un setState adicional disparado por un efecto.
+  const totalPaginasSeries = Math.max(1, Math.ceil(series.length / POR_PAGINA_SERIES));
+  const paginaSeriesActual = Math.min(paginaSeries, totalPaginasSeries);
 
   const agregar = async () => {
     if (!numeroSerie.trim()) return setErr('Ingresá el número de serie');
@@ -230,6 +237,7 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
     try {
       await onAgregar(numeroSerie.trim(), file);
       setNumeroSerie(''); setFile(null);
+      setPaginaSeries(Math.ceil((series.length + 1) / POR_PAGINA_SERIES));
     } catch (e) {
       setErr(e?.response?.data?.error ?? 'Error al guardar');
     } finally {
@@ -270,8 +278,9 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
         <Modal titulo="Números de serie" onClose={() => { setModalAbierto(false); setErr(''); }}>
           <div className="space-y-4">
             {series.length > 0 ? (
+              <div className="space-y-2">
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {series.map(s => {
+                {series.slice((paginaSeriesActual - 1) * POR_PAGINA_SERIES, paginaSeriesActual * POR_PAGINA_SERIES).map(s => {
                   const url = buildFileUrl(s.imagen_url);
                   const editandoEsta = editandoId === s.id_serie;
                   return (
@@ -340,6 +349,23 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
                     </div>
                   );
                 })}
+              </div>
+              {series.length > POR_PAGINA_SERIES && (
+                <div className="flex items-center justify-between pt-1">
+                  <button onClick={() => setPaginaSeries(p => Math.max(1, p - 1))} disabled={paginaSeriesActual === 1}
+                    className="text-xs font-semibold text-amber-600 dark:text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed hover:underline">
+                    ← Anterior
+                  </button>
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                    Página {paginaSeriesActual} / {totalPaginasSeries}
+                  </span>
+                  <button onClick={() => setPaginaSeries(p => Math.min(totalPaginasSeries, p + 1))}
+                    disabled={paginaSeriesActual >= totalPaginasSeries}
+                    className="text-xs font-semibold text-amber-600 dark:text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed hover:underline">
+                    Siguiente →
+                  </button>
+                </div>
+              )}
               </div>
             ) : (
               <p className="text-sm text-zinc-400 text-center py-4">Todavía no se registró ningún número de serie.</p>
@@ -962,7 +988,17 @@ export default function CompraDetalle() {
   };
 
   useEffect(() => {
-    cargar();
+    // No se llama a cargar() acá: su setCargando(true) inicial se ejecutaría
+    // sincrónicamente dentro del efecto. `cargando` ya arranca en `true`
+    // (useState(true)), así que para la carga inicial alcanza con pedir los
+    // datos y recién tocar el estado después del await / dentro del .then().
+    (async () => {
+      try {
+        const res = await comprasService.getOne(id);
+        setData(res.data);
+      } catch { /* silencioso */ }
+      finally { setCargando(false); }
+    })();
     comprasService.getFormData().then(r => {
       setMonedas(r.data.monedas ?? []);
       setDepositos(r.data.depositos ?? []);

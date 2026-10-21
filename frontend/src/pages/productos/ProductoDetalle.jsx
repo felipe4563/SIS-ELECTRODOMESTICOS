@@ -46,7 +46,19 @@ function TabDatos({ producto, onActualizar }) {
     });
   }, []);
 
-  useEffect(() => {
+  // Sincroniza `form` con `producto` ajustando el estado durante el render
+  // (patrón recomendado por React para "resetear estado cuando cambia una
+  // prop") en vez de un efecto: el padre pasa un objeto `producto` nuevo
+  // tanto al montar como después de cada guardado exitoso (onActualizar
+  // vuelve a pedirlo), y acá se refleja ese valor recién confirmado.
+  // Arranca en null (no en `producto`) a propósito: este componente ya
+  // monta con un `producto` real (el padre no lo renderiza hasta tenerlo
+  // cargado), así que si el "anterior" arrancara igual al valor inicial
+  // nunca se dispararía la primera sincronización y el formulario quedaría
+  // vacío.
+  const [productoSincronizado, setProductoSincronizado] = useState(null);
+  if (producto !== productoSincronizado) {
+    setProductoSincronizado(producto);
     if (producto) {
       setForm({
         codigo_interno:       producto.codigo_interno || '',
@@ -74,7 +86,7 @@ function TabDatos({ producto, onActualizar }) {
         activo:               !!producto.activo,
       });
     }
-  }, [producto]);
+  }
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -623,6 +635,8 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
   const [editError,   setEditError]   = useState('');
   const [editGuardando, setEditGuardando] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState(null); // url de la foto en visor de pantalla completa, o null
+  const [paginaSeries, setPaginaSeries] = useState(1);
+  const POR_PAGINA_SERIES = 9;
 
   useEffect(() => {
     productosService.getSeriesProducto(idProducto, idDeposito, { incluirReservadas: true })
@@ -648,7 +662,11 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
       // si se adjuntó foto, usamos un preview local inmediato en vez de "Sin foto"
       // hasta que se cierre/reabra el panel y el GET traiga la URL real.
       const previewUrl = file ? URL.createObjectURL(file) : null;
-      setSeries(prev => [...prev, { id_serie: data.id_serie, numero_serie: data.numero_serie, imagen_url: previewUrl, _preview: !!previewUrl }]);
+      setSeries(prev => {
+        const next = [...prev, { id_serie: data.id_serie, numero_serie: data.numero_serie, imagen_url: previewUrl, _preview: !!previewUrl }];
+        setPaginaSeries(Math.ceil(next.length / POR_PAGINA_SERIES));
+        return next;
+      });
       setNumeroSerie(''); setFile(null);
     } catch (err) {
       setError(err.response?.data?.mensaje || err.response?.data?.error || 'Error al guardar');
@@ -726,8 +744,9 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
 
             {/* Series ya cargadas */}
             {series.length > 0 && (
+              <div className="space-y-2">
               <div className="grid grid-cols-3 gap-3">
-                {series.map(s => {
+                {series.slice((paginaSeries - 1) * POR_PAGINA_SERIES, paginaSeries * POR_PAGINA_SERIES).map(s => {
                   // Las series recién guardadas en esta sesión llevan un preview
                   // local (blob:) en vez de la URL del servidor — no pasarlo por
                   // buildImgUrl, que le agregaría el prefijo del backend.
@@ -784,6 +803,23 @@ function PanelSeriesDeposito({ idProducto, idDeposito, depositoNombre, cantidadT
                     </div>
                   );
                 })}
+              </div>
+              {series.length > POR_PAGINA_SERIES && (
+                <div className="flex items-center justify-between pt-1">
+                  <button onClick={() => setPaginaSeries(p => Math.max(1, p - 1))} disabled={paginaSeries === 1}
+                    className="text-xs font-semibold text-amber-600 dark:text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed hover:underline">
+                    ← Anterior
+                  </button>
+                  <span className="text-xs text-gray-400 dark:text-zinc-500">
+                    Página {paginaSeries} / {Math.ceil(series.length / POR_PAGINA_SERIES)}
+                  </span>
+                  <button onClick={() => setPaginaSeries(p => Math.min(Math.ceil(series.length / POR_PAGINA_SERIES), p + 1))}
+                    disabled={paginaSeries >= Math.ceil(series.length / POR_PAGINA_SERIES)}
+                    className="text-xs font-semibold text-amber-600 dark:text-amber-400 disabled:opacity-30 disabled:cursor-not-allowed hover:underline">
+                    Siguiente →
+                  </button>
+                </div>
+              )}
               </div>
             )}
 
