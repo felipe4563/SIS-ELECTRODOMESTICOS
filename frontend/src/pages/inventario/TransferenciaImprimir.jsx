@@ -79,6 +79,7 @@ const S = StyleSheet.create({
   pNom:   { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#111827' },
   pDet:   { fontSize: 7, color: '#555555', marginTop: 1 },
   pSpec:  { fontSize: 7, color: '#6b7280', marginTop: 1 },
+  pSerie: { fontSize: 7, fontFamily: 'Courier', color: '#374151', marginTop: 1 },
 
   // Totales
   totWrap:  { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10, marginBottom: 12 },
@@ -205,6 +206,9 @@ function TransferenciaDoc({ transferencia: t, detalle = [], empresa: e, logoUrl 
                 <Text style={S.pNom}>{d.producto_nombre}</Text>
                 {d.producto_detalle && <Text style={S.pDet}>{d.producto_detalle}</Text>}
                 {spec && <Text style={S.pSpec}>{spec}</Text>}
+                {d.series?.length > 0 && (
+                  <Text style={S.pSerie}>N° serie: {d.series.map(s => s.numero_serie).join(', ')}</Text>
+                )}
               </View>
               <Text style={[S.td, S.cUm, { fontSize: 7, color: '#9ca3af' }]}>{d.unidad_nombre}</Text>
               <Text style={[S.td, S.cSol, S.right, S.mono]}>{fmtN(d.cantidad_enviada)}</Text>

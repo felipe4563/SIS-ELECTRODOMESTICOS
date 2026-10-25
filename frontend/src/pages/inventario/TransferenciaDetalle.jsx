@@ -346,6 +346,11 @@ export default function TransferenciaDetalle() {
                   {specLinea(d) && (
                     <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
                   )}
+                  {d.series?.length > 0 && (
+                    <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
+                      N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+                    </p>
+                  )}
                 </div>
                 {d.unidad_nombre && (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Unidad: {d.unidad_nombre}</p>
@@ -404,6 +409,11 @@ export default function TransferenciaDetalle() {
                       )}
                       {specLinea(d) && (
                         <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
+                      )}
+                      {d.series?.length > 0 && (
+                        <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
+                          N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+                        </p>
                       )}
                       {trf.estado === 'BORRADOR' && puedeEditar && (
                         <button type="button" onClick={() => abrirSeries(d)}

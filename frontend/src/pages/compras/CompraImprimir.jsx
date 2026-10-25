@@ -79,6 +79,7 @@ const S = StyleSheet.create({
   pMarca: { fontSize: 7, color: '#9ca3af', marginTop: 1 },
   pDet:   { fontSize: 7, color: '#6b7280', marginTop: 1 },
   pSpec:  { fontSize: 7, color: '#9ca3af', marginTop: 1 },
+  pSerie: { fontSize: 7, fontFamily: 'Courier', color: '#374151', marginTop: 1 },
   pObs:   { fontSize: 7, color: '#92400e', marginTop: 1 },
 
   // Totales
@@ -249,6 +250,7 @@ function CompraDoc({ compra: c, detalle = [], cuotas = [], pagos = [], recepcion
               {d.marca_nombre && <Text style={S.pMarca}>{d.marca_nombre}</Text>}
               {d.producto_detalle && <Text style={S.pDet}>{d.producto_detalle}</Text>}
               {specLinea(d) && <Text style={S.pSpec}>{specLinea(d)}</Text>}
+              {d.series?.length > 0 && <Text style={S.pSerie}>N° serie: {d.series.map(s => s.numero_serie).join(', ')}</Text>}
               {d.observacion && <Text style={S.pObs}>📝 {d.observacion}</Text>}
             </View>
             <Text style={[S.td, S.cCant, S.right]}>{fmtN(d.cantidad)}</Text>

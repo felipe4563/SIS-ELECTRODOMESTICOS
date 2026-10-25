@@ -193,6 +193,11 @@ function Ticket110({ c, detalle, pagos, recepciones, empresa: e, logoUrl, fmtM }
               {spec && (
                 <div style={{ fontSize: '8px', color: '#666', paddingLeft: '14mm' }}>{spec}</div>
               )}
+              {d.series?.length > 0 && (
+                <div style={{ fontSize: '8px', fontFamily: 'Courier, monospace', color: '#374151', paddingLeft: '14mm' }}>
+                  N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+                </div>
+              )}
               {d.observacion && (
                 <div style={{ fontSize: '8px', color: '#92400e', paddingLeft: '14mm' }}>📝 {d.observacion}</div>
               )}
@@ -358,6 +363,11 @@ function TicketA4({ c, detalle, cuotas, pagos, recepciones, empresa: e, logoUrl,
                   )}
                   {spec && (
                     <div style={{ fontSize: '8px', color: '#666', marginTop: '1px' }}>{spec}</div>
+                  )}
+                  {d.series?.length > 0 && (
+                    <div style={{ fontSize: '8px', fontFamily: 'Courier, monospace', color: '#374151', marginTop: '1px' }}>
+                      N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+                    </div>
                   )}
                   {d.observacion && (
                     <div style={{ fontSize: '8px', color: '#92400e', marginTop: '1px' }}>📝 {d.observacion}</div>
@@ -629,6 +639,11 @@ const DetalleProductos = ({ detalle, fmtM }) => (
           )}
           {spec && (
             <div style={{ fontSize: '9px', color: '#444', paddingLeft: '2px' }}>{spec}</div>
+          )}
+          {d.series?.length > 0 && (
+            <div style={{ fontSize: '9px', fontFamily: 'monospace', color: '#374151', paddingLeft: '2px' }}>
+              N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+            </div>
           )}
           {d.observacion && (
             <div style={{ fontSize: '9px', color: '#92400e', paddingLeft: '2px' }}>📝 {d.observacion}</div>
