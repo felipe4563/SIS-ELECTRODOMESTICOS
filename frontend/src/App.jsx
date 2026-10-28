@@ -419,6 +419,11 @@ export default function App() {
               <Route path="/ventas/:id/imprimir" element={
                 <PageRoute action="imprimir" subject="ventas"><VentaImprimir /></PageRoute>
               } />
+              <Route path="/ventas/:id/etiquetas" element={
+                <ProtectedRoute action="imprimir" subject="ventas">
+                  <EtiquetasImprimir />
+                </ProtectedRoute>
+              } />
 
               {/* ── Servicio Técnico ─────────────────────────────────── */}
               <Route path="/servicio-tecnico" element={

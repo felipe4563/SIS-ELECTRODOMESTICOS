@@ -293,6 +293,32 @@ export default function VentaDetalle() {
   const puedeVerUtilidad = puede('ver_utilidad',     'ventas');
   const tieneSeriesSinFoto = (venta.detalle ?? []).some(d => d.numero_serie && !d.imagen_serie_url);
 
+  // Agrupa las líneas de venta por código de producto: ventas con series
+  // parte cada unidad en su propia fila (misma línea repetida), así que sin
+  // agrupar se generaría un QR por fila en vez de uno por producto con todas
+  // sus series.
+  const etiquetasDisponibles = (() => {
+    const porCodigo = new Map();
+    for (const d of (venta.detalle ?? [])) {
+      if (!d.codigo_interno) continue;
+      if (!porCodigo.has(d.codigo_interno)) {
+        porCodigo.set(d.codigo_interno, {
+          nombre: d.producto, detalle: d.producto_detalle, codigo_interno: d.codigo_interno,
+          marca: d.marca, modelo: d.modelo, color: d.color, capacidad: d.capacidad,
+          series: [], copias: 0,
+        });
+      }
+      const item = porCodigo.get(d.codigo_interno);
+      if (d.numero_serie) item.series.push({ numero_serie: d.numero_serie });
+      else item.copias += Math.round(Number(d.cantidad) || 1);
+    }
+    return Array.from(porCodigo.values()).map(it => ({ ...it, copias: Math.max(1, it.copias) }));
+  })();
+
+  const handleImprimirEtiquetas = () => {
+    navigate(`/ventas/${id}/etiquetas`, { state: { etiquetas: etiquetasDisponibles } });
+  };
+
   return (
     <div className="space-y-4">
 
@@ -348,6 +374,12 @@ export default function VentaDetalle() {
                 }}
                 className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium text-sm transition-colors disabled:opacity-50">
                 {descargando ? 'Generando…' : 'Comprobante PDF'}
+              </button>
+            )}
+            {puedeImprimir && etiquetasDisponibles.length > 0 && (
+              <button onClick={handleImprimirEtiquetas}
+                className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-medium text-sm transition-colors">
+                Etiquetas
               </button>
             )}
             {puedeEditar && (
