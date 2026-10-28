@@ -205,6 +205,22 @@ export default function TransferenciaDetalle() {
 
   const textaCls = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-400';
 
+  const etiquetasDisponibles = (trf.detalle ?? []).filter(d => d.codigo_interno);
+  const handleImprimirEtiquetas = () => {
+    navigate(`/inventario/transferencias/${id}/etiquetas`, {
+      state: {
+        etiquetas: etiquetasDisponibles.map(d => ({
+          nombre: d.producto_nombre,
+          detalle: d.producto_detalle,
+          codigo_interno: d.codigo_interno,
+          marca: d.marca, modelo: d.modelo, color: d.color, capacidad: d.capacidad,
+          series: d.series,
+          copias: 1,
+        })),
+      },
+    });
+  };
+
   return (
     <div className="space-y-5">
       {/* Cabecera */}
@@ -238,6 +254,14 @@ export default function TransferenciaDetalle() {
           >
             {descargando ? 'Generando…' : 'Comprobante PDF'}
           </button>
+          {etiquetasDisponibles.length > 0 && (
+            <button
+              onClick={handleImprimirEtiquetas}
+              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-sm transition-colors"
+            >
+              Etiquetas
+            </button>
+          )}
           {trf.estado === 'BORRADOR' && puedeEditar && (
             <button onClick={() => navigate(`/inventario/transferencias/${id}/editar`)}
               className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-sm transition-colors">

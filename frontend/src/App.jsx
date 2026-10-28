@@ -347,6 +347,11 @@ export default function App() {
               <Route path="/inventario/transferencias/:id/imprimir" element={
                 <PageRoute action="ver" subject="inventario"><TransferenciaImprimirDirecto /></PageRoute>
               } />
+              <Route path="/inventario/transferencias/:id/etiquetas" element={
+                <ProtectedRoute action="ver" subject="inventario">
+                  <EtiquetasImprimir />
+                </ProtectedRoute>
+              } />
 
               {/* Ajustes de inventario */}
               <Route path="/inventario/ajustes" element={
