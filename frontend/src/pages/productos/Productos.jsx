@@ -35,6 +35,8 @@ export default function Productos() {
   const [filtroModelo, setFiltroModelo] = useState('');
   const [filtroColor, setFiltroColor] = useState('');
   const [filtroCapacidad, setFiltroCapacidad] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroStock, setFiltroStock] = useState('');
 
   const [modal,      setModal]      = useState(false);
   const [confirm,    setConfirm]    = useState(null);
@@ -164,7 +166,11 @@ export default function Productos() {
     const modeloOk    = !filtroModelo || p.modelo === filtroModelo;
     const colorOk      = !filtroColor || p.color === filtroColor;
     const capacidadOk  = !filtroCapacidad || p.capacidad === filtroCapacidad;
-    return coincide && marcaOk && categOk && productoOk && detalleOk && modeloOk && colorOk && capacidadOk;
+    const estadoOk     = !filtroEstado ||
+      (filtroEstado === 'activo' ? !!p.activo : !p.activo);
+    const stockOk      = !filtroStock ||
+      (filtroStock === 'con' ? Number(p.stock_total) > 0 : Number(p.stock_total) <= 0);
+    return coincide && marcaOk && categOk && productoOk && detalleOk && modeloOk && colorOk && capacidadOk && estadoOk && stockOk;
   });
 
   const abrirCrear  = () => { setForm(EMPTY); setError(null); setModal(true); };
@@ -213,6 +219,18 @@ export default function Productos() {
         description="Catálogo de productos con precios y stock"
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50">
+              <option value="">Todos los estados</option>
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+            </select>
+            <select value={filtroStock} onChange={e => setFiltroStock(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50">
+              <option value="">Todo el stock</option>
+              <option value="con">Con stock</option>
+              <option value="sin">Sin stock</option>
+            </select>
             {seleccionados.size > 0 && (
               <button onClick={imprimirEtiquetas}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white shadow-sm transition-all">
@@ -283,7 +301,7 @@ export default function Productos() {
       ) : visibles.length === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-zinc-500 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl">
           <HiArchiveBox className="h-10 w-10 mx-auto mb-3 opacity-25" />
-          <p className="text-sm">{busqueda || filtroMarca || filtroCateg || filtroProducto || filtroDetalle || filtroModelo || filtroColor || filtroCapacidad ? 'Sin resultados para los filtros aplicados' : 'No hay productos registrados'}</p>
+          <p className="text-sm">{busqueda || filtroMarca || filtroCateg || filtroProducto || filtroDetalle || filtroModelo || filtroColor || filtroCapacidad || filtroEstado || filtroStock ? 'Sin resultados para los filtros aplicados' : 'No hay productos registrados'}</p>
         </div>
       ) : (
         <>
