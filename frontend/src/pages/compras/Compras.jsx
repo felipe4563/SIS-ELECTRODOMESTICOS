@@ -40,13 +40,14 @@ export default function Compras() {
   const [compras,    setCompras]    = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [depositos,  setDepositos]  = useState([]);
+  const [proveedores,setProveedores]= useState([]);
   const [cargando,   setCargando]   = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage]   = useState(1);
   const [resumen, setResumen] = useState({ byEstado: {}, saldoTotal: 0, total: 0 });
   const LIMIT = 20;
   const [filtros,    setFiltros]    = useState({
-    q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '', id_deposito_destino: '',
+    q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '', id_deposito_destino: '', id_proveedor: '',
   });
 
   const depositosDeSucursal = filtros.id_sucursal
@@ -68,15 +69,14 @@ export default function Compras() {
   };
 
   useEffect(() => {
-    if (puedeVerTodas) {
-      comprasService.getFormData()
-        .then(({ data }) => {
-          setSucursales(data.sucursales ?? []);
-          setDepositos(data.depositos ?? []);
-        })
-        .catch(() => {});
-    }
-  }, []); // eslint-disable-line
+    comprasService.getFormData()
+      .then(({ data }) => {
+        setSucursales(data.sucursales ?? []);
+        setDepositos(data.depositos ?? []);
+        setProveedores(data.proveedores ?? []);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => { ejecutarBusqueda(1); }, [filtros]); // eslint-disable-line
 
@@ -209,6 +209,16 @@ export default function Compras() {
             ))}
           </select>
         )}
+        <select
+          value={filtros.id_proveedor}
+          onChange={e => setF('id_proveedor', e.target.value)}
+          className={inputCls}
+        >
+          <option value="">Todos los proveedores</option>
+          {proveedores.map(p => (
+            <option key={p.id_proveedor} value={p.id_proveedor}>{p.razon_social}</option>
+          ))}
+        </select>
         <span className="text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap" title="Filtra por la fecha en que se hizo el pedido (columna PEDIDO), no por fecha de recepción ni de registro en el sistema.">
           Fecha de pedido:
         </span>
