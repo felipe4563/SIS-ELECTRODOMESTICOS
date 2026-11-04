@@ -9,6 +9,13 @@ import App from './App.jsx'
 // versión vieja hasta que haga un hard refresh (Ctrl+Shift+R) por su cuenta.
 const updateSW = registerSW({
   onNeedRefresh() { updateSW(true) },
+  onRegisteredSW(_url, registration) {
+    // El navegador solo revisa si hay una versión nueva al navegar; en una
+    // SPA el usuario puede dejar la pestaña abierta horas sin navegar nunca,
+    // así que además se fuerza una revisión manual cada 10 minutos.
+    if (!registration) return
+    setInterval(() => registration.update(), 10 * 60 * 1000)
+  },
 })
 
 createRoot(document.getElementById('root')).render(
