@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { comprasService }     from '../../services/compras.service';
 import { proveedoresService } from '../../services/proveedores.service';
@@ -6,6 +6,7 @@ import { productosService }   from '../../services/productos.service';
 import { tiposCambioService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import { hoyLocal } from '../../utils/fechaLocal';
+import EscanerQR from '../../components/EscanerQR';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const HOY      = hoyLocal();
@@ -47,6 +48,7 @@ function Ic({ id, size = 15, className = '' }) {
     tune:    <><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></>,
     search:  <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
     pencil:  <><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></>,
+    camera:  <><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></>,
   };
   return (
     <svg viewBox="0 0 24 24" width={size} height={size}
@@ -287,6 +289,10 @@ export default function CompraForm() {
   const [expandidos, setExpandidos] = useState(() => new Set());
 
   const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [qrInput,       setQrInput]       = useState('');
+  const [qrError,       setQrError]       = useState('');
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
+  const qrTimerRef = useRef(null);
   const [filtroMarca,      setFiltroMarca]      = useState('');
   const [filtroProducto,   setFiltroProducto]   = useState('');
   const [filtroModelo,     setFiltroModelo]     = useState('');
@@ -498,6 +504,31 @@ export default function CompraForm() {
       }];
     });
   }, [catalogo]);
+
+  const procesarCodigoQr = useCallback((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    const match  = trimmed.match(/\/p\/([^/?#\s]+)$/);
+    const codigo = match ? decodeURIComponent(match[1]) : trimmed;
+
+    const prod = catalogo?.productos.find(p => p.codigo_interno === codigo || p.codigo_barras === codigo);
+    if (!prod) {
+      setQrError(`No encontrado: ${codigo}`);
+      setTimeout(() => setQrError(''), 3000);
+      setQrInput('');
+      return;
+    }
+
+    agregarAlCarrito(prod);
+    setQrInput('');
+    setQrError('');
+  }, [catalogo, agregarAlCarrito]);
+
+  const handleQrScan = (val) => {
+    clearTimeout(qrTimerRef.current);
+    qrTimerRef.current = setTimeout(() => procesarCodigoQr(val), 300);
+  };
 
   const sugeridoReposicion = prod => Math.max(0, Number(prod.stock_maximo || 0) - Number(prod.stock_actual || 0));
 
@@ -1065,6 +1096,26 @@ export default function CompraForm() {
 
         {/* ── Columna productos ── */}
         <div className="space-y-3 min-w-0">
+
+          {/* Escáner QR */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-2.5 flex items-center gap-3">
+            <span className="text-[10px] font-mono font-bold text-zinc-400 flex-shrink-0 tracking-widest select-none uppercase">QR</span>
+            <input
+              type="text" value={qrInput}
+              onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
+              onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+              placeholder="Escanee un código o escriba manualmente…"
+              className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+            />
+            {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
+            <button
+              type="button" onClick={() => setMostrarEscaner(true)} title="Escanear con cámara"
+              className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-500 transition-colors"
+            >
+              <Ic id="camera" size={16} />
+            </button>
+          </div>
+
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -1593,6 +1644,13 @@ export default function CompraForm() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {mostrarEscaner && (
+        <EscanerQR
+          onScan={(val) => { setMostrarEscaner(false); procesarCodigoQr(val); }}
+          onClose={() => setMostrarEscaner(false)}
+        />
       )}
 
     </div>

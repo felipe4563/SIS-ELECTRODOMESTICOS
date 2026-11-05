@@ -83,7 +83,7 @@ const getFormData = async (req, res) => {
       safe(() => {
         if (id_sucursal) {
           return db.promise().query(
-            `SELECT p.id_producto, p.producto AS nombre, p.detalle,
+            `SELECT p.id_producto, p.producto AS nombre, p.detalle, p.codigo_interno, p.codigo_barras,
                     m.nombre AS marca, p.modelo, p.color, p.capacidad, p.imagen_url,
                     CAST(SUM(s.cantidad_disponible) AS DECIMAL(14,2)) AS stock
              FROM productos p
@@ -92,14 +92,14 @@ const getFormData = async (req, res) => {
              INNER JOIN depositos d ON s.id_deposito = d.id_deposito
                         AND d.id_sucursal = ? AND d.activo = 1
              WHERE p.activo = 1
-             GROUP BY p.id_producto, p.producto, p.detalle, m.nombre, p.modelo, p.color, p.capacidad, p.imagen_url
+             GROUP BY p.id_producto, p.producto, p.detalle, p.codigo_interno, p.codigo_barras, m.nombre, p.modelo, p.color, p.capacidad, p.imagen_url
              HAVING SUM(s.cantidad_disponible) > 0
              ORDER BY p.producto`,
             [id_sucursal]
           ).then(([r]) => r);
         }
         return db.promise().query(
-          `SELECT p.id_producto, p.producto AS nombre, p.detalle,
+          `SELECT p.id_producto, p.producto AS nombre, p.detalle, p.codigo_interno, p.codigo_barras,
                   m.nombre AS marca, p.modelo, p.color, p.capacidad, p.imagen_url
            FROM productos p
            LEFT JOIN marcas m ON p.id_marca = m.id_marca

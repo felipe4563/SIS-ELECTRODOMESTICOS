@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { transferenciasService } from '../../services/transferencias.service';
 import { inventarioService }      from '../../services/inventario.service';
 import { productosService }       from '../../services/productos.service';
-import { FaArrowLeft } from 'react-icons/fa';
+import { FaArrowLeft, FaCamera } from 'react-icons/fa';
+import EscanerQR from '../../components/EscanerQR';
 
 const fmtNum = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
@@ -290,6 +291,10 @@ export default function TransferenciaForm() {
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState('');
   const [busquedaStock, setBusquedaStock] = useState('');
+  const [qrInput,        setQrInput]        = useState('');
+  const [qrError,        setQrError]        = useState('');
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
+  const qrTimerRef = useRef(null);
   const [filtroMarca,    setFiltroMarca]    = useState('');
   const [filtroProducto, setFiltroProducto] = useState('');
   const [filtroModelo,   setFiltroModelo]   = useState('');
@@ -423,6 +428,46 @@ export default function TransferenciaForm() {
       if (vacio >= 0) return prev.map((it, i) => i === vacio ? nuevaFila : it);
       return [...prev, nuevaFila];
     });
+  };
+
+  const procesarCodigoQr = useCallback((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    const match  = trimmed.match(/\/p\/([^/?#\s]+)$/);
+    const codigo = match ? decodeURIComponent(match[1]) : trimmed;
+
+    if (!form.id_deposito_origen) {
+      setQrError('Elegí primero el depósito origen');
+      setTimeout(() => setQrError(''), 3000);
+      setQrInput('');
+      return;
+    }
+
+    const prod = productos.find(p => p.codigo_interno === codigo || p.codigo_barras === codigo);
+    if (!prod) {
+      setQrError(`No encontrado: ${codigo}`);
+      setTimeout(() => setQrError(''), 3000);
+      setQrInput('');
+      return;
+    }
+
+    const disponible = stockOrigen[String(prod.id_producto)] ?? 0;
+    if (disponible <= 0) {
+      setQrError(`Sin stock en origen: ${prod.producto}`);
+      setTimeout(() => setQrError(''), 3000);
+      setQrInput('');
+      return;
+    }
+
+    agregarProducto(prod);
+    setQrInput('');
+    setQrError('');
+  }, [form.id_deposito_origen, productos, stockOrigen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleQrScan = (val) => {
+    clearTimeout(qrTimerRef.current);
+    qrTimerRef.current = setTimeout(() => procesarCodigoQr(val), 300);
   };
 
   // Quitar una unidad de un producto ya agregado (desde el catálogo)
@@ -692,6 +737,27 @@ export default function TransferenciaForm() {
             )}
           </div>
 
+          {/* Escáner QR */}
+          {form.id_deposito_origen && (
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-2.5 flex items-center gap-3">
+              <span className="text-[10px] font-mono font-bold text-zinc-400 flex-shrink-0 tracking-widest select-none uppercase">QR</span>
+              <input
+                type="text" value={qrInput}
+                onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                placeholder="Escanee un código o escriba manualmente…"
+                className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+              />
+              {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
+              <button
+                type="button" onClick={() => setMostrarEscaner(true)} title="Escanear con cámara"
+                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-500 transition-colors"
+              >
+                <FaCamera className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           {/* Catálogo de stock disponible */}
           {form.id_deposito_origen && (
             <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -805,6 +871,13 @@ export default function TransferenciaForm() {
             <div className="flex-1 min-h-0">{panelCarrito}</div>
           </div>
         </div>
+      )}
+
+      {mostrarEscaner && (
+        <EscanerQR
+          onScan={(val) => { setMostrarEscaner(false); procesarCodigoQr(val); }}
+          onClose={() => setMostrarEscaner(false)}
+        />
       )}
 
     </div>

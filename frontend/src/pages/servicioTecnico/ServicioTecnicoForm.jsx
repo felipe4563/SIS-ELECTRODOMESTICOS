@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useParams }      from 'react-router-dom';
-import { FaArrowLeft, FaSpinner }      from 'react-icons/fa';
+import { FaArrowLeft, FaSpinner, FaCamera } from 'react-icons/fa';
 import { servicioTecnicoService }      from '../../services/servicioTecnico.service';
 import { fechaHoraLocal }              from '../../utils/fechaLocal';
+import EscanerQR from '../../components/EscanerQR';
 
 const INPUT = 'w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition-colors';
 const COMPACT = 'px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400';
@@ -293,7 +294,47 @@ export default function ServicioTecnicoForm() {
     clientes: [], tecnicos: [], sucursales: [], depositos: [], productos: [],
   });
 
+  const [qrInput,        setQrInput]        = useState('');
+  const [qrError,        setQrError]        = useState('');
+  const [mostrarEscaner, setMostrarEscaner] = useState(false);
+  const qrTimerRef = useRef(null);
+
   const set = (k, v) => setFormData(p => ({ ...p, [k]: v }));
+
+  const seleccionarProducto = useCallback((prod) => {
+    if (!prod) { set('id_producto', null); return; }
+    set('id_producto', prod.id_producto);
+    const desc = [prod.nombre, prod.detalle].filter(Boolean).join(' ');
+    set('descripcion_producto', desc);
+    set('marca_producto', prod.marca ?? '');
+    set('modelo_producto', prod.modelo ?? '');
+    set('color_producto', prod.color ?? '');
+  }, []);
+
+  const procesarCodigoQr = useCallback((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    const match  = trimmed.match(/\/p\/([^/?#\s]+)$/);
+    const codigo = match ? decodeURIComponent(match[1]) : trimmed;
+
+    const prod = catalogo.productos.find(p => p.codigo_interno === codigo || p.codigo_barras === codigo);
+    if (!prod) {
+      setQrError(`No encontrado: ${codigo}`);
+      setTimeout(() => setQrError(''), 3000);
+      setQrInput('');
+      return;
+    }
+
+    seleccionarProducto(prod);
+    setQrInput('');
+    setQrError('');
+  }, [catalogo.productos, seleccionarProducto]);
+
+  const handleQrScan = (val) => {
+    clearTimeout(qrTimerRef.current);
+    qrTimerRef.current = setTimeout(() => procesarCodigoQr(val), 300);
+  };
 
   // Cargar datos base del formulario
   useEffect(() => {
@@ -485,21 +526,30 @@ export default function ServicioTecnicoForm() {
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className={LABEL}>Producto del catálogo</label>
+
+                {/* Escáner QR */}
+                <div className="mb-2 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-2.5 flex items-center gap-3">
+                  <span className="text-[10px] font-mono font-bold text-zinc-400 flex-shrink-0 tracking-widest select-none uppercase">QR</span>
+                  <input
+                    type="text" value={qrInput}
+                    onChange={e => { setQrInput(e.target.value); handleQrScan(e.target.value); }}
+                    onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+                    placeholder="Escanee un código o escriba manualmente…"
+                    className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                  />
+                  {qrError && <span className="text-xs text-red-500 flex-shrink-0">{qrError}</span>}
+                  <button
+                    type="button" onClick={() => setMostrarEscaner(true)} title="Escanear con cámara"
+                    className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-yellow-400 hover:text-yellow-500 transition-colors"
+                  >
+                    <FaCamera className="h-4 w-4" />
+                  </button>
+                </div>
+
                 <ProductoCatalogo
                   productos={catalogo.productos}
                   value={formData.id_producto}
-                  onChange={prod => {
-                    if (!prod) {
-                      set('id_producto', null);
-                      return;
-                    }
-                    set('id_producto', prod.id_producto);
-                    const desc = [prod.nombre, prod.detalle].filter(Boolean).join(' ');
-                    set('descripcion_producto', desc);
-                    set('marca_producto', prod.marca ?? '');
-                    set('modelo_producto', prod.modelo ?? '');
-                    set('color_producto', prod.color ?? '');
-                  }}
+                  onChange={seleccionarProducto}
                 />
               </div>
               <div className="sm:max-w-xs">
@@ -699,6 +749,13 @@ export default function ServicioTecnicoForm() {
         </div>
 
       </form>
+
+      {mostrarEscaner && (
+        <EscanerQR
+          onScan={(val) => { setMostrarEscaner(false); procesarCodigoQr(val); }}
+          onClose={() => setMostrarEscaner(false)}
+        />
+      )}
     </div>
   );
 }
