@@ -172,6 +172,11 @@ function ProductoCatalogo({ productos, value, onChange }) {
       .map(p => p.capacidad).filter(Boolean)
   )].sort(), [productos, filtroMarca, filtroProducto, filtroModelo, filtroColor]);
 
+  const productoSeleccionado = useMemo(
+    () => productos.find(p => String(p.id_producto) === String(value)) ?? null,
+    [productos, value]
+  );
+
   const productosVisibles = useMemo(() => {
     let lista = productos
       .filter(p => !filtroMarca     || p.marca     === filtroMarca)
@@ -193,21 +198,37 @@ function ProductoCatalogo({ productos, value, onChange }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <IcSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
-          <input
-            type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre, marca, modelo…"
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-          />
-        </div>
-        {value != null && (
+      {productoSeleccionado && (
+        <div className="flex items-center gap-3 bg-yellow-50 dark:bg-yellow-400/10 border border-yellow-300 dark:border-yellow-400/40 rounded-xl px-3 py-2">
+          <span className="w-8 h-8 shrink-0 rounded-lg bg-yellow-400 text-zinc-900 flex items-center justify-center">
+            <IcPackage size={16} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-yellow-700 dark:text-yellow-400">Seleccionado</p>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
+              {productoSeleccionado.nombre}
+              {productoSeleccionado.detalle && <span className="font-normal text-zinc-500 dark:text-zinc-400"> — {productoSeleccionado.detalle}</span>}
+            </p>
+            {(productoSeleccionado.marca || productoSeleccionado.modelo || productoSeleccionado.color || productoSeleccionado.capacidad) && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                {[productoSeleccionado.marca, productoSeleccionado.modelo, productoSeleccionado.color, productoSeleccionado.capacidad].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
           <button type="button" onClick={() => onChange(null)}
-            className="shrink-0 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-500 transition-colors">
+            className="shrink-0 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-500 transition-colors">
             ✕ Quitar
           </button>
-        )}
+        </div>
+      )}
+
+      <div className="relative">
+        <IcSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+        <input
+          type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre, marca, modelo…"
+          className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+        />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -239,7 +260,7 @@ function ProductoCatalogo({ productos, value, onChange }) {
           <p className="text-sm font-medium">Sin productos para este filtro</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-[420px] overflow-y-auto pr-0.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 max-h-[420px] overflow-y-auto pr-0.5">
           {productosVisibles.map(p => (
             <ProductoTile
               key={p.id_producto}
@@ -422,7 +443,7 @@ export default function ServicioTecnicoForm() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-5">
+    <div className="max-w-5xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
