@@ -50,6 +50,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // Sin esto, el service worker intercepta CUALQUIER navegación directa
+        // (ej. abrir la URL de una imagen subida en una pestaña nueva) y
+        // devuelve el index.html de la app en vez del archivo real.
+        navigateFallbackDenylist: [/^\/uploads\//, /^\/api\//],
       },
     }),
   ],
