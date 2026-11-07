@@ -100,6 +100,34 @@ function FacturaProvCell({ id, value, editable, onSaved }) {
   );
 }
 
+// ── Miniatura clicable que abre la imagen ampliada en un visor (en vez de
+//    navegar a la URL del archivo, que el service worker del PWA intercepta) ──
+function ImagenAmpliable({ url, alt, className }) {
+  const [abierta, setAbierta] = useState(false);
+  if (!url) return null;
+  return (
+    <>
+      <button type="button" onClick={() => setAbierta(true)} className="shrink-0">
+        <img src={url} alt={alt} className={className} />
+      </button>
+      {abierta && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setAbierta(false)}
+        >
+          <button
+            onClick={() => setAbierta(false)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none transition-colors"
+          >
+            ×
+          </button>
+          <img src={url} alt={alt} className="max-w-full max-h-full rounded-lg object-contain" />
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Imagen de factura / nota de venta del proveedor ────────────────────────────
 function FacturaImagenUpload({ id, url, editable, onSubir }) {
   const [subiendo, setSubiendo] = useState(false);
@@ -124,9 +152,7 @@ function FacturaImagenUpload({ id, url, editable, onSubir }) {
       <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-0.5">Foto de factura / nota de venta</p>
       <div className="flex items-center gap-2">
         {url ? (
-          <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
-            <img src={url} alt="Factura" className="w-12 h-12 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
-          </a>
+          <ImagenAmpliable url={url} alt="Factura" className="w-12 h-12 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
         ) : (
           <span className="text-zinc-400 dark:text-zinc-500 italic text-sm">Sin imagen</span>
         )}
@@ -169,9 +195,7 @@ function ImagenDetalleUpload({ id, idDetalle, url, editable, onSubir, compact = 
     return (
       <div className="flex flex-col items-center gap-1 w-16 mx-auto text-center">
         {url ? (
-          <a href={url} target="_blank" rel="noreferrer">
-            <img src={url} alt="Producto recibido" className="w-11 h-11 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
-          </a>
+          <ImagenAmpliable url={url} alt="Producto recibido" className="w-11 h-11 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
         ) : (
           <div className="w-11 h-11 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-300 dark:text-zinc-600 text-[9px] leading-tight">
             Sin foto
@@ -191,9 +215,7 @@ function ImagenDetalleUpload({ id, idDetalle, url, editable, onSubir, compact = 
   return (
     <div className="flex items-center gap-1.5">
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
-          <img src={url} alt="Producto recibido" className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
-        </a>
+        <ImagenAmpliable url={url} alt="Producto recibido" className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
       ) : (
         <span className="text-zinc-300 dark:text-zinc-600 text-xs italic">Sin foto</span>
       )}
@@ -1778,9 +1800,7 @@ export default function CompraDetalle() {
                         <td className="px-4 py-3 text-zinc-400">{p.numero_cuota ? `#${p.numero_cuota}` : '—'}</td>
                         <td className="px-4 py-3">
                           {p.comprobante_url ? (
-                            <a href={buildFileUrl(p.comprobante_url)} target="_blank" rel="noreferrer">
-                              <img src={buildFileUrl(p.comprobante_url)} alt="Comprobante" className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
-                            </a>
+                            <ImagenAmpliable url={buildFileUrl(p.comprobante_url)} alt="Comprobante" className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
                           ) : (
                             <span className="text-zinc-300 dark:text-zinc-600">—</span>
                           )}
@@ -1824,9 +1844,9 @@ export default function CompraDetalle() {
                       <span>· {p.usuario_nombres} {p.usuario_apellidos}</span>
                     </div>
                     {p.comprobante_url && (
-                      <a href={buildFileUrl(p.comprobante_url)} target="_blank" rel="noreferrer" className="inline-block mb-2">
-                        <img src={buildFileUrl(p.comprobante_url)} alt="Comprobante" className="w-10 h-10 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
-                      </a>
+                      <div className="mb-2">
+                        <ImagenAmpliable url={buildFileUrl(p.comprobante_url)} alt="Comprobante" className="w-10 h-10 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700" />
+                      </div>
                     )}
                     {puedeAnulPago && (
                       <button
