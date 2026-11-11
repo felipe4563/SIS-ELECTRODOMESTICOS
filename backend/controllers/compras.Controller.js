@@ -547,7 +547,10 @@ const actualizarFacturaCompra = async (req, res) => {
 
 // ── Aprobar compra PRE_PEDIDO → CONFIRMADO ────────────────────────────────────
 
-const ESTADOS_PAGO_VALIDOS = ['PRE_PEDIDO', 'CONTADO_PREVENTA', 'PAGADO', 'PARCIAL_ACTA', 'RESERVADO'];
+// CONTADO_PREVENTA ya no es seleccionable (se separó en CONTADO y PREVENTA),
+// pero se deja fuera de esta lista a propósito: las compras viejas guardadas
+// con ese valor siguen existiendo en la base y no necesitan migrarse.
+const ESTADOS_PAGO_VALIDOS = ['PRE_PEDIDO', 'CONTADO', 'PREVENTA', 'CONSIGNACION', 'PAGADO', 'PARCIAL_ACTA', 'RESERVADO'];
 
 const aprobarCompra = async (req, res) => {
   try {

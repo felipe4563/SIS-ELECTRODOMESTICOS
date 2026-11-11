@@ -25,13 +25,22 @@ const ESTADO_BADGE = {
   ANULADO:    { label: 'Anulado',    cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 };
 
+// Incluye CONTADO_PREVENTA solo para mostrar el badge de compras viejas ya
+// guardadas con ese valor combinado; ya no es seleccionable para compras
+// nuevas (reemplazado por CONTADO y PREVENTA por separado).
 const ESTADO_PAGO_BADGE = {
   PRE_PEDIDO:        { label: 'Pre-pedido',        cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400' },
   CONTADO_PREVENTA:  { label: 'Contado / Pre-venta', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+  CONTADO:           { label: 'Contado',           cls: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
+  PREVENTA:          { label: 'Pre-venta',         cls: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
+  CONSIGNACION:      { label: 'Consignación',      cls: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400' },
   PAGADO:            { label: 'Pagado',            cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   PARCIAL_ACTA:      { label: 'Parcial a cuenta',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   RESERVADO:         { label: 'Reservado',         cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
 };
+
+// Opciones seleccionables al aprobar una compra nueva (sin el valor legacy combinado).
+const ESTADO_PAGO_OPCIONES = Object.entries(ESTADO_PAGO_BADGE).filter(([k]) => k !== 'CONTADO_PREVENTA');
 
 const CUOTA_BADGE = {
   PENDIENTE: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
@@ -289,6 +298,16 @@ function SeriesDetalle({ series = [], maxCantidad, editable, onAgregar, onEditar
 
   return (
     <>
+      {series.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {series.map(s => (
+            <span key={s.id_serie}
+              className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+              {s.numero_serie}
+            </span>
+          ))}
+        </div>
+      )}
       <button
         type="button" onClick={() => setModalAbierto(true)}
         className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline"
@@ -1166,7 +1185,7 @@ export default function CompraDetalle() {
             <label className={labelCls}>Estado de pago / reserva (opcional)</label>
             <select value={estadoPagoSel} onChange={e => setEstadoPagoSel(e.target.value)} className={fieldCls}>
               <option value="">— Sin especificar —</option>
-              {Object.entries(ESTADO_PAGO_BADGE).map(([k, v]) => (
+              {ESTADO_PAGO_OPCIONES.map(([k, v]) => (
                 <option key={k} value={k}>{v.label}</option>
               ))}
             </select>
