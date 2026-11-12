@@ -30,7 +30,10 @@ export default function EtiquetasImprimir() {
         try {
           urls[item.codigo_interno] = await QRCode.toDataURL(
             `${APP_URL}/p/${item.codigo_interno}`,
-            { width: 320, margin: 1, errorCorrectionLevel: 'M' }
+            // 'H' (máxima corrección de errores) en vez de 'M': algunas
+            // impresoras (BLE "familia ff00") recortan unos mm del borde del
+            // cabezal, perdiendo módulos del QR si está muy pegado al borde.
+            { width: 320, margin: 1, errorCorrectionLevel: 'H' }
           );
         } catch { /* código inválido — se ignora */ }
       }

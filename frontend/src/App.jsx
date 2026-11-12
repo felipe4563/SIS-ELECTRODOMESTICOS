@@ -14,6 +14,7 @@ import NotFound           from './pages/NotFound';
 import CambiarContrasena  from './pages/CambiarContrasena';
 import SelectorSucursal   from './pages/SelectorSucursal';
 import ProductoPublico    from './pages/public/ProductoPublico';
+import TestImpresoraBT    from './pages/TestImpresoraBT';
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 import Dashboard from './pages/Dashboard';
@@ -167,6 +168,9 @@ export default function App() {
 
               {/* Producto público — sin login */}
               <Route path="/p/:codigo" element={<ProductoPublico />} />
+
+              {/* Página descartable para probar conexión Web Bluetooth con impresoras */}
+              <Route path="/test-impresora-bt" element={<TestImpresoraBT />} />
 
               {/* Cambiar contraseña (requiere sesión) */}
               <Route path="/cambiar-contrasena" element={

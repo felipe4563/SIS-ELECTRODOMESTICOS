@@ -15,7 +15,14 @@
 
 const CANDIDATOS = [
   { servicio: '0000ffe0-0000-1000-8000-00805f9b34fb', write: '0000ffe1-0000-1000-8000-00805f9b34fb', nombre: 'HM-10/FFE0' },
-  { servicio: '49535343-fe7d-4ae5-8fa9-9fafd205e455', write: '49535343-1e4d-4bd9-ba61-23c647249616', nombre: 'RN4870/UART' },
+  // OJO: 49535343-1e4d-... es la característica de NOTIFICACIÓN (RX desde la
+  // impresora), no la de escritura — confirmado por inspección directa en una
+  // T-IM5001 real (ver /test-impresora-bt). La de escritura es 49535343-8841-...
+  { servicio: '49535343-fe7d-4ae5-8fa9-9fafd205e455', write: '49535343-8841-43f4-a8d4-ecbe34729bb3', nombre: 'RN4870/UART' },
+  // Confirmado por inspección directa en una DP30-Y308321015 real (ver /test-impresora-bt).
+  { servicio: '0000ff00-0000-1000-8000-00805f9b34fb', write: '0000ff02-0000-1000-8000-00805f9b34fb', nombre: 'FF00/FF02' },
+  // Confirmado por inspección directa en una T-IM5001 real (ver /test-impresora-bt).
+  { servicio: '000018f0-0000-1000-8000-00805f9b34fb', write: '00002af1-0000-1000-8000-00805f9b34fb', nombre: '18F0/2AF1' },
 ];
 
 const DPI          = 203;
@@ -55,6 +62,125 @@ function concatBytes(arrays) {
   return out;
 }
 
+// ── Protocolo "familia ff00" (DP30 y similares) ──────────────────────────────
+// Comando de bitmap raster estándar ESC/POS (GS v 0) + wakeup/enable/stop
+// propios de esta familia, con control de flujo por créditos/MTU que la
+// propia impresora reporta por notificación en 0xFF03. Confirmado contra
+// hardware real — ver tomLadder/thermoprint REVERSE_ENGINEERING.md.
+async function conectarFamiliaFF00(device, service, writeChar) {
+  const flow = { creditos: 4, mtu: 237 };
+  try {
+    const notifyChar  = await service.getCharacteristic('0000ff01-0000-1000-8000-00805f9b34fb');
+    const controlChar = await service.getCharacteristic('0000ff03-0000-1000-8000-00805f9b34fb');
+    await controlChar.startNotifications();
+    controlChar.addEventListener('characteristicvaluechanged', (e) => {
+      const v = e.target.value;
+      if (v.byteLength >= 2 && v.getUint8(0) === 0x01) flow.creditos += v.getUint8(1);
+      else if (v.byteLength >= 3 && v.getUint8(0) === 0x02) flow.mtu = Math.max(20, (v.getUint8(1) | (v.getUint8(2) << 8)) - 3);
+    });
+    await notifyChar.startNotifications(); // 0xFF=status (sin papel/tapa abierta/etc.), se ignora por ahora
+  } catch { /* si no están disponibles, seguimos con los valores por defecto */ }
+
+  const esperarCredito = async () => {
+    let esperado = 0;
+    while (flow.creditos <= 0 && esperado < 3000) {
+      await sleep(20);
+      esperado += 20;
+    }
+  };
+
+  const write = async (bytes) => {
+    for (let i = 0; i < bytes.length; i += flow.mtu) {
+      await esperarCredito();
+      await writeChar.writeValueWithoutResponse(bytes.subarray(i, i + flow.mtu));
+      flow.creditos -= 1;
+    }
+  };
+
+  const disconnect = () => {
+    try { device.gatt.disconnect(); } catch { /* noop */ }
+  };
+
+  async function printCanvas(canvasRotado) {
+    // renderLabelDetallado/renderLabelSimple devuelven el diseño ya rotado
+    // 90° pensando en impresoras TSPL de cabezal angosto (40mm). Esta
+    // impresora (familia ff00/L11) tiene cabezal más ancho (72mm según su
+    // driver de Windows) e imprime las 60mm de ancho del diseño directo,
+    // sin rotar — se deshace la rotación antes de mandarlo.
+    const rotW = canvasRotado.width, rotH = canvasRotado.height;
+    const natural = document.createElement('canvas');
+    natural.width = rotH;
+    natural.height = rotW;
+    const ctxNat = natural.getContext('2d');
+    ctxNat.fillStyle = '#fff';
+    ctxNat.fillRect(0, 0, natural.width, natural.height);
+    ctxNat.translate(natural.width / 2, natural.height / 2);
+    ctxNat.rotate(-Math.PI / 2);
+    ctxNat.drawImage(canvasRotado, -rotW / 2, -rotH / 2);
+
+    // El cabezal de esta impresora no imprime unos mm de un borde del ancho
+    // (confirmado con pruebas: se comían las primeras letras/módulos del QR)
+    // — se achica levemente el diseño para que entre completo con margen de
+    // los dos lados. El canvas se mantiene en 480 dots: confirmado que
+    // agrandarlo más allá de eso cuelga la impresora a mitad de impresión
+    // (límite real del firmware, no un problema de timing).
+    const MARGEN_DOTS = 150; // ~18.7mm a 203dpi — confirmado que posiciona bien
+    const { width, height } = natural;
+    const escala = (width - MARGEN_DOTS) / width;
+    const escaladoW = Math.round(width * escala);
+    const escaladoH = Math.round(height * escala);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctxOut = canvas.getContext('2d');
+    ctxOut.fillStyle = '#fff';
+    ctxOut.fillRect(0, 0, width, height);
+    ctxOut.drawImage(natural, MARGEN_DOTS, Math.round((height - escaladoH) / 2), escaladoW, escaladoH);
+
+    const bytesPerRow = Math.ceil(width / 8);
+    const ctx  = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, width, height).data;
+    const bitmap = new Uint8Array(bytesPerRow * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i   = (y * width + x) * 4;
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        if (lum < 128) bitmap[y * bytesPerRow + (x >> 3)] |= (0x80 >> (x & 7));
+      }
+    }
+
+    const wakeup = new Uint8Array(15).fill(0x00);
+    const enable = new Uint8Array([0x10, 0xff, 0xf1, 0x02]);
+    const header = new Uint8Array([
+      0x1d, 0x76, 0x30, 0x00,
+      bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
+      height & 0xff, (height >> 8) & 0xff,
+    ]);
+    const feed = new Uint8Array([0x1d, 0x0c]); // avanzar hasta el próximo gap
+    const stop = new Uint8Array([0x10, 0xff, 0xf1, 0x45]);
+
+    await write(wakeup);
+    await write(enable);
+    await write(header);
+    await write(bitmap);
+    await write(feed);
+    await write(stop);
+
+    // El BLE confirma la recepción de los datos mucho antes de que el
+    // cabezal termine de imprimir y avanzar el papel físicamente — sin
+    // esperar esto, la siguiente etiqueta (en una impresión de varias
+    // copias) le llega a mitad de impresión y se pierde/sale en blanco.
+    await sleep(3500);
+  }
+
+  return {
+    device,
+    printCanvas,
+    disconnect,
+    get connected() { return !!device.gatt?.connected; },
+  };
+}
+
 // ── Conexión ────────────────────────────────────────────────────────────────
 export async function connectTomatePrinter() {
   if (!isBluetoothSupported()) {
@@ -68,10 +194,13 @@ export async function connectTomatePrinter() {
   const server = await device.gatt.connect();
 
   let writeChar = null;
+  let matched = null;
+  let service = null;
   for (const cand of CANDIDATOS) {
     try {
-      const service = await server.getPrimaryService(cand.servicio);
+      service = await server.getPrimaryService(cand.servicio);
       writeChar = await service.getCharacteristic(cand.write);
+      matched = cand;
       break;
     } catch { /* probar el siguiente candidato */ }
   }
@@ -86,16 +215,38 @@ export async function connectTomatePrinter() {
     );
   }
 
+  // Las impresoras de la "familia ff00" (confirmado en una DP30-Y308321015
+  // real — ver tomLadder/thermoprint REVERSE_ENGINEERING.md) NO hablan TSPL:
+  // usan un protocolo tipo ESC/POS (GS v 0) con control de flujo por créditos
+  // reportado por notificación en la característica 0xFF03. Nada que ver con
+  // el protocolo TSPL que sí hablan la HM-10/RN4870 (p. ej. la T-IM5001).
+  if (matched.nombre === 'FF00/FF02') {
+    return await conectarFamiliaFF00(device, service, writeChar);
+  }
+
   const write = async (bytes) => {
-    // Muchos módulos BLE baratos tienen un buffer interno chico; mandamos
-    // de a trozos cortos con una pequeña pausa, igual que con la cat printer.
-    const CHUNK = 100;
+    // Muchos módulos BLE baratos tienen un buffer interno chico y un MTU
+    // bajo; mandamos de a trozos cortos (20 bytes, el payload típico sin
+    // negociación de MTU extendida) con una pequeña pausa, igual que con
+    // la cat printer — con trozos más grandes el bitmap llegaba corrupto
+    // y la etiqueta salía en blanco.
+    //
+    // writeValueWithoutResponse puede colgarse sin error ni resolución en
+    // ráfagas largas (bug conocido de Chrome con ciertos módulos BLE
+    // baratos) — se prefiere writeValue (con respuesta/ack) aunque sea más
+    // lento, porque al menos no se cuelga en silencio.
+    const CHUNK = 20;
+    const usarConRespuesta = typeof writeChar.writeValue === 'function';
+    const totalChunks = Math.ceil(bytes.length / CHUNK);
     for (let i = 0; i < bytes.length; i += CHUNK) {
       const trozo = bytes.subarray(i, i + CHUNK);
-      if (writeChar.writeValueWithoutResponse) await writeChar.writeValueWithoutResponse(trozo);
-      else await writeChar.writeValue(trozo);
-      await sleep(15);
+      const n = i / CHUNK;
+      if (n % 50 === 0) console.log(`[tomatePrinter] paquete ${n}/${totalChunks}`);
+      if (usarConRespuesta) await writeChar.writeValue(trozo);
+      else await writeChar.writeValueWithoutResponse(trozo);
+      await sleep(10);
     }
+    console.log('[tomatePrinter] todos los paquetes enviados');
   };
 
   const disconnect = () => {
@@ -107,7 +258,9 @@ export async function connectTomatePrinter() {
 
     const encabezado = concatBytes([
       strToBytes(`SIZE ${LABEL_W_MM} mm,${LABEL_H_MM} mm`),
-      strToBytes('GAP 2 mm,0 mm'),
+      // 3mm confirmado en la config del driver Windows de esta misma impresora
+      // (Gap/Mark Height) — con 2mm el sensor pierde sincronía con el rollo real.
+      strToBytes('GAP 3 mm,0 mm'),
       strToBytes('DIRECTION 0'),
       strToBytes('CLS'),
       strToBytes(`BITMAP 0,0,${widthBytes},${heightDots},0,`),
