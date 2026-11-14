@@ -68,7 +68,7 @@ export default function TransferenciaDetalle() {
     );
     setSendItems(pendientes.map(d => {
       const aEnviar = Math.round(Number(d.cantidad_enviada) - Number(d.cantidad_despachada));
-      const series = (d.series ?? []).filter(s => s.estado === 'EN_STOCK' && String(s.id_deposito_actual) === String(trf.id_deposito_origen));
+      const series = (d.series ?? []).filter(s => s.estado === 'EN_STOCK' && String(s.id_deposito_actual) === String(d.id_deposito_origen));
       return {
         id_detalle: d.id_detalle,
         producto_nombre: d.producto_nombre,
@@ -141,7 +141,7 @@ export default function TransferenciaDetalle() {
       guardando: false,
     });
     try {
-      const { data } = await productosService.getSeriesProducto(d.id_producto, trf.id_deposito_origen, {
+      const { data } = await productosService.getSeriesProducto(d.id_producto, d.id_deposito_origen, {
         excluirTransferencia: trf.id_transferencia,
       });
       setModalSeries(prev => (prev && prev.id_detalle === d.id_detalle) ? { ...prev, disponibles: data.series ?? [], cargando: false } : prev);
@@ -166,12 +166,12 @@ export default function TransferenciaDetalle() {
     try {
       const items = (trf.detalle ?? []).map(d => ({
         id_producto: d.id_producto,
+        id_deposito_origen: d.id_deposito_origen,
         cantidad: d.cantidad_enviada,
         observacion: d.observacion,
         series: d.id_detalle === modalSeries.id_detalle ? modalSeries.seleccion : (d.series ?? []).map(s => s.id_serie),
       }));
       await transferenciasService.update(id, {
-        id_deposito_origen: trf.id_deposito_origen,
         id_deposito_destino: trf.id_deposito_destino,
         observaciones: trf.observaciones,
         items,
