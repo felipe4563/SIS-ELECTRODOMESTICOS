@@ -105,7 +105,7 @@ const getTransferencias = async (req, res) => {
     const [rows] = await db.promise().query(
       `SELECT t.id_transferencia, t.numero, t.estado,
               t.fecha_solicitud, t.fecha_envio, t.fecha_recepcion,
-              dor.nombre AS deposito_origen_nombre, dor.codigo AS deposito_origen_codigo,
+              COALESCE(dor.nombre, 'Varios depósitos') AS deposito_origen_nombre, dor.codigo AS deposito_origen_codigo,
               dde.nombre AS deposito_destino_nombre, dde.codigo AS deposito_destino_codigo,
               u1.nombres AS solicita_nombres, u1.apellidos AS solicita_apellidos
        FROM transferencias t
@@ -130,7 +130,7 @@ const getTransferencia = async (req, res) => {
     const { id } = req.params;
     const [[t]] = await db.promise().query(
       `SELECT t.*,
-              dor.nombre AS deposito_origen_nombre, dor.codigo AS deposito_origen_codigo,
+              COALESCE(dor.nombre, 'Varios depósitos') AS deposito_origen_nombre, dor.codigo AS deposito_origen_codigo,
               dde.nombre AS deposito_destino_nombre, dde.codigo AS deposito_destino_codigo,
               u1.nombres AS solicita_nombres, u1.apellidos AS solicita_apellidos,
               u2.nombres AS envia_nombres,    u2.apellidos AS envia_apellidos,

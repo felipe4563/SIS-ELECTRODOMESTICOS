@@ -307,7 +307,7 @@ export default function TransferenciaDetalle() {
       {/* Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
-          { label: 'Depósito origen',  value: `${trf.deposito_origen_nombre} (${trf.deposito_origen_codigo})` },
+          { label: 'Depósito origen',  value: trf.deposito_origen_nombre ? `${trf.deposito_origen_nombre}${trf.deposito_origen_codigo ? ` (${trf.deposito_origen_codigo})` : ''}` : 'Varios depósitos' },
           { label: 'Depósito destino', value: `${trf.deposito_destino_nombre} (${trf.deposito_destino_codigo})` },
           { label: 'Solicitada',       value: fmtFecha(trf.fecha_solicitud) },
           { label: 'Enviada',          value: fmtFecha(trf.fecha_envio) },
@@ -504,7 +504,7 @@ export default function TransferenciaDetalle() {
         <Modal titulo="Confirmar envío" onClose={() => setModal(null)}>
           <div className="space-y-4">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              El stock saldrá del depósito <strong>{trf.deposito_origen_nombre}</strong>. Si no envía todo, puede completar el resto después con un nuevo envío.
+              El stock saldrá del depósito <strong>{trf.deposito_origen_nombre || 'varios depósitos'}</strong>. Si no envía todo, puede completar el resto después con un nuevo envío.
             </p>
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {sendItems.map((item, i) => {
