@@ -703,37 +703,36 @@ const anularTransferencia = async (req, res) => {
         `SELECT * FROM transferencia_detalle WHERE id_transferencia = ?`, [id]
       );
 
-      const idsDetalle = detalle.map(d => d.id_detalle);
-      if (idsDetalle.length) {
-        const [seriesRows] = await conn.query(
-          `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle IN (?) AND estado = 'EN_TRANSITO'`,
-          [idsDetalle]
-        );
-        if (seriesRows.length) {
-          await productoSeries.revertirATransito(dbTx(conn), seriesRows.map(r => r.id_serie), {
-            id_deposito_origen: t.id_deposito_origen,
-          });
-        }
-      }
-
       // Se devuelve al origen lo que salió y todavía está en tránsito
       // (despachado - recibido), no todo lo despachado: lo ya recibido en
       // destino (transferencia PARCIAL) no debe volver también al origen,
-      // o se duplicaría ese stock en ambos depósitos.
+      // o se duplicaría ese stock en ambos depósitos. El origen es el de
+      // cada línea (id_deposito_origen de transferencia_detalle), no el de
+      // cabecera, que puede ser NULL en transferencias de origen mixto.
       for (const item of detalle) {
+        const [seriesRows] = await conn.query(
+          `SELECT id_serie FROM compra_detalle_series WHERE id_transferencia_detalle = ? AND estado = 'EN_TRANSITO'`,
+          [item.id_detalle]
+        );
+        if (seriesRows.length) {
+          await productoSeries.revertirATransito(dbTx(conn), seriesRows.map(r => r.id_serie), {
+            id_deposito_origen: item.id_deposito_origen,
+          });
+        }
+
         const devolver = Number(item.cantidad_despachada) - Number(item.cantidad_recibida);
         if (!(devolver > 0)) continue;
         await conn.query(
           `UPDATE stock SET cantidad = cantidad + ?, fecha_ult_movimiento = NOW()
            WHERE id_producto = ? AND id_deposito = ?`,
-          [devolver, item.id_producto, t.id_deposito_origen]
+          [devolver, item.id_producto, item.id_deposito_origen]
         );
 
         if (tmEntrada) {
           const [[stPost]] = await conn.query(
             `SELECT COALESCE(cantidad, 0) AS qty, COALESCE(costo_promedio, 0) AS costo
              FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-            [item.id_producto, t.id_deposito_origen]
+            [item.id_producto, item.id_deposito_origen]
           );
           await conn.query(
             `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad,
@@ -741,7 +740,7 @@ const anularTransferencia = async (req, res) => {
                documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
-              item.id_producto, t.id_deposito_origen, tmEntrada.id_tipo_movimiento,
+              item.id_producto, item.id_deposito_origen, tmEntrada.id_tipo_movimiento,
               devolver,
               Number(stPost?.costo ?? 0),
               Number(stPost?.qty   ?? 0),
