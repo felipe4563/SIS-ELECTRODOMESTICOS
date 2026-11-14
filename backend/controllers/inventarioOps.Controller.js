@@ -569,7 +569,7 @@ const recibirTransferencia = async (req, res) => {
       const [[stOrig]] = await conn.query(
         `SELECT COALESCE(costo_promedio, 0) AS costo FROM stock
          WHERE id_producto = ? AND id_deposito = ?`,
-        [det.id_producto, t.id_deposito_origen]
+        [det.id_producto, det.id_deposito_origen]
       );
 
       const qtyActual   = Number(stDest?.qty  ?? 0);
