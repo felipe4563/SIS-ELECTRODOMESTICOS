@@ -679,12 +679,12 @@ export default function TransferenciaForm() {
               (acc[k] ??= []).push({ fila: it, i });
               return acc;
             }, {})
-          ).map(([k, filas]) => {
+          ).map(([k, filas], index) => {
             const nombreDeposito = k ? depositos.find(d => String(d.id_deposito) === k)?.nombre : null;
             return (
-              <div key={k || 'sin-origen'}>
+              <div key={k || 'sin-origen'} className={index > 0 ? 'mt-3' : ''}>
                 {nombreDeposito && (
-                  <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mt-3 mb-1.5 uppercase tracking-wide first:mt-0">
+                  <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5 uppercase tracking-wide">
                     {nombreDeposito}
                   </p>
                 )}
