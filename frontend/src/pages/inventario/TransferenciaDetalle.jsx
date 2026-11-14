@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { transferenciasService } from '../../services/transferencias.service';
 import { productosService }       from '../../services/productos.service';
@@ -72,6 +72,7 @@ export default function TransferenciaDetalle() {
       return {
         id_detalle: d.id_detalle,
         producto_nombre: d.producto_nombre,
+        deposito_origen_nombre: d.deposito_origen_nombre,
         cantidad_enviada: d.cantidad_enviada,
         cantidad_despachada: d.cantidad_despachada,
         cantidad_a_enviar: aEnviar,
@@ -92,6 +93,7 @@ export default function TransferenciaDetalle() {
       return {
         id_detalle: d.id_detalle,
         producto_nombre: d.producto_nombre,
+        deposito_origen_nombre: d.deposito_origen_nombre,
         cantidad_despachada: d.cantidad_despachada,
         cantidad_recibida: d.cantidad_recibida,
         cantidad_a_recibir: aRecibir,
@@ -356,58 +358,75 @@ export default function TransferenciaDetalle() {
         </div>
 
         {/* ── Tarjetas — móvil < md ── */}
-        <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
-          {(trf.detalle ?? []).map(d => {
-            const pendiente = Number(d.cantidad_despachada) - Number(d.cantidad_recibida);
-            return (
-              <div key={d.id_detalle} className="px-4 py-3 space-y-2">
-                <div>
-                  <p className="font-medium text-sm text-zinc-900 dark:text-white">{d.producto_nombre}</p>
-                  <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
-                  {d.producto_detalle && (
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
-                  )}
-                  {specLinea(d) && (
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
-                  )}
-                  {d.series?.length > 0 && (
-                    <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
-                      N° serie: {d.series.map(s => s.numero_serie).join(', ')}
-                    </p>
-                  )}
-                </div>
-                {d.unidad_nombre && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Unidad: {d.unidad_nombre}</p>
-                )}
-                {trf.estado === 'BORRADOR' && puedeEditar && (
-                  <button type="button" onClick={() => abrirSeries(d)}
-                    className="text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
-                    {d.series?.length > 0 ? `Series elegidas (${d.series.length}/${fmtCant(d.cantidad_enviada)})` : 'Elegir series'}
-                  </button>
-                )}
-                <div className="flex items-center gap-4 text-xs flex-wrap">
-                  <div>
-                    <span className="text-zinc-400 dark:text-zinc-500">Solicitado </span>
-                    <span className="font-mono font-semibold text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400 dark:text-zinc-500">Despachado </span>
-                    <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">{fmtCant(d.cantidad_despachada)}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400 dark:text-zinc-500">Recibido </span>
-                    <span className="font-mono font-semibold text-green-600 dark:text-green-400">{fmtCant(d.cantidad_recibida)}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400 dark:text-zinc-500">Pendiente </span>
-                    <span className={`font-mono font-semibold ${pendiente > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-zinc-400'}`}>
-                      {fmtCant(pendiente)}
-                    </span>
-                  </div>
-                </div>
+        <div className="md:hidden">
+          {Object.entries(
+            (trf.detalle ?? []).reduce((acc, d) => {
+              const k = d.deposito_origen_nombre || '';
+              (acc[k] ??= []).push(d);
+              return acc;
+            }, {})
+          ).map(([nombreDeposito, filas], index) => (
+            <div key={nombreDeposito || 'sin-origen'} className={index > 0 ? 'mt-1' : ''}>
+              {nombreDeposito && (
+                <p className="px-4 py-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide bg-zinc-50 dark:bg-zinc-800/60 border-y border-zinc-100 dark:border-zinc-800">
+                  Origen: {nombreDeposito}
+                </p>
+              )}
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {filas.map(d => {
+                  const pendiente = Number(d.cantidad_despachada) - Number(d.cantidad_recibida);
+                  return (
+                    <div key={d.id_detalle} className="px-4 py-3 space-y-2">
+                      <div>
+                        <p className="font-medium text-sm text-zinc-900 dark:text-white">{d.producto_nombre}</p>
+                        <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                        {d.producto_detalle && (
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
+                        )}
+                        {specLinea(d) && (
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
+                        )}
+                        {d.series?.length > 0 && (
+                          <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
+                            N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      {d.unidad_nombre && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Unidad: {d.unidad_nombre}</p>
+                      )}
+                      {trf.estado === 'BORRADOR' && puedeEditar && (
+                        <button type="button" onClick={() => abrirSeries(d)}
+                          className="text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                          {d.series?.length > 0 ? `Series elegidas (${d.series.length}/${fmtCant(d.cantidad_enviada)})` : 'Elegir series'}
+                        </button>
+                      )}
+                      <div className="flex items-center gap-4 text-xs flex-wrap">
+                        <div>
+                          <span className="text-zinc-400 dark:text-zinc-500">Solicitado </span>
+                          <span className="font-mono font-semibold text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 dark:text-zinc-500">Despachado </span>
+                          <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">{fmtCant(d.cantidad_despachada)}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 dark:text-zinc-500">Recibido </span>
+                          <span className="font-mono font-semibold text-green-600 dark:text-green-400">{fmtCant(d.cantidad_recibida)}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 dark:text-zinc-500">Pendiente </span>
+                          <span className={`font-mono font-semibold ${pendiente > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-zinc-400'}`}>
+                            {fmtCant(pendiente)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
         {/* ── Tabla — desktop md+ ── */}
@@ -421,43 +440,60 @@ export default function TransferenciaDetalle() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {(trf.detalle ?? []).map(d => {
-                const pendiente = Number(d.cantidad_despachada) - Number(d.cantidad_recibida);
-                return (
-                  <tr key={d.id_detalle}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-zinc-900 dark:text-white">{d.producto_nombre}</p>
-                      <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
-                      {d.producto_detalle && (
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
-                      )}
-                      {specLinea(d) && (
-                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
-                      )}
-                      {d.series?.length > 0 && (
-                        <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
-                          N° serie: {d.series.map(s => s.numero_serie).join(', ')}
-                        </p>
-                      )}
-                      {trf.estado === 'BORRADOR' && puedeEditar && (
-                        <button type="button" onClick={() => abrirSeries(d)}
-                          className="mt-1.5 text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
-                          {d.series?.length > 0 ? `Series elegidas (${d.series.length}/${fmtCant(d.cantidad_enviada)})` : 'Elegir series'}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{d.unidad_nombre}</td>
-                    <td className="px-4 py-3 font-mono text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</td>
-                    <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400">{fmtCant(d.cantidad_despachada)}</td>
-                    <td className="px-4 py-3 font-mono text-green-600 dark:text-green-400">{fmtCant(d.cantidad_recibida)}</td>
-                    <td className="px-4 py-3 font-mono">
-                      <span className={pendiente > 0 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-zinc-400'}>
-                        {fmtCant(pendiente)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {Object.entries(
+                (trf.detalle ?? []).reduce((acc, d) => {
+                  const k = d.deposito_origen_nombre || '';
+                  (acc[k] ??= []).push(d);
+                  return acc;
+                }, {})
+              ).map(([nombreDeposito, filas], index) => (
+                <Fragment key={nombreDeposito || 'sin-origen'}>
+                  {nombreDeposito && (
+                    <tr className={index > 0 ? 'border-t-2 border-zinc-200 dark:border-zinc-700' : ''}>
+                      <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide bg-zinc-50 dark:bg-zinc-800/60">
+                        Origen: {nombreDeposito}
+                      </td>
+                    </tr>
+                  )}
+                  {filas.map(d => {
+                    const pendiente = Number(d.cantidad_despachada) - Number(d.cantidad_recibida);
+                    return (
+                      <tr key={d.id_detalle}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-zinc-900 dark:text-white">{d.producto_nombre}</p>
+                          <p className="text-[11px] font-mono text-zinc-400">{d.codigo_interno}</p>
+                          {d.producto_detalle && (
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{d.producto_detalle}</p>
+                          )}
+                          {specLinea(d) && (
+                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(d)}</p>
+                          )}
+                          {d.series?.length > 0 && (
+                            <p className="text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
+                              N° serie: {d.series.map(s => s.numero_serie).join(', ')}
+                            </p>
+                          )}
+                          {trf.estado === 'BORRADOR' && puedeEditar && (
+                            <button type="button" onClick={() => abrirSeries(d)}
+                              className="mt-1.5 text-[11px] px-2 py-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                              {d.series?.length > 0 ? `Series elegidas (${d.series.length}/${fmtCant(d.cantidad_enviada)})` : 'Elegir series'}
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400">{d.unidad_nombre}</td>
+                        <td className="px-4 py-3 font-mono text-zinc-900 dark:text-white">{fmtCant(d.cantidad_enviada)}</td>
+                        <td className="px-4 py-3 font-mono text-blue-600 dark:text-blue-400">{fmtCant(d.cantidad_despachada)}</td>
+                        <td className="px-4 py-3 font-mono text-green-600 dark:text-green-400">{fmtCant(d.cantidad_recibida)}</td>
+                        <td className="px-4 py-3 font-mono">
+                          <span className={pendiente > 0 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-zinc-400'}>
+                            {fmtCant(pendiente)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
@@ -479,6 +515,11 @@ export default function TransferenciaDetalle() {
                     <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.producto_nombre}</p>
+                        {item.deposito_origen_nombre && (
+                          <span className="inline-block mt-0.5 mb-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium">
+                            Origen: {item.deposito_origen_nombre}
+                          </span>
+                        )}
                         <p className="text-[11px] text-zinc-400">
                           Solicitado: {fmtCant(item.cantidad_enviada)} · Despachado: {fmtCant(item.cantidad_despachada)}
                         </p>
@@ -572,6 +613,11 @@ export default function TransferenciaDetalle() {
                     <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.producto_nombre}</p>
+                        {item.deposito_origen_nombre && (
+                          <span className="inline-block mt-0.5 mb-0.5 text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium">
+                            Origen: {item.deposito_origen_nombre}
+                          </span>
+                        )}
                         <p className="text-[11px] text-zinc-400">
                           Despachado: {fmtCant(item.cantidad_despachada)} · Recibido: {fmtCant(item.cantidad_recibida)}
                         </p>
