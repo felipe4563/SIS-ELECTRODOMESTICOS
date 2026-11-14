@@ -401,7 +401,7 @@ const enviarTransferencia = async (req, res) => {
       const [[st]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS qty FROM stock
          WHERE id_producto = ? AND id_deposito = ?`,
-        [item.id_producto, t.id_deposito_origen]
+        [item.id_producto, item.id_deposito_origen]
       );
       if (Number(st?.qty ?? 0) < item.cantidad_a_enviar) {
         const nombreProd = [item.producto, item.modelo].filter(Boolean).join(' ');
@@ -415,13 +415,13 @@ const enviarTransferencia = async (req, res) => {
       await conn.query(
         `UPDATE stock SET cantidad = cantidad - ?, fecha_ult_movimiento = NOW()
          WHERE id_producto = ? AND id_deposito = ?`,
-        [item.cantidad_a_enviar, item.id_producto, t.id_deposito_origen]
+        [item.cantidad_a_enviar, item.id_producto, item.id_deposito_origen]
       );
 
       const [[stPost]] = await conn.query(
         `SELECT COALESCE(cantidad, 0) AS qty, COALESCE(costo_promedio, 0) AS costo
          FROM stock WHERE id_producto = ? AND id_deposito = ?`,
-        [item.id_producto, t.id_deposito_origen]
+        [item.id_producto, item.id_deposito_origen]
       );
 
       await conn.query(
@@ -430,7 +430,7 @@ const enviarTransferencia = async (req, res) => {
            documento_tipo, documento_id, documento_numero, id_usuario, observaciones)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          item.id_producto, t.id_deposito_origen, tm.id_tipo_movimiento,
+          item.id_producto, item.id_deposito_origen, tm.id_tipo_movimiento,
           -item.cantidad_a_enviar,
           Number(stPost?.costo ?? 0),
           Number(stPost?.qty ?? 0),
@@ -469,7 +469,7 @@ const enviarTransferencia = async (req, res) => {
         const [chk] = await conn.query(
           `SELECT id_serie FROM compra_detalle_series
            WHERE id_serie IN (?) AND id_transferencia_detalle = ? AND estado = 'EN_STOCK' AND id_deposito_actual = ?`,
-          [idsSerieEnviar, item.id_detalle, t.id_deposito_origen]
+          [idsSerieEnviar, item.id_detalle, item.id_deposito_origen]
         );
         if (chk.length !== idsSerieEnviar.length) throw new Error('SERIE_NO_DISPONIBLE');
       } else {
@@ -478,14 +478,14 @@ const enviarTransferencia = async (req, res) => {
            WHERE id_transferencia_detalle = ? AND estado = 'EN_STOCK' AND id_deposito_actual = ?
            ORDER BY id_serie
            LIMIT ?`,
-          [item.id_detalle, t.id_deposito_origen, Math.floor(Number(item.cantidad_a_enviar))]
+          [item.id_detalle, item.id_deposito_origen, Math.floor(Number(item.cantidad_a_enviar))]
         );
         idsSerieEnviar = seriesRows.map(r => r.id_serie);
       }
       if (idsSerieEnviar.length) {
         await productoSeries.moverATransito(dbTx(conn), idsSerieEnviar, {
           id_transferencia_detalle: item.id_detalle,
-          id_deposito_origen: t.id_deposito_origen,
+          id_deposito_origen: item.id_deposito_origen,
         });
       }
     }
