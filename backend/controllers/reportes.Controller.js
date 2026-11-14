@@ -1482,8 +1482,8 @@ async function exportarTransferenciasPDF(req, res) {
         CONCAT(ue.nombres,' ',ue.apellidos)  AS enviado_por,
         CONCAT(ur.nombres,' ',ur.apellidos)  AS recibido_por
       FROM transferencias t
-      JOIN depositos dor  ON dor.id_deposito = t.id_deposito_origen
-      JOIN sucursales sor ON sor.id_sucursal  = dor.id_sucursal
+      LEFT JOIN depositos dor  ON dor.id_deposito = t.id_deposito_origen
+      LEFT JOIN sucursales sor ON sor.id_sucursal  = dor.id_sucursal
       JOIN depositos dde  ON dde.id_deposito = t.id_deposito_destino
       JOIN sucursales sde ON sde.id_sucursal  = dde.id_sucursal
       LEFT JOIN transferencia_detalle td ON td.id_transferencia = t.id_transferencia
@@ -2723,8 +2723,8 @@ async function getTransferencias(req, res) {
         COALESCE(SUM(td.cantidad_enviada), 0) AS total_enviado,
         CONCAT(us.nombres,' ',us.apellidos) AS solicitante
       FROM transferencias t
-      JOIN depositos dor ON dor.id_deposito=t.id_deposito_origen
-      JOIN sucursales sor ON sor.id_sucursal=dor.id_sucursal
+      LEFT JOIN depositos dor ON dor.id_deposito=t.id_deposito_origen
+      LEFT JOIN sucursales sor ON sor.id_sucursal=dor.id_sucursal
       JOIN depositos dde ON dde.id_deposito=t.id_deposito_destino
       JOIN sucursales sde ON sde.id_sucursal=dde.id_sucursal
       LEFT JOIN transferencia_detalle td ON td.id_transferencia=t.id_transferencia
