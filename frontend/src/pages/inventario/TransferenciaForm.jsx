@@ -673,18 +673,36 @@ export default function TransferenciaForm() {
         {items.length === 0 ? (
           <p className="text-sm text-zinc-400 text-center py-8">Sin productos — tocá uno del catálogo para agregarlo</p>
         ) : (
-          items.map((fila, i) => (
-            <CartItemRow
-              key={i}
-              fila={fila}
-              productos={productos}
-              stockPorDeposito={stockPorDeposito}
-              idTransferencia={esEdicion ? id : null}
-              onChange={(k, v) => updateItem(i, k, v)}
-              onQtyDelta={d => cambiarCantidad(i, d)}
-              onRemove={() => removeItem(i)}
-            />
-          ))
+          Object.entries(
+            items.reduce((acc, it, i) => {
+              const k = it.id_deposito_origen || '';
+              (acc[k] ??= []).push({ fila: it, i });
+              return acc;
+            }, {})
+          ).map(([k, filas]) => {
+            const nombreDeposito = k ? depositos.find(d => String(d.id_deposito) === k)?.nombre : null;
+            return (
+              <div key={k || 'sin-origen'}>
+                {nombreDeposito && (
+                  <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mt-3 mb-1.5 uppercase tracking-wide first:mt-0">
+                    {nombreDeposito}
+                  </p>
+                )}
+                {filas.map(({ fila, i }) => (
+                  <CartItemRow
+                    key={i}
+                    fila={fila}
+                    productos={productos}
+                    stockPorDeposito={stockPorDeposito}
+                    idTransferencia={esEdicion ? id : null}
+                    onChange={(k2, v) => updateItem(i, k2, v)}
+                    onQtyDelta={d => cambiarCantidad(i, d)}
+                    onRemove={() => removeItem(i)}
+                  />
+                ))}
+              </div>
+            );
+          })
         )}
       </div>
 
