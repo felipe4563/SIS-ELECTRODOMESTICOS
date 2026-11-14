@@ -514,7 +514,7 @@ export default function TransferenciaForm() {
   };
 
   // Resumen de items con stock válido
-  const itemsValidos = items.filter(it => it.id_producto && Number(it.cantidad) > 0);
+  const itemsValidos = items.filter(it => it.id_producto && Number(it.cantidad) > 0 && it.id_deposito_origen);
   const hayExcesos   = itemsValidos.some(it => {
     const disp = stockPorDeposito[it.id_deposito_origen]?.[String(it.id_producto)];
     return disp !== undefined && Number(it.cantidad) > disp;
@@ -524,6 +524,8 @@ export default function TransferenciaForm() {
     setError('');
     if (!form.id_deposito_destino)
       return setError('Seleccioná depósito destino');
+    if (items.some(it => it.id_producto && Number(it.cantidad) > 0 && !it.id_deposito_origen))
+      return setError('Hay productos sin depósito de origen seleccionado');
     if (!itemsValidos.length)
       return setError('Agregá al menos un producto con cantidad válida');
     if (itemsValidos.some(it => String(it.id_deposito_origen) === String(form.id_deposito_destino)))
