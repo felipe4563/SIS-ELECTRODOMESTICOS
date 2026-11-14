@@ -64,7 +64,7 @@ para endpoints, pasos de UI para pantallas) en vez de tests automatizados.
 
 ---
 
-### Tarea 1: Migración de base de datos
+### Task 1: Migración de base de datos
 
 **Files:**
 - Create: `bd/migracion_38_transferencia_detalle_origen.sql`
@@ -139,7 +139,7 @@ git commit -m "feat(db): id_deposito_origen por item de transferencia (migracion
 
 ---
 
-### Tarea 2: Backend — crear/editar transferencia con origen por ítem
+### Task 2: Backend — crear/editar transferencia con origen por ítem
 
 **Files:**
 - Modify: `backend/controllers/inventarioOps.Controller.js:190-310` (`createTransferencia`, `updateTransferencia`)
@@ -212,7 +212,7 @@ git commit -m "feat: aceptar deposito de origen por item al crear/editar transfe
 
 ---
 
-### Tarea 3: Backend — lectura (listado, detalle, filtro) sin perder transferencias mixtas
+### Task 3: Backend — lectura (listado, detalle, filtro) sin perder transferencias mixtas
 
 **Files:**
 - Modify: `backend/controllers/inventarioOps.Controller.js:76-188` (`getTransferencias`, `getTransferencia`)
@@ -294,7 +294,7 @@ git commit -m "fix: no perder transferencias de origen mixto en listado/detalle/
 
 ---
 
-### Tarea 4: Backend — envío usa el origen de cada línea
+### Task 4: Backend — envío usa el origen de cada línea
 
 **Files:**
 - Modify: `backend/controllers/inventarioOps.Controller.js:340-512` (`enviarTransferencia`)
@@ -336,7 +336,7 @@ git commit -m "fix: enviar transferencia mueve stock del origen de cada linea, n
 
 ---
 
-### Tarea 5: Backend — recepción usa el origen de cada línea (costo promedio)
+### Task 5: Backend — recepción usa el origen de cada línea (costo promedio)
 
 **Files:**
 - Modify: `backend/controllers/inventarioOps.Controller.js:514-665` (`recibirTransferencia`)
@@ -377,7 +377,7 @@ git commit -m "fix: recepcion calcula costo promedio contra el origen de cada li
 
 ---
 
-### Tarea 6: Backend — anulación devuelve stock al origen de cada línea
+### Task 6: Backend — anulación devuelve stock al origen de cada línea
 
 **Files:**
 - Modify: `backend/controllers/inventarioOps.Controller.js:667-760` (`anularTransferencia`)
@@ -417,7 +417,7 @@ git commit -m "fix: anular transferencia devuelve stock al origen de cada linea"
 
 ---
 
-### Tarea 7: Backend — reportes no pierden transferencias mixtas
+### Task 7: Backend — reportes no pierden transferencias mixtas
 
 **Files:**
 - Modify: `backend/controllers/reportes.Controller.js:1485-1488` y `:2726-2729`
@@ -457,7 +457,7 @@ git commit -m "fix: reportes de transferencias no pierden filas de origen mixto"
 
 ---
 
-### Tarea 8: Frontend — carrito con origen por ítem en `TransferenciaForm.jsx`
+### Task 8: Frontend — carrito con origen por ítem en `TransferenciaForm.jsx`
 
 **Files:**
 - Modify: `frontend/src/pages/inventario/TransferenciaForm.jsx`
@@ -555,7 +555,7 @@ git commit -m "feat: permitir origen por item al cargar una transferencia"
 
 ---
 
-### Tarea 9: Frontend — carrito agrupado visualmente por depósito de origen
+### Task 9: Frontend — carrito agrupado visualmente por depósito de origen
 
 **Files:**
 - Modify: `frontend/src/pages/inventario/TransferenciaForm.jsx`
@@ -602,7 +602,7 @@ git commit -m "feat: agrupar el carrito de transferencia por deposito de origen"
 
 ---
 
-### Tarea 10: Frontend — detalle de transferencia agrupado por origen
+### Task 10: Frontend — detalle de transferencia agrupado por origen
 
 **Files:**
 - Modify: `frontend/src/pages/inventario/TransferenciaDetalle.jsx`
