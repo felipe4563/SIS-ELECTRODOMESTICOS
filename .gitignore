@@ -83,3 +83,5 @@ backend/backups/
 #   Snapshots de Playwright MCP — solo local
 # ===============================
 .playwright-mcp/
+
+.superpowers/
