@@ -81,7 +81,7 @@ const getTransferencias = async (req, res) => {
     const where = [], params = [];
 
     if (estado)              { where.push('t.estado = ?');                  params.push(estado); }
-    if (id_deposito_origen)  { where.push('t.id_deposito_origen = ?');      params.push(id_deposito_origen); }
+    if (id_deposito_origen)  { where.push('EXISTS (SELECT 1 FROM transferencia_detalle td2 WHERE td2.id_transferencia = t.id_transferencia AND td2.id_deposito_origen = ?)'); params.push(id_deposito_origen); }
     if (id_deposito_destino) { where.push('t.id_deposito_destino = ?');     params.push(id_deposito_destino); }
     if (fecha_desde)         { where.push('DATE(t.fecha_solicitud) >= ?');  params.push(fecha_desde); }
     if (fecha_hasta)         { where.push('DATE(t.fecha_solicitud) <= ?');  params.push(fecha_hasta); }
@@ -95,7 +95,7 @@ const getTransferencias = async (req, res) => {
     const [[{ total }]] = await db.promise().query(
       `SELECT COUNT(*) AS total
        FROM transferencias t
-       JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
+       LEFT JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
        JOIN depositos dde ON dde.id_deposito = t.id_deposito_destino
        LEFT JOIN usuarios u1 ON u1.id_usuario = t.id_usuario_solicita
        ${whereSql}`,
@@ -109,7 +109,7 @@ const getTransferencias = async (req, res) => {
               dde.nombre AS deposito_destino_nombre, dde.codigo AS deposito_destino_codigo,
               u1.nombres AS solicita_nombres, u1.apellidos AS solicita_apellidos
        FROM transferencias t
-       JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
+       LEFT JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
        JOIN depositos dde ON dde.id_deposito = t.id_deposito_destino
        LEFT JOIN usuarios u1 ON u1.id_usuario = t.id_usuario_solicita
        ${whereSql}
@@ -136,7 +136,7 @@ const getTransferencia = async (req, res) => {
               u2.nombres AS envia_nombres,    u2.apellidos AS envia_apellidos,
               u3.nombres AS recibe_nombres,   u3.apellidos AS recibe_apellidos
        FROM transferencias t
-       JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
+       LEFT JOIN depositos dor ON dor.id_deposito = t.id_deposito_origen
        JOIN depositos dde ON dde.id_deposito = t.id_deposito_destino
        LEFT JOIN usuarios u1 ON u1.id_usuario = t.id_usuario_solicita
        LEFT JOIN usuarios u2 ON u2.id_usuario = t.id_usuario_envia
@@ -146,14 +146,17 @@ const getTransferencia = async (req, res) => {
     if (!t) return res.status(404).json({ mensaje: 'Transferencia no encontrada' });
 
     const [detalle] = await db.promise().query(
-      `SELECT td.id_detalle, td.id_producto, td.cantidad_enviada, td.cantidad_despachada, td.cantidad_recibida, td.observacion,
+      `SELECT td.id_detalle, td.id_producto, td.id_deposito_origen,
+              dor.nombre AS deposito_origen_nombre, dor.codigo AS deposito_origen_codigo,
+              td.cantidad_enviada, td.cantidad_despachada, td.cantidad_recibida, td.observacion,
               p.producto AS producto_nombre, p.codigo_interno,
               p.modelo, p.color, p.detalle AS producto_detalle, p.capacidad, m.nombre AS marca,
               um.nombre AS unidad_nombre
        FROM transferencia_detalle td
-       JOIN productos p       ON p.id_producto = td.id_producto
-       JOIN marcas    m       ON m.id_marca    = p.id_marca
-       JOIN unidades_medida um ON um.id_unidad  = p.id_unidad
+       JOIN productos p        ON p.id_producto = td.id_producto
+       JOIN depositos dor       ON dor.id_deposito = td.id_deposito_origen
+       JOIN marcas    m         ON m.id_marca    = p.id_marca
+       JOIN unidades_medida um  ON um.id_unidad  = p.id_unidad
        WHERE td.id_transferencia = ?
        ORDER BY td.id_detalle`, [id]
     );
