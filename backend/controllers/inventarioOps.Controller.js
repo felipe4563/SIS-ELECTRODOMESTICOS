@@ -191,20 +191,26 @@ const createTransferencia = async (req, res) => {
   const conn = await db.promise().getConnection();
   try {
     const userId = req.user.id_usuario;
-    const { id_deposito_origen, id_deposito_destino, observaciones, items } = req.body;
+    const { id_deposito_destino, observaciones, items } = req.body;
 
-    if (!id_deposito_origen || !id_deposito_destino || !items?.length) {
+    if (!id_deposito_destino || !items?.length) {
       throw new ApiError(400, 'Faltan datos requeridos');
-    }
-    if (String(id_deposito_origen) === String(id_deposito_destino)) {
-      throw new ApiError(400, 'Origen y destino no pueden ser iguales');
     }
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
+      if (!item.id_deposito_origen) {
+        throw new ApiError(400, 'Faltan datos requeridos');
+      }
+      if (String(item.id_deposito_origen) === String(id_deposito_destino)) {
+        throw new ApiError(400, 'El depósito de origen no puede ser igual al destino');
+      }
       if (item.series?.length > Number(item.cantidad)) {
         throw new ApiError(400, 'Elegiste más series de las que caben en la cantidad');
       }
     }
+
+    const origenesUnicos = [...new Set(items.map(i => String(i.id_deposito_origen)))];
+    const idDepositoOrigenCabecera = origenesUnicos.length === 1 ? origenesUnicos[0] : null;
 
     await conn.beginTransaction();
 
@@ -213,21 +219,21 @@ const createTransferencia = async (req, res) => {
     const [{ insertId }] = await conn.query(
       `INSERT INTO transferencias (numero, id_deposito_origen, id_deposito_destino, id_usuario_solicita, observaciones)
        VALUES (?, ?, ?, ?, ?)`,
-      [numero, id_deposito_origen, id_deposito_destino, userId, observaciones ?? null]
+      [numero, idDepositoOrigenCabecera, id_deposito_destino, userId, observaciones ?? null]
     );
 
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
       const [{ insertId: idDetalle }] = await conn.query(
-        `INSERT INTO transferencia_detalle (id_transferencia, id_producto, cantidad_enviada, observacion)
-         VALUES (?, ?, ?, ?)`,
-        [insertId, item.id_producto, item.cantidad, item.observacion ?? null]
+        `INSERT INTO transferencia_detalle (id_transferencia, id_producto, id_deposito_origen, cantidad_enviada, observacion)
+         VALUES (?, ?, ?, ?, ?)`,
+        [insertId, item.id_producto, item.id_deposito_origen, item.cantidad, item.observacion ?? null]
       );
       if (item.series?.length) {
         await asociarSeriesATransferencia(conn, {
           idsSerie: item.series,
           idDetalle,
-          idDepositoOrigen: id_deposito_origen,
+          idDepositoOrigen: item.id_deposito_origen,
           idProducto: item.id_producto,
         });
       }
@@ -250,31 +256,37 @@ const updateTransferencia = async (req, res) => {
   const conn = await db.promise().getConnection();
   try {
     const { id } = req.params;
-    const { id_deposito_origen, id_deposito_destino, observaciones, items } = req.body;
+    const { id_deposito_destino, observaciones, items } = req.body;
 
     const [[t]] = await conn.query(`SELECT estado FROM transferencias WHERE id_transferencia = ?`, [id]);
     if (!t) throw new ApiError(404, 'Transferencia no encontrada');
     if (t.estado !== 'BORRADOR') throw new ApiError(400, 'Solo se puede editar una transferencia en borrador');
 
-    if (!id_deposito_origen || !id_deposito_destino || !items?.length) {
+    if (!id_deposito_destino || !items?.length) {
       throw new ApiError(400, 'Faltan datos requeridos');
-    }
-    if (String(id_deposito_origen) === String(id_deposito_destino)) {
-      throw new ApiError(400, 'Origen y destino no pueden ser iguales');
     }
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
+      if (!item.id_deposito_origen) {
+        throw new ApiError(400, 'Faltan datos requeridos');
+      }
+      if (String(item.id_deposito_origen) === String(id_deposito_destino)) {
+        throw new ApiError(400, 'El depósito de origen no puede ser igual al destino');
+      }
       if (item.series?.length > Number(item.cantidad)) {
         throw new ApiError(400, 'Elegiste más series de las que caben en la cantidad');
       }
     }
+
+    const origenesUnicos = [...new Set(items.map(i => String(i.id_deposito_origen)))];
+    const idDepositoOrigenCabecera = origenesUnicos.length === 1 ? origenesUnicos[0] : null;
 
     await conn.beginTransaction();
 
     await conn.query(
       `UPDATE transferencias SET id_deposito_origen = ?, id_deposito_destino = ?, observaciones = ?
        WHERE id_transferencia = ?`,
-      [id_deposito_origen, id_deposito_destino, observaciones ?? null, id]
+      [idDepositoOrigenCabecera, id_deposito_destino, observaciones ?? null, id]
     );
 
     // Las líneas viejas van a borrarse y recrearse; si alguna tenía series
@@ -289,15 +301,15 @@ const updateTransferencia = async (req, res) => {
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
       const [{ insertId: idDetalle }] = await conn.query(
-        `INSERT INTO transferencia_detalle (id_transferencia, id_producto, cantidad_enviada, observacion)
-         VALUES (?, ?, ?, ?)`,
-        [id, item.id_producto, item.cantidad, item.observacion ?? null]
+        `INSERT INTO transferencia_detalle (id_transferencia, id_producto, id_deposito_origen, cantidad_enviada, observacion)
+         VALUES (?, ?, ?, ?, ?)`,
+        [id, item.id_producto, item.id_deposito_origen, item.cantidad, item.observacion ?? null]
       );
       if (item.series?.length) {
         await asociarSeriesATransferencia(conn, {
           idsSerie: item.series,
           idDetalle,
-          idDepositoOrigen: id_deposito_origen,
+          idDepositoOrigen: item.id_deposito_origen,
           idProducto: item.id_producto,
         });
       }
