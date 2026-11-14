@@ -72,6 +72,7 @@ export default function TransferenciaDetalle() {
       return {
         id_detalle: d.id_detalle,
         producto_nombre: d.producto_nombre,
+        marca: d.marca, modelo: d.modelo, color: d.color, capacidad: d.capacidad,
         deposito_origen_nombre: d.deposito_origen_nombre,
         cantidad_enviada: d.cantidad_enviada,
         cantidad_despachada: d.cantidad_despachada,
@@ -93,6 +94,7 @@ export default function TransferenciaDetalle() {
       return {
         id_detalle: d.id_detalle,
         producto_nombre: d.producto_nombre,
+        marca: d.marca, modelo: d.modelo, color: d.color, capacidad: d.capacidad,
         deposito_origen_nombre: d.deposito_origen_nombre,
         cantidad_despachada: d.cantidad_despachada,
         cantidad_recibida: d.cantidad_recibida,
@@ -515,6 +517,9 @@ export default function TransferenciaDetalle() {
                     <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.producto_nombre}</p>
+                        {specLinea(item) && (
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(item)}</p>
+                        )}
                         {item.deposito_origen_nombre && (
                           <span className="inline-block mt-0.5 mb-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium">
                             Origen: {item.deposito_origen_nombre}
@@ -613,6 +618,9 @@ export default function TransferenciaDetalle() {
                     <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.producto_nombre}</p>
+                        {specLinea(item) && (
+                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{specLinea(item)}</p>
+                        )}
                         {item.deposito_origen_nombre && (
                           <span className="inline-block mt-0.5 mb-0.5 text-[10px] px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-medium">
                             Origen: {item.deposito_origen_nombre}
