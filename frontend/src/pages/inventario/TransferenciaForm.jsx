@@ -174,7 +174,7 @@ function SeriesSelector({ fila, idDepositoOrigen, idTransferencia, onChange }) {
 }
 
 // ── Fila del carrito (compacta, usada en el panel lateral / bottom sheet) ────
-function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, idTransferencia, onChange, onQtyDelta, onRemove }) {
+function CartItemRow({ fila, productos, stockPorDeposito, idTransferencia, onChange, onQtyDelta, onRemove }) {
   const [busqueda, setBusqueda] = useState('');
 
   const filtrados = productos.filter(p => {
@@ -188,7 +188,7 @@ function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, idTransfe
   const opciones = filtrados;
 
   const productoSel = fila.id_producto ? productos.find(p => String(p.id_producto) === String(fila.id_producto)) : null;
-  const disponible  = fila.id_producto ? (stockOrigen[fila.id_producto] ?? 0) : null;
+  const disponible  = fila.id_producto ? (stockPorDeposito[fila.id_deposito_origen]?.[fila.id_producto] ?? 0) : null;
   const excede      = disponible !== null && Number(fila.cantidad) > disponible;
   const sinStock    = disponible !== null && disponible <= 0;
 
@@ -257,11 +257,11 @@ function CartItemRow({ fila, productos, stockOrigen, idDepositoOrigen, idTransfe
       </div>
       {excede && <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 text-right">Supera el disponible</p>}
 
-      {fila.id_producto && idDepositoOrigen && (
+      {fila.id_producto && fila.id_deposito_origen && (
         <SeriesSelector
           key={fila.id_producto}
           fila={fila}
-          idDepositoOrigen={idDepositoOrigen}
+          idDepositoOrigen={fila.id_deposito_origen}
           idTransferencia={idTransferencia}
           onChange={onChange}
         />
@@ -278,7 +278,10 @@ export default function TransferenciaForm() {
 
   const [depositos,     setDepositos]     = useState([]);
   const [productos,     setProductos]     = useState([]);
-  const [stockOrigen,   setStockOrigen]   = useState({});
+  // Stock cacheado por depósito mirado: { [idDeposito]: { [idProducto]: disponible } }.
+  // Se acumula (nunca se pisa) para que cambiar el depósito que se está
+  // mirando no haga perder el stock ya cargado de otro depósito.
+  const [stockPorDeposito, setStockPorDeposito] = useState({});
   const [cargandoStock, setCargandoStock] = useState(false);
   const [cargando,      setCargando]      = useState(esEdicion);
   const [bloqueado,     setBloqueado]     = useState(false);
@@ -287,7 +290,7 @@ export default function TransferenciaForm() {
   const [form, setForm] = useState({
     id_deposito_origen: '', id_deposito_destino: '', observaciones: '',
   });
-  const [items,     setItems]     = useState([{ id_producto: '', cantidad: 1, series: [] }]);
+  const [items,     setItems]     = useState([{ id_producto: '', cantidad: 1, series: [], id_deposito_origen: '' }]);
   const [guardando, setGuardando] = useState(false);
   const [error,     setError]     = useState('');
   const [busquedaStock, setBusquedaStock] = useState('');
@@ -330,51 +333,74 @@ export default function TransferenciaForm() {
           setBloqueado(true);
           return;
         }
+        // El origen de cabecera (t.id_deposito_origen) puede venir null cuando
+        // la transferencia tiene líneas de orígenes mixtos — el depósito que
+        // se "está mirando" al abrir el borrador se toma de la primera línea.
         setForm({
-          id_deposito_origen: String(t.id_deposito_origen),
+          id_deposito_origen: String((t.detalle ?? [])[0]?.id_deposito_origen ?? t.id_deposito_origen ?? ''),
           id_deposito_destino: String(t.id_deposito_destino),
           observaciones: t.observaciones ?? '',
         });
         // Hidratar las series ya reservadas por cada línea: si quedaran en []
-        // cualquier guardado del borrador las soltaría en silencio.
+        // cualquier guardado del borrador las soltaría en silencio. Cada línea
+        // conserva su propio depósito de origen (puede diferir entre líneas).
         setItems((t.detalle ?? []).map(d => ({
           id_producto: String(d.id_producto),
           cantidad: Number(d.cantidad_enviada),
           series: (d.series ?? []).map(s => s.id_serie),
+          id_deposito_origen: String(d.id_deposito_origen),
         })));
-        return inventarioService.getStockDeposito(t.id_deposito_origen).then(rs => {
-          const map = {};
-          (rs.data.stock ?? []).forEach(s => { map[String(s.id_producto)] = s.cantidad_disponible; });
-          setStockOrigen(map);
+        // Precargar el stock de cada depósito de origen distinto presente en
+        // el detalle, no solo el de cabecera.
+        const origenesDistintos = [...new Set((t.detalle ?? []).map(d => String(d.id_deposito_origen)))];
+        return Promise.all(origenesDistintos.map(idDep =>
+          inventarioService.getStockDeposito(idDep).then(rs => {
+            const map = {};
+            (rs.data.stock ?? []).forEach(s => { map[String(s.id_producto)] = s.cantidad_disponible; });
+            return [idDep, map];
+          })
+        )).then(pares => {
+          setStockPorDeposito(prev => ({ ...prev, ...Object.fromEntries(pares) }));
         });
       })
       .catch(() => setError('Error al cargar la transferencia'))
       .finally(() => setCargando(false));
   }, [id]); // eslint-disable-line
 
-  // Al cambiar depósito origen → cargar stock
+  // Al cambiar el depósito origen que se está "mirando" → cargar su stock
+  // (si no estaba ya cacheado). No toca el destino ni los items ya agregados
+  // de otros depósitos: cada fila del carrito conserva su propio origen.
   const handleOrigenChange = async (id) => {
-    setForm(p => ({ ...p, id_deposito_origen: id, id_deposito_destino: p.id_deposito_destino === id ? '' : p.id_deposito_destino }));
-    setStockOrigen({});
-    setItems(prev => prev.map(it => ({ ...it, series: [] })));
+    setForm(p => ({ ...p, id_deposito_origen: id }));
     setBusquedaStock('');
     setFiltroMarca('');
     setFiltroProducto('');
     setFiltroModelo('');
     setFiltroColor('');
     setFiltroCapacidad('');
-    if (!id) return;
+    if (!id || stockPorDeposito[id]) return;
     setCargandoStock(true);
     try {
       const r = await inventarioService.getStockDeposito(id);
       const map = {};
       (r.data.stock ?? []).forEach(s => { map[String(s.id_producto)] = s.cantidad_disponible; });
-      setStockOrigen(map);
+      setStockPorDeposito(prev => ({ ...prev, [id]: map }));
     } catch { /* silencioso */ }
     finally { setCargandoStock(false); }
   };
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // El destino se elige independiente del origen que se está mirando; solo
+  // se valida que no coincida con el origen de algún producto ya agregado.
+  const handleDestinoChange = (valor) => {
+    if (valor && items.some(it => it.id_producto && String(it.id_deposito_origen) === String(valor))) {
+      setError('El depósito destino no puede coincidir con el origen de algún producto ya agregado al carrito');
+      return;
+    }
+    setError('');
+    setF('id_deposito_destino', valor);
+  };
 
   const cambiarFiltroMarca = (v) => {
     setFiltroMarca(v);
@@ -399,14 +425,14 @@ export default function TransferenciaForm() {
     setFiltroCapacidad('');
   };
 
-  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, series: [] }]);
+  const addItem    = () => setItems(p => [...p, { id_producto: '', cantidad: 1, series: [], id_deposito_origen: form.id_deposito_origen }]);
   const removeItem = i  => setItems(p => p.filter((_, idx) => idx !== i));
   const updateItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
 
   const cambiarCantidad = (i, delta) => {
     setItems(prev => prev.map((it, idx) => {
       if (idx !== i) return it;
-      const disponible = it.id_producto ? (stockOrigen[String(it.id_producto)] ?? null) : null;
+      const disponible = it.id_producto ? (stockPorDeposito[it.id_deposito_origen]?.[String(it.id_producto)] ?? null) : null;
       let nueva = Number(it.cantidad || 0) + delta;
       if (disponible !== null) nueva = Math.min(nueva, disponible);
       nueva = Math.max(0.01, nueva);
@@ -414,17 +440,21 @@ export default function TransferenciaForm() {
     }));
   };
 
-  // Agregar un producto desde el catálogo
+  // Agregar un producto desde el catálogo del depósito que se está mirando
+  // (form.id_deposito_origen). Cada fila queda identificada por el par
+  // (id_producto, id_deposito_origen): el mismo producto agregado desde dos
+  // depósitos distintos queda en dos filas separadas.
   const agregarProducto = (p) => {
+    const origenActual = form.id_deposito_origen;
     setItems(prev => {
-      const idx = prev.findIndex(it => String(it.id_producto) === String(p.id_producto));
+      const idx = prev.findIndex(it => String(it.id_producto) === String(p.id_producto) && String(it.id_deposito_origen) === String(origenActual));
       if (idx >= 0) {
-        const disp = stockOrigen[String(p.id_producto)] ?? Infinity;
+        const disp = stockPorDeposito[origenActual]?.[String(p.id_producto)] ?? Infinity;
         if (Number(prev[idx].cantidad) >= disp) return prev;
         return prev.map((it, i) => i === idx ? { ...it, cantidad: Number(it.cantidad) + 1 } : it);
       }
       const vacio = prev.findIndex(it => !it.id_producto);
-      const nuevaFila = { id_producto: String(p.id_producto), cantidad: 1, series: [] };
+      const nuevaFila = { id_producto: String(p.id_producto), cantidad: 1, series: [], id_deposito_origen: origenActual };
       if (vacio >= 0) return prev.map((it, i) => i === vacio ? nuevaFila : it);
       return [...prev, nuevaFila];
     });
@@ -452,7 +482,7 @@ export default function TransferenciaForm() {
       return;
     }
 
-    const disponible = stockOrigen[String(prod.id_producto)] ?? 0;
+    const disponible = stockPorDeposito[form.id_deposito_origen]?.[String(prod.id_producto)] ?? 0;
     if (disponible <= 0) {
       setQrError(`Sin stock en origen: ${prod.producto}`);
       setTimeout(() => setQrError(''), 3000);
@@ -463,17 +493,19 @@ export default function TransferenciaForm() {
     agregarProducto(prod);
     setQrInput('');
     setQrError('');
-  }, [form.id_deposito_origen, productos, stockOrigen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form.id_deposito_origen, productos, stockPorDeposito]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleQrScan = (val) => {
     clearTimeout(qrTimerRef.current);
     qrTimerRef.current = setTimeout(() => procesarCodigoQr(val), 300);
   };
 
-  // Quitar una unidad de un producto ya agregado (desde el catálogo)
+  // Quitar una unidad de un producto ya agregado (desde el catálogo del
+  // depósito que se está mirando actualmente)
   const quitarUnidadProducto = (p) => {
+    const origenActual = form.id_deposito_origen;
     setItems(prev => {
-      const idx = prev.findIndex(it => String(it.id_producto) === String(p.id_producto));
+      const idx = prev.findIndex(it => String(it.id_producto) === String(p.id_producto) && String(it.id_deposito_origen) === String(origenActual));
       if (idx < 0) return prev;
       const nueva = Number(prev[idx].cantidad) - 1;
       if (nueva <= 0) return prev.filter((_, i) => i !== idx);
@@ -484,28 +516,34 @@ export default function TransferenciaForm() {
   // Resumen de items con stock válido
   const itemsValidos = items.filter(it => it.id_producto && Number(it.cantidad) > 0);
   const hayExcesos   = itemsValidos.some(it => {
-    const disp = stockOrigen[String(it.id_producto)];
+    const disp = stockPorDeposito[it.id_deposito_origen]?.[String(it.id_producto)];
     return disp !== undefined && Number(it.cantidad) > disp;
   });
 
   const guardar = async () => {
     setError('');
-    if (!form.id_deposito_origen || !form.id_deposito_destino)
-      return setError('Seleccioná depósito origen y destino');
-    if (form.id_deposito_origen === form.id_deposito_destino)
-      return setError('Origen y destino no pueden ser el mismo depósito');
+    if (!form.id_deposito_destino)
+      return setError('Seleccioná depósito destino');
     if (!itemsValidos.length)
       return setError('Agregá al menos un producto con cantidad válida');
+    if (itemsValidos.some(it => String(it.id_deposito_origen) === String(form.id_deposito_destino)))
+      return setError('El depósito destino no puede coincidir con el origen de algún producto del carrito');
     if (hayExcesos)
       return setError('Hay productos con cantidad mayor al stock disponible en origen');
+
+    const payload = {
+      id_deposito_destino: form.id_deposito_destino,
+      observaciones: form.observaciones,
+      items: itemsValidos,
+    };
 
     setGuardando(true);
     try {
       if (esEdicion) {
-        await transferenciasService.update(id, { ...form, items: itemsValidos });
+        await transferenciasService.update(id, payload);
         navigate(`/inventario/transferencias/${id}`);
       } else {
-        const res = await transferenciasService.create({ ...form, items: itemsValidos });
+        const res = await transferenciasService.create(payload);
         navigate(`/inventario/transferencias/${res.data.id_transferencia}`);
       }
     } catch (err) {
@@ -520,8 +558,8 @@ export default function TransferenciaForm() {
   const depositoOrigen  = depositos.find(d => String(d.id_deposito) === String(form.id_deposito_origen));
   const depositoDestino = depositos.find(d => String(d.id_deposito) === String(form.id_deposito_destino));
 
-  // Productos con stock > 0 en origen (base, antes de aplicar filtros)
-  const productosConStockBase = Object.entries(stockOrigen)
+  // Productos con stock > 0 en el depósito que se está mirando (base, antes de aplicar filtros)
+  const productosConStockBase = Object.entries(stockPorDeposito[form.id_deposito_origen] ?? {})
     .filter(([, disp]) => disp > 0)
     .map(([id, disp]) => ({
       ...productos.find(p => String(p.id_producto) === id),
@@ -578,8 +616,13 @@ export default function TransferenciaForm() {
     })
     .sort((a, b) => b.disponible - a.disponible);
 
+  // Solo cuenta lo agregado desde el depósito que se está mirando: el
+  // catálogo (y su badge "en carrito") muestra el stock de ese depósito, así
+  // que lo agregado desde otro origen no debe mezclarse en este contador.
   const cantidadesSeleccionadas = items.reduce((acc, it) => {
-    if (it.id_producto) acc[it.id_producto] = (acc[it.id_producto] ?? 0) + Number(it.cantidad || 0);
+    if (it.id_producto && String(it.id_deposito_origen) === String(form.id_deposito_origen)) {
+      acc[it.id_producto] = (acc[it.id_producto] ?? 0) + Number(it.cantidad || 0);
+    }
     return acc;
   }, {});
 
@@ -633,8 +676,7 @@ export default function TransferenciaForm() {
               key={i}
               fila={fila}
               productos={productos}
-              stockOrigen={stockOrigen}
-              idDepositoOrigen={form.id_deposito_origen}
+              stockPorDeposito={stockPorDeposito}
               idTransferencia={esEdicion ? id : null}
               onChange={(k, v) => updateItem(i, k, v)}
               onQtyDelta={d => cambiarCantidad(i, d)}
@@ -713,12 +755,11 @@ export default function TransferenciaForm() {
                 </label>
                 <select
                   value={form.id_deposito_destino}
-                  onChange={e => setF('id_deposito_destino', e.target.value)}
+                  onChange={e => handleDestinoChange(e.target.value)}
                   className={inputCls}
-                  disabled={!form.id_deposito_origen}
                 >
                   <option value="">— seleccionar —</option>
-                  {depositos.filter(d => String(d.id_deposito) !== String(form.id_deposito_origen)).map(d => (
+                  {depositos.map(d => (
                     <option key={d.id_deposito} value={d.id_deposito}>{d.nombre}</option>
                   ))}
                 </select>
