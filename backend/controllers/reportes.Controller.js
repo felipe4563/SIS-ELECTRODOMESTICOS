@@ -1493,7 +1493,14 @@ async function exportarTransferenciasPDF(req, res) {
       WHERE DATE(t.fecha_solicitud) BETWEEN ? AND ?
     `;
     const params = [desde, hasta];
-    if (id_sucursal) { sql += ' AND (sor.id_sucursal=? OR sde.id_sucursal=?)'; params.push(id_sucursal, id_sucursal); }
+    if (id_sucursal) {
+      sql += ` AND (sor.id_sucursal=? OR sde.id_sucursal=? OR EXISTS (
+        SELECT 1 FROM transferencia_detalle td2
+        JOIN depositos d2 ON d2.id_deposito = td2.id_deposito_origen
+        WHERE td2.id_transferencia = t.id_transferencia AND d2.id_sucursal = ?
+      ))`;
+      params.push(id_sucursal, id_sucursal, id_sucursal);
+    }
     if (estado)      { sql += ' AND t.estado=?'; params.push(estado); }
     sql += ' GROUP BY t.id_transferencia ORDER BY t.fecha_solicitud DESC LIMIT 500';
 
@@ -2732,7 +2739,14 @@ async function getTransferencias(req, res) {
       WHERE DATE(t.fecha_solicitud) BETWEEN ? AND ?
     `;
     const params = [desde, hasta];
-    if (id_sucursal) { sql += ' AND (sor.id_sucursal=? OR sde.id_sucursal=?)'; params.push(id_sucursal, id_sucursal); }
+    if (id_sucursal) {
+      sql += ` AND (sor.id_sucursal=? OR sde.id_sucursal=? OR EXISTS (
+        SELECT 1 FROM transferencia_detalle td2
+        JOIN depositos d2 ON d2.id_deposito = td2.id_deposito_origen
+        WHERE td2.id_transferencia = t.id_transferencia AND d2.id_sucursal = ?
+      ))`;
+      params.push(id_sucursal, id_sucursal, id_sucursal);
+    }
     if (estado) { sql += ' AND t.estado=?'; params.push(estado); }
     sql += ' GROUP BY t.id_transferencia ORDER BY t.fecha_solicitud DESC LIMIT 500';
 
