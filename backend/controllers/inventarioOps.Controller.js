@@ -778,7 +778,7 @@ const anularTransferencia = async (req, res) => {
 
 const getAjustes = async (req, res) => {
   try {
-    const { estado, id_deposito, fecha_desde, fecha_hasta, page = 1, limit = 20 } = req.query;
+    const { estado, id_deposito, fecha_desde, fecha_hasta, q, page = 1, limit = 20 } = req.query;
     const limitNum = Math.min(Number(limit) || 20, 200);
     const offset = (Number(page) - 1) * limitNum;
     const where = [], params = [];
@@ -787,6 +787,10 @@ const getAjustes = async (req, res) => {
     if (id_deposito) { where.push('a.id_deposito = ?');    params.push(id_deposito); }
     if (fecha_desde) { where.push('DATE(a.fecha) >= ?');   params.push(fecha_desde); }
     if (fecha_hasta) { where.push('DATE(a.fecha) <= ?');   params.push(fecha_hasta); }
+    if (q) {
+      where.push('a.numero LIKE ?');
+      params.push(`%${q}%`);
+    }
 
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
