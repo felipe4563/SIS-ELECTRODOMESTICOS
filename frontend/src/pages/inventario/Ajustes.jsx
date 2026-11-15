@@ -28,7 +28,7 @@ export default function Ajustes() {
   const [page,      setPage]      = useState(1);
   const LIMIT = 20;
   const [filtros,   setFiltros]   = useState({
-    estado: '', id_deposito: '', fecha_desde: HACE30, fecha_hasta: HOY,
+    q: '', estado: '', id_deposito: '', fecha_desde: HACE30, fecha_hasta: HOY,
   });
 
   useEffect(() => {
@@ -98,7 +98,15 @@ export default function Ajustes() {
 
       {/* Filtros */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <input
+            type="text"
+            placeholder="Número de ajuste…"
+            value={filtros.q}
+            onChange={e => setF('q', e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && cargar(1)}
+            className={inputCls}
+          />
           <select value={filtros.estado} onChange={e => setF('estado', e.target.value)} className={inputCls}>
             <option value="">Todos los estados</option>
             {Object.entries(ESTADO_BADGE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
