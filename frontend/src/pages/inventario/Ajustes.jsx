@@ -133,6 +133,22 @@ export default function Ajustes() {
           <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-2">
             <span className="text-4xl">📋</span>
             <p className="text-sm">No hay ajustes para los filtros seleccionados</p>
+            {(filtros.fecha_desde || filtros.fecha_hasta) && (
+              <p className="text-xs text-zinc-400 max-w-sm text-center">
+                Recordá que solo se muestran ajustes con fecha entre{' '}
+                <strong>{fmtFecha(filtros.fecha_desde)}</strong> y <strong>{fmtFecha(filtros.fecha_hasta)}</strong>.
+                Si el ajuste es más viejo o más nuevo que ese rango, ampliá las fechas.
+              </p>
+            )}
+            <button
+              onClick={() => {
+                const limpios = { q: filtros.q, estado: filtros.estado, id_deposito: filtros.id_deposito, fecha_desde: '', fecha_hasta: '' };
+                setFiltros(limpios);
+              }}
+              className="text-xs text-yellow-500 hover:text-yellow-600 underline underline-offset-2 transition-colors"
+            >
+              Ver todo el historial (sin filtro de fechas)
+            </button>
           </div>
         ) : (
           <>

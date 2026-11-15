@@ -111,7 +111,7 @@ export default function Transferencias() {
             type="text"
             value={filtros.q}
             onChange={e => setF('q', e.target.value)}
-            placeholder="Número de transferencia…"
+            placeholder="Número o depósito…"
             className={inputCls}
           />
           <select value={filtros.estado} onChange={e => setF('estado', e.target.value)} className={inputCls}>
@@ -144,6 +144,26 @@ export default function Transferencias() {
           <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-2">
             <span className="text-4xl">🔄</span>
             <p className="text-sm">No hay transferencias para los filtros seleccionados</p>
+            {(filtros.fecha_desde || filtros.fecha_hasta) && (
+              <p className="text-xs text-zinc-400 max-w-sm text-center">
+                Recordá que solo se muestran transferencias con fecha de solicitud entre{' '}
+                <strong>{fmtFecha(filtros.fecha_desde)}</strong> y <strong>{fmtFecha(filtros.fecha_hasta)}</strong>.
+                Si la transferencia es más vieja o más nueva que ese rango, ampliá las fechas.
+              </p>
+            )}
+            <button
+              onClick={() => {
+                const limpios = {
+                  q: filtros.q, estado: filtros.estado,
+                  id_deposito_origen: filtros.id_deposito_origen, id_deposito_destino: filtros.id_deposito_destino,
+                  fecha_desde: '', fecha_hasta: '',
+                };
+                setFiltros(limpios);
+              }}
+              className="text-xs text-yellow-500 hover:text-yellow-600 underline underline-offset-2 transition-colors"
+            >
+              Ver todo el historial (sin filtro de fechas)
+            </button>
           </div>
         ) : (
           <>
