@@ -37,10 +37,11 @@ export default function Ajustes() {
       .catch(() => {});
   }, []);
 
-  const cargar = async (p = 1) => {
+  const cargar = async (p = 1, overrideFiltros) => {
     setCargando(true);
     try {
-      const params = Object.fromEntries(Object.entries(filtros).filter(([, v]) => v !== ''));
+      const f = overrideFiltros ?? filtros;
+      const params = Object.fromEntries(Object.entries(f).filter(([, v]) => v !== ''));
       const res = await ajustesService.getAll({ ...params, page: p, limit: LIMIT });
       setAjustes(res.data.ajustes ?? []);
       setTotal(res.data.total ?? 0);
@@ -144,6 +145,7 @@ export default function Ajustes() {
               onClick={() => {
                 const limpios = { q: filtros.q, estado: filtros.estado, id_deposito: filtros.id_deposito, fecha_desde: '', fecha_hasta: '' };
                 setFiltros(limpios);
+                cargar(1, limpios);
               }}
               className="text-xs text-yellow-500 hover:text-yellow-600 underline underline-offset-2 transition-colors"
             >
