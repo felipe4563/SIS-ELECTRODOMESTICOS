@@ -802,6 +802,20 @@ const recibirMercaderia = async (req, res) => {
         [cantReal, detalle.id_detalle]
       );
 
+      // Si se cargaron números de serie antes de recibir, quedaron con el
+      // depósito sugerido del encabezado (único dato disponible en ese
+      // momento, ver agregarSerieDetalle). Si la recepción real termina en
+      // otro depósito, corregirlas acá — si no, listarDisponibles nunca las
+      // encuentra porque busca por el depósito donde el stock realmente está.
+      if (Number(comp.id_deposito_destino) !== Number(id_deposito)) {
+        await db.promise().query(
+          `UPDATE compra_detalle_series
+             SET id_deposito_actual = ?
+           WHERE id_detalle = ? AND estado = 'EN_STOCK' AND origen = 'COMPRA' AND id_deposito_actual = ?`,
+          [id_deposito, detalle.id_detalle, comp.id_deposito_destino]
+        );
+      }
+
       const [[stockRow]] = await db.promise().query(
         `SELECT cantidad, costo_promedio FROM stock WHERE id_producto = ? AND id_deposito = ?`,
         [detalle.id_producto, id_deposito]
