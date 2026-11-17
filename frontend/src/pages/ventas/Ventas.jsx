@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ventasService } from '../../services/ventas.service';
 import { cajaService } from '../../services/caja.service';
+import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
@@ -76,12 +77,16 @@ export default function Ventas() {
   const navigate = useNavigate();
   const { puede } = usePermission();
   const puedeCrear = puede('crear_menor', 'ventas') || puede('crear_mayor', 'ventas');
+  // El backend ya restringe por sucursal a quien no tiene ver_todas, así que
+  // para esos usuarios el filtro mostraría una sola opción: no se muestra.
+  const puedeVerTodas = puede('ver_todas', 'ventas');
 
   const [ventas,       setVentas]       = useState([]);
+  const [sucursales,   setSucursales]   = useState([]);
   const [cargando,     setCargando]     = useState(true);
   const [arqueoActual, setArqueoActual] = useState(undefined); // undefined = cargando, null = sin caja
   const [filtros,      setFiltros]      = useState({
-    estado: '', tipo_venta: '', fecha_desde: HACE30, fecha_hasta: HOY, q: '',
+    estado: '', tipo_venta: '', id_sucursal: '', fecha_desde: HACE30, fecha_hasta: HOY, q: '',
   });
   const [total, setTotal] = useState(0);
   const [page,  setPage]  = useState(1);
@@ -104,6 +109,13 @@ export default function Ventas() {
       .then(r => setArqueoActual(r.data.arqueo ?? null))
       .catch(() => setArqueoActual(null));
   }, []);
+
+  useEffect(() => {
+    if (!puedeVerTodas) return;
+    sucursalesService.getAll()
+      .then(r => setSucursales(r.data.sucursales ?? r.data ?? []))
+      .catch(() => {});
+  }, [puedeVerTodas]);
 
   // Búsqueda automática: al entrar y cada vez que cambian los filtros (con debounce)
   useEffect(() => {
@@ -193,7 +205,7 @@ export default function Ventas() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${puedeVerTodas ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
           <div className="flex p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl gap-1">
             {[
               { v: '',      label: 'Menor y mayor' },
@@ -222,6 +234,16 @@ export default function Ventas() {
             <label className="absolute -top-2 left-3 text-[10px] font-semibold text-zinc-400 bg-white dark:bg-zinc-900 px-1 uppercase tracking-wide">Hasta</label>
             <input type="date" value={filtros.fecha_hasta} onChange={e => setF('fecha_hasta', e.target.value)} className={inputCls} />
           </div>
+
+          {puedeVerTodas && (
+            <div className="relative">
+              <label className="absolute -top-2 left-3 text-[10px] font-semibold text-zinc-400 bg-white dark:bg-zinc-900 px-1 uppercase tracking-wide">Sucursal</label>
+              <select value={filtros.id_sucursal} onChange={e => setF('id_sucursal', e.target.value)} className={inputCls}>
+                <option value="">Todas las sucursales</option>
+                {sucursales.map(s => <option key={s.id_sucursal} value={s.id_sucursal}>{s.nombre}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -267,6 +289,7 @@ export default function Ventas() {
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Número</th>
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Cliente</th>
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Tipo</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Sucursal</th>
                     <th className="text-left px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Fecha</th>
                     <th className="text-right px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Total</th>
                     <th className="text-right px-4 py-3 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Pendiente</th>
@@ -302,6 +325,9 @@ export default function Ventas() {
                           }`}>
                             {v.tipo_venta === 'MAYOR' ? 'Mayor' : 'Menor'}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 whitespace-nowrap text-sm">
+                          {v.sucursal_nombre ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-zinc-500 dark:text-zinc-400 whitespace-nowrap text-sm">
                           {fmtFecha(v.fecha)}
@@ -378,7 +404,9 @@ export default function Ventas() {
                       {/* Fila inferior: cliente + fecha */}
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm text-zinc-700 dark:text-zinc-300 font-medium truncate">{clienteNombre}</p>
-                        <p className="text-xs text-zinc-400 shrink-0">{fmtFecha(v.fecha)}</p>
+                        <p className="text-xs text-zinc-400 shrink-0">
+                          {v.sucursal_nombre ? `${v.sucursal_nombre} · ` : ''}{fmtFecha(v.fecha)}
+                        </p>
                       </div>
                     </div>
                   </div>

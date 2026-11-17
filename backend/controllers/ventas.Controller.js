@@ -995,6 +995,28 @@ const emitirVenta = async (req, res) => {
         [item.id_producto, venta.id_deposito]
       );
 
+      // El costo de la venta se congela al crear el borrador: si en ese
+      // momento el depósito todavía no tenía costo (mercadería aún no
+      // recibida, o stock cargado sin costo), quedó en 0 y la utilidad sale
+      // 100%. Se refresca acá, al emitir, que es cuando el costo de venta
+      // queda definitivo. Nunca se pisa un costo conocido con 0.
+      let costoVenta = Number(nuevoStock?.costo ?? 0);
+      if (costoVenta <= 0) {
+        const [[otroDeposito]] = await db.promise().query(
+          `SELECT costo_promedio FROM stock
+           WHERE id_producto = ? AND costo_promedio > 0
+           ORDER BY fecha_ult_movimiento DESC LIMIT 1`,
+          [item.id_producto]
+        );
+        costoVenta = Number(otroDeposito?.costo_promedio ?? 0);
+      }
+      if (costoVenta > 0 && costoVenta !== Number(item.costo_unitario)) {
+        await db.promise().query(
+          `UPDATE venta_detalle SET costo_unitario = ? WHERE id_detalle = ?`,
+          [costoVenta, item.id_detalle]
+        );
+      }
+
       await db.promise().query(
         `INSERT INTO kardex (id_producto, id_deposito, id_tipo_movimiento, cantidad, costo_unitario,
          saldo_cantidad, saldo_costo, documento_tipo, documento_id, documento_numero, id_usuario)
