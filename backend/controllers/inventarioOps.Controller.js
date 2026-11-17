@@ -190,19 +190,35 @@ const getTransferencia = async (req, res) => {
   }
 };
 
+// Hasta el 2026-11-13 el depósito de origen era uno solo y viajaba en la
+// cabecera; ahora cada ítem lleva el suyo. Una app cacheada vieja sigue
+// mandando el formato anterior, así que se resuelve el origen de cada ítem
+// contra la cabecera en vez de rechazar el pedido. Si no hay ninguno de los
+// dos no se puede deducir, y ahí sí conviene decirle al usuario que su app
+// quedó vieja en lugar del mensaje genérico, que no le dice nada.
+const MSG_CLIENTE_DESACTUALIZADO =
+  'Tu aplicación está desactualizada. Cerrala y volvé a abrirla para continuar.';
+
+const resolverOrigenItems = (items, origenCabecera) =>
+  items.map(it => ({
+    ...it,
+    id_deposito_origen: it.id_deposito_origen || origenCabecera || null,
+  }));
+
 const createTransferencia = async (req, res) => {
   const conn = await db.promise().getConnection();
   try {
     const userId = req.user.id_usuario;
-    const { id_deposito_destino, observaciones, items } = req.body;
+    const { id_deposito_origen: origenCabecera, id_deposito_destino, observaciones } = req.body;
 
-    if (!id_deposito_destino || !items?.length) {
+    if (!id_deposito_destino || !req.body.items?.length) {
       throw new ApiError(400, 'Faltan datos requeridos');
     }
+    const items = resolverOrigenItems(req.body.items, origenCabecera);
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
       if (!item.id_deposito_origen) {
-        throw new ApiError(400, 'Faltan datos requeridos');
+        throw new ApiError(400, MSG_CLIENTE_DESACTUALIZADO);
       }
       if (String(item.id_deposito_origen) === String(id_deposito_destino)) {
         throw new ApiError(400, 'El depósito de origen no puede ser igual al destino');
@@ -259,19 +275,20 @@ const updateTransferencia = async (req, res) => {
   const conn = await db.promise().getConnection();
   try {
     const { id } = req.params;
-    const { id_deposito_destino, observaciones, items } = req.body;
+    const { id_deposito_origen: origenCabecera, id_deposito_destino, observaciones } = req.body;
 
     const [[t]] = await conn.query(`SELECT estado FROM transferencias WHERE id_transferencia = ?`, [id]);
     if (!t) throw new ApiError(404, 'Transferencia no encontrada');
     if (t.estado !== 'BORRADOR') throw new ApiError(400, 'Solo se puede editar una transferencia en borrador');
 
-    if (!id_deposito_destino || !items?.length) {
+    if (!id_deposito_destino || !req.body.items?.length) {
       throw new ApiError(400, 'Faltan datos requeridos');
     }
+    const items = resolverOrigenItems(req.body.items, origenCabecera);
     for (const item of items) {
       if (!item.id_producto || Number(item.cantidad) <= 0) continue;
       if (!item.id_deposito_origen) {
-        throw new ApiError(400, 'Faltan datos requeridos');
+        throw new ApiError(400, MSG_CLIENTE_DESACTUALIZADO);
       }
       if (String(item.id_deposito_origen) === String(id_deposito_destino)) {
         throw new ApiError(400, 'El depósito de origen no puede ser igual al destino');
