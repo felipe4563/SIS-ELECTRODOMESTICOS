@@ -7,6 +7,18 @@ import { useState, useRef } from 'react';
 
 const ESC = 0x1b;
 
+// Características de escritura conocidas, de mayor a menor prioridad. Varias
+// impresoras exponen un servicio propietario ADEMÁS del estándar (la MTP-3
+// expone cuatro servicios a la vez), y quedarse con "la primera que permita
+// escribir" elegía el canal propietario: la prueba se colgaba esperando
+// créditos y la impresora contestaba "err:" (65 72 72 3a).
+const WRITE_CONOCIDAS = [
+  { uuid: '0000ff02-0000-1000-8000-00805f9b34fb', nombre: 'FF00/FF02 (familia ff00 / L11)' },
+  { uuid: '00002af1-0000-1000-8000-00805f9b34fb', nombre: '18F0/2AF1 (ESC/POS genérico)' },
+  { uuid: '49535343-8841-43f4-a8d4-ecbe34729bb3', nombre: 'RN4870/UART (TSPL)' },
+  { uuid: '0000ffe1-0000-1000-8000-00805f9b34fb', nombre: 'HM-10/FFE1 (TSPL)' },
+];
+
 function strToBytes(s) {
   return new TextEncoder().encode(s);
 }
@@ -97,7 +109,7 @@ export default function TestImpresoraBT() {
       addLog(`Servicios encontrados: ${services.length}`);
 
       const PROP_NAMES = ['broadcast', 'read', 'writeWithoutResponse', 'write', 'notify', 'indicate', 'authenticatedSignedWrites', 'reliableWrite', 'writableAuxiliaries'];
-      let candidata = null;
+      const escribibles = [];
       const notifCands = [];
       for (const service of services) {
         addLog(`— Servicio: ${service.uuid}`);
@@ -106,10 +118,7 @@ export default function TestImpresoraBT() {
           const props = PROP_NAMES.filter(n => c.properties[n]).join(', ');
           addLog(`    · Característica: ${c.uuid}  [${props}]`);
           if (c.properties.write || c.properties.writeWithoutResponse) {
-            // Preferimos writeWithoutResponse (más rápido, sin esperar ack por cada paquete).
-            if (!candidata || (c.properties.writeWithoutResponse && !candidata.properties.writeWithoutResponse)) {
-              candidata = c;
-            }
+            escribibles.push(c);
             addLog(`      ↳ Esta característica puede usarse para escribir (candidata para imprimir).`);
           }
           if (c.properties.notify || c.properties.indicate) {
@@ -118,9 +127,27 @@ export default function TestImpresoraBT() {
         }
       }
 
+      // Entre todas las escribibles se elige una conocida antes que el canal
+      // propietario de turno; recién si no hay ninguna conocida se cae en
+      // "la primera que permita escribir" (con aviso, porque suele fallar).
+      let candidata = null;
+      let porQue = '';
+      for (const conocida of WRITE_CONOCIDAS) {
+        const hit = escribibles.find(c => c.uuid === conocida.uuid);
+        if (hit) { candidata = hit; porQue = conocida.nombre; break; }
+      }
+      if (!candidata && escribibles.length) {
+        candidata = escribibles.find(c => c.properties.writeWithoutResponse) ?? escribibles[0];
+        porQue = 'DESCONOCIDA — ninguna de las conocidas está presente';
+      }
+
       if (candidata) {
         setWriteChar(candidata);
         addLog(`✅ Característica elegida para imprimir: ${candidata.uuid}`);
+        addLog(`   ↳ ${porQue}`);
+        if (escribibles.length > 1) {
+          addLog(`   ↳ (había ${escribibles.length} escribibles; se descartaron las demás)`);
+        }
       } else {
         addLog('⚠️ No se detectó ninguna característica de escritura.');
       }
