@@ -11,15 +11,28 @@ export default function EtiquetasImprimir() {
   const { state }    = useLocation();
   const { empresa }  = useEmpresa() ?? {};
   const empresaNombre = empresa?.nombre_comercial || empresa?.razon_social || '';
+  // Las series llegan como objetos ({ numero_serie }) o como strings según
+  // quién navegó hasta acá; se normalizan a un único formato y se les agrega
+  // el flag de selección, que arranca en todas marcadas (el caso habitual).
   const [items, setItems]   = useState(() =>
-    (state?.etiquetas ?? []).map(e => ({ ...e, copias: e.copias ?? 1 }))
+    (state?.etiquetas ?? []).map(e => ({
+      ...e,
+      copias: e.copias ?? 1,
+      series: (e.series ?? []).map(s => ({
+        numero_serie: s?.numero_serie ?? s,
+        imprimir: true,
+      })),
+    }))
   );
+  const [abiertos, setAbiertos] = useState(() => new Set());
   const [qrUrls, setQrUrls] = useState({});
   const [modo, setModo]     = useState('detallado'); // 'detallado' | 'simple'
 
   useEffect(() => {
     if (!state?.etiquetas?.length) navigate(-1);
   }, []); // eslint-disable-line
+
+  const codigosClave = items.map(i => i.codigo_interno ?? '').join('|');
 
   useEffect(() => {
     if (items.length === 0) return;
@@ -40,7 +53,28 @@ export default function EtiquetasImprimir() {
       setQrUrls(urls);
     };
     generar();
-  }, [items]);
+    // Depende solo de los códigos, no del array entero: marcar/desmarcar una
+    // serie cambia `items` y volvería a regenerar todos los QR sin necesidad.
+  }, [codigosClave]); // eslint-disable-line
+
+  const toggleAbierto = idx =>
+    setAbiertos(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+
+  const toggleSerie = (idx, si) =>
+    setItems(prev => prev.map((it, i) => i !== idx ? it : {
+      ...it,
+      series: it.series.map((s, j) => j === si ? { ...s, imprimir: !s.imprimir } : s),
+    }));
+
+  const marcarTodas = (idx, valor) =>
+    setItems(prev => prev.map((it, i) => i !== idx ? it : {
+      ...it,
+      series: it.series.map(s => ({ ...s, imprimir: valor })),
+    }));
 
   const setCopias = (idx, val) =>
     setItems(prev => prev.map((it, i) =>
@@ -51,8 +85,8 @@ export default function EtiquetasImprimir() {
   // número real). Si no, se respeta la cantidad de copias y el campo de
   // serie queda vacío para completarlo a mano.
   const printLabels = items.flatMap(item =>
-    item.series?.length
-      ? item.series.map(s => ({ ...item, numero_serie: s.numero_serie ?? s }))
+    item.series.length
+      ? item.series.filter(s => s.imprimir).map(s => ({ ...item, numero_serie: s.numero_serie }))
       : Array.from({ length: item.copias }, () => ({ ...item, numero_serie: '' }))
   );
 
@@ -126,7 +160,7 @@ export default function EtiquetasImprimir() {
         <div className="flex items-center gap-2">
           <button
             onClick={imprimirPorBluetooth}
-            disabled={!qrListo || btEstado === 'conectando' || btEstado === 'imprimiendo'}
+            disabled={!qrListo || printLabels.length === 0 || btEstado === 'conectando' || btEstado === 'imprimiendo'}
             className="px-4 py-1.5 rounded-xl border border-blue-400 text-blue-600 dark:text-blue-400 text-sm font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
           >
             {btEstado === 'conectando' && '🔵 Conectando…'}
@@ -135,10 +169,10 @@ export default function EtiquetasImprimir() {
           </button>
           <button
             onClick={() => window.print()}
-            disabled={!qrListo}
+            disabled={!qrListo || printLabels.length === 0}
             className="px-4 py-1.5 rounded-xl bg-yellow-400 text-zinc-900 text-sm font-semibold hover:bg-yellow-500 transition-colors disabled:opacity-50"
           >
-            {qrListo ? '🖨 Imprimir' : 'Generando QR…'}
+            {!qrListo ? 'Generando QR…' : '🖨 Imprimir (' + printLabels.length + ')'}
           </button>
         </div>
       </div>
@@ -150,60 +184,111 @@ export default function EtiquetasImprimir() {
             Rollo de etiquetas 40mm × 60mm. <strong>Detallado</strong> imprime empresa, producto, marca,
             modelo, color, capacidad y N° de serie junto al QR. <strong>Solo QR</strong> imprime únicamente
             el código QR con el nombre y código del producto. Los productos con series cargadas imprimen
-            una etiqueta por cada serie; el resto respeta la cantidad de copias.
+            una etiqueta por cada serie (tocá el renglón de series para elegir cuáles imprimir);
+            el resto respeta la cantidad de copias.
           </p>
           {btError && (
             <div className="px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-600 dark:text-red-400">
               ⚠ {btError}
             </div>
           )}
-          {items.map((item, idx) => (
+          {items.map((item, idx) => {
+            const tieneSeries = item.series.length > 0;
+            const elegidas    = item.series.filter(s => s.imprimir).length;
+            const abierto     = abiertos.has(idx);
+            return (
             <div
               key={idx}
-              className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center gap-4"
+              className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4"
             >
-              <div className="shrink-0 bg-white p-1 rounded">
-                {qrUrls[item.codigo_interno] ? (
-                  <img
-                    src={qrUrls[item.codigo_interno]}
-                    alt={item.codigo_interno}
-                    className="w-16 h-16"
-                  />
-                ) : (
-                  <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+              <div className="flex items-center gap-4">
+                <div className="shrink-0 bg-white p-1 rounded">
+                  {qrUrls[item.codigo_interno] ? (
+                    <img
+                      src={qrUrls[item.codigo_interno]}
+                      alt={item.codigo_interno}
+                      className="w-16 h-16"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
+                    {item.nombre}
+                  </p>
+                  <p className="text-xs font-mono text-zinc-500">{item.codigo_interno}</p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                    {[item.marca, item.modelo, item.color, item.capacidad].filter(Boolean).join(' · ')}
+                  </p>
+                  {tieneSeries ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleAbierto(idx)}
+                      className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400 hover:underline"
+                    >
+                      {elegidas} de {item.series.length} serie{item.series.length === 1 ? '' : 's'} → {elegidas} etiqueta{elegidas === 1 ? '' : 's'} · {abierto ? 'ocultar' : 'elegir series'}
+                    </button>
+                  ) : (
+                    <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                      {APP_URL}/p/{item.codigo_interno}
+                    </p>
+                  )}
+                </div>
+                {!tieneSeries && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className="text-xs text-zinc-500">Copias</label>
+                    <input
+                      type="number" min="1" max="99"
+                      value={item.copias}
+                      onChange={e => setCopias(idx, e.target.value)}
+                      className="w-16 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-center focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    />
+                  </div>
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
-                  {item.nombre}
-                </p>
-                <p className="text-xs font-mono text-zinc-500">{item.codigo_interno}</p>
-                <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                  {[item.marca, item.modelo, item.color, item.capacidad].filter(Boolean).join(' · ')}
-                </p>
-                {item.series?.length > 0 ? (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                    {item.series.length} serie{item.series.length === 1 ? '' : 's'} cargada{item.series.length === 1 ? '' : 's'} → {item.series.length} etiqueta{item.series.length === 1 ? '' : 's'}
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                    {APP_URL}/p/{item.codigo_interno}
-                  </p>
-                )}
-              </div>
-              {!(item.series?.length > 0) && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <label className="text-xs text-zinc-500">Copias</label>
-                  <input
-                    type="number" min="1" max="99"
-                    value={item.copias}
-                    onChange={e => setCopias(idx, e.target.value)}
-                    className="w-16 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-center focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                  />
+
+              {tieneSeries && abierto && (
+                <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => marcarTodas(idx, true)}
+                      className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      Todas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => marcarTodas(idx, false)}
+                      className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      Ninguna
+                    </button>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1">
+                    {item.series.map((s, si) => (
+                      <label
+                        key={s.numero_serie + '-' + si}
+                        className="flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={s.imprimir}
+                          onChange={() => toggleSerie(idx, si)}
+                          className="accent-yellow-400 w-4 h-4 shrink-0"
+                        />
+                        <span className="text-[11px] font-mono text-zinc-700 dark:text-zinc-300 truncate">
+                          {s.numero_serie}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
