@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { ajustesService }   from '../../services/ajustes.service';
 import { depositosService } from '../../services/depositos.service';
 import { usePermission }    from '../../hooks/usePermission';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 
@@ -12,9 +11,6 @@ const ESTADO_BADGE = {
   APROBADO: { label: 'Aprobado',  cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   ANULADO:  { label: 'Anulado',   cls: 'bg-red-100   text-red-700   dark:bg-red-900/30   dark:text-red-400' },
 };
-
-const HOY    = hoyLocal();
-const HACE30 = fechaHaceDiasLocal(30);
 
 export default function Ajustes() {
   const navigate = useNavigate();
@@ -27,8 +23,11 @@ export default function Ajustes() {
   const [total,     setTotal]     = useState(0);
   const [page,      setPage]      = useState(1);
   const LIMIT = 20;
+  // Sin filtro de fechas por defecto: arrancar en los últimos 30 días
+  // esconde documentos cargados con una fecha anterior, que es como se
+  // registró tres veces la misma orden de compra. La lista ya pagina.
   const [filtros,   setFiltros]   = useState({
-    q: '', estado: '', id_deposito: '', fecha_desde: HACE30, fecha_hasta: HOY,
+    q: '', estado: '', id_deposito: '', fecha_desde: '', fecha_hasta: '',
   });
 
   useEffect(() => {

@@ -4,7 +4,6 @@ import { ventasService } from '../../services/ventas.service';
 import { cajaService } from '../../services/caja.service';
 import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -37,9 +36,6 @@ const ESTADO_BADGE = {
   ANULADA:   { label: 'Anulada',   cls: 'bg-red-100   text-red-700   dark:bg-red-900/30   dark:text-red-400',   accent: 'bg-red-400',    chipOn: 'bg-red-500 text-white' },
   DEVUELTA:  { label: 'Devuelta',  cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', accent: 'bg-purple-400', chipOn: 'bg-purple-500 text-white' },
 };
-
-const HOY    = hoyLocal();
-const HACE30 = fechaHaceDiasLocal(30);
 
 /* ─── Chip de filtro de estado ────────────────────────────────────────────── */
 function ChipEstado({ label, activo, colorOn, onClick }) {
@@ -85,8 +81,11 @@ export default function Ventas() {
   const [sucursales,   setSucursales]   = useState([]);
   const [cargando,     setCargando]     = useState(true);
   const [arqueoActual, setArqueoActual] = useState(undefined); // undefined = cargando, null = sin caja
+  // Sin filtro de fechas por defecto: arrancar en los últimos 30 días
+  // esconde documentos cargados con una fecha anterior, que es como se
+  // registró tres veces la misma orden de compra. La lista ya pagina.
   const [filtros,      setFiltros]      = useState({
-    estado: '', tipo_venta: '', id_sucursal: '', fecha_desde: HACE30, fecha_hasta: HOY, q: '',
+    estado: '', tipo_venta: '', id_sucursal: '', fecha_desde: '', fecha_hasta: '', q: '',
   });
   const [total, setTotal] = useState(0);
   const [page,  setPage]  = useState(1);

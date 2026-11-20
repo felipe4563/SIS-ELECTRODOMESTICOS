@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { cajaService } from '../../services/caja.service';
 import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
@@ -14,9 +13,6 @@ const ORIGEN_BADGE = {
   GASTO:  { label: 'Gasto',   cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 };
 
-const HOY   = hoyLocal();
-const HACE30 = fechaHaceDiasLocal(30);
-
 const METODOS_PAGO = [
   'EFECTIVO', 'QR', 'TRANSFERENCIA', 'TARJETA', 'TARJETA_DEBITO', 'TARJETA_CREDITO', 'CHEQUE', 'OTRO',
 ];
@@ -26,8 +22,11 @@ export default function LibroCaja() {
   const { puede } = usePermission();
   const verTodos = puede('ver_arqueo_todos', 'caja');
 
+  // Sin filtro de fechas por defecto: arrancar en los últimos 30 días
+  // esconde documentos cargados con una fecha anterior, que es como se
+  // registró tres veces la misma orden de compra. La lista ya pagina.
   const [filtros, setFiltros] = useState({
-    id_sucursal: '', fecha_desde: HACE30, fecha_hasta: HOY, metodo_pago: '',
+    id_sucursal: '', fecha_desde: '', fecha_hasta: '', metodo_pago: '',
   });
 
   const [sucursales, setSucursales] = useState([]);

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { inventarioService } from '../../services/inventario.service';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtFecha = s => s ? new Date(s).toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
@@ -15,17 +14,17 @@ const EFECTO_BADGE = {
 
 const DOC_TIPOS = ['COMPRA', 'VENTA', 'TRANSFERENCIA', 'AJUSTE', 'DEVOLUCION', 'APERTURA', 'SERVICIO_TECNICO'];
 
-const HOY   = hoyLocal();
-const HACE30 = fechaHaceDiasLocal(30);
-
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Kardex() {
   // Filtros
+  // Sin filtro de fechas por defecto: arrancar en los últimos 30 días
+  // esconde documentos cargados con una fecha anterior, que es como se
+  // registró tres veces la misma orden de compra. La lista ya pagina.
   const [filtros, setFiltros] = useState({
     id_producto:   '',
     id_deposito:   '',
-    fecha_desde:   HACE30,
-    fecha_hasta:   HOY,
+    fecha_desde:   '',
+    fecha_hasta:   '',
     documento_tipo: '',
   });
 

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate }          from 'react-router-dom';
 import { usePermission }        from '../../hooks/usePermission';
 import { servicioTecnicoService } from '../../services/servicioTecnico.service';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 /* ── Constantes de UI ─────────────────────────────────────────────────────── */
 const ESTADO_META = {
@@ -26,9 +25,6 @@ const PRIORIDAD_META = {
 
 const ESTADOS_ACTIVOS = ['RECIBIDO', 'EN_DIAGNOSTICO', 'ESPERANDO_REPUESTO', 'EN_REPARACION', 'REPARADO', 'LISTO_ENTREGA'];
 const TODOS_LOS_ESTADOS = [...ESTADOS_ACTIVOS, 'ENTREGADO', 'SIN_REPARACION', 'ANULADO'];
-
-const hoy    = hoyLocal;
-const hace30 = () => fechaHaceDiasLocal(30);
 
 /* ── Badges ──────────────────────────────────────────────────────────────── */
 function EstadoBadge({ estado }) {
@@ -64,8 +60,11 @@ export default function ServicioTecnico() {
   const [total, setTotal]           = useState(0);
   const [cargando, setCargando]     = useState(true);
   const [pipeline, setPipeline]     = useState({});
+  // Sin filtro de fechas por defecto: arrancar en los últimos 30 días
+  // esconde documentos cargados con una fecha anterior, que es como se
+  // registró tres veces la misma orden de compra. La lista ya pagina.
   const [filtros, setFiltros]       = useState({
-    search: '', estado: '', fecha_desde: hace30(), fecha_hasta: hoy(),
+    search: '', estado: '', fecha_desde: '', fecha_hasta: '',
   });
 
   const setF = (k, v) => setFiltros(p => ({ ...p, [k]: v }));

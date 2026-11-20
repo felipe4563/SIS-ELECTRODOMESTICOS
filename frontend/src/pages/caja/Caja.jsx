@@ -4,7 +4,6 @@ import { cajaService } from '../../services/caja.service';
 import { sucursalesService } from '../../services/configuracion.service';
 import { usePermission } from '../../hooks/usePermission';
 import { useAuth } from '../../contexts/AuthContext';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -439,11 +438,14 @@ export default function Caja() {
   const [modalReponer, setModalReponer] = useState(null); // null | { chica, generales }
   const puedeReponer = puede('reponer_caja_chica', 'caja');
 
+  // Sin filtro de fechas por defecto: arrancar en los últimos 30 días
+  // esconde documentos cargados con una fecha anterior, que es como se
+  // registró tres veces la misma orden de compra. La lista ya pagina.
   const [filtros, setFiltros] = useState({
     id_caja:     '',
     estado:      '',
-    fecha_desde: fechaHaceDiasLocal(30),
-    fecha_hasta: hoyLocal(),
+    fecha_desde: '',
+    fecha_hasta: '',
   });
 
   const cargarTurnoActual = () => {
