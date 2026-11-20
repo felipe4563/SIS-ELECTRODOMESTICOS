@@ -372,7 +372,7 @@ export async function renderLabelDetallado(item, qrDataUrl, empresaNombre) {
   // N° de serie (sin línea separadora)
   const ySerie = filaSuperiorY + filaSuperiorH + mm(4.2);
   ctx.font = `bold ${mm(3.0)}px sans-serif`;
-  const textoSerie = item.numero_serie ? `N°S: ${item.numero_serie}` : 'N°S: _______________';
+  const textoSerie = item.numero_serie ? `N° ${item.numero_serie}` : 'N° _______________';
   drawTruncado(ctx, textoSerie, CONTENT_DOTS_W / 2, ySerie, CONTENT_DOTS_W - pad * 2, 'center');
 
   return rotar90Centrado(contenido, DOTS_WIDTH, DOTS_HEIGHT);

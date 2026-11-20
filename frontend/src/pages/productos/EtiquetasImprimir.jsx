@@ -319,7 +319,7 @@ export default function EtiquetasImprimir() {
                   </div>
                 </div>
                 <div className="etq-serie">
-                  N°S: {item.numero_serie || '_______________'}
+                  N° {item.numero_serie || '_______________'}
                 </div>
               </div>
             ) : (
