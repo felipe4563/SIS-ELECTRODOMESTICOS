@@ -174,7 +174,7 @@ export default function Ventas() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile
           icon="ticket" iconCls="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
-          label="Total ventas" value={ventas.length} sub="en el período"
+          label="Total ventas" value={total} sub="con los filtros actuales"
         />
         <StatTile
           icon="clock" iconCls="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"

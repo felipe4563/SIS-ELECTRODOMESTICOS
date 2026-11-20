@@ -80,7 +80,7 @@ export default function Ajustes() {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4">
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Total (filtro)</p>
-          <p className="text-2xl font-bold text-zinc-900 dark:text-white">{ajustes.length}</p>
+          <p className="text-2xl font-bold text-zinc-900 dark:text-white">{total}</p>
         </div>
         <div className="bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4">
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Borradores</p>
