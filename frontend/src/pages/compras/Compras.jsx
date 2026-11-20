@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { comprasService } from '../../services/compras.service';
 import { usePermission }  from '../../hooks/usePermission';
-import { hoyLocal, fechaHaceDiasLocal } from '../../utils/fechaLocal';
 
 const fmtFecha = s => s ? new Date(s).toLocaleDateString('es-BO') : '—';
 const fmtMonto = n => Number(n ?? 0).toLocaleString('es-BO', { minimumFractionDigits: 2 });
@@ -26,9 +25,6 @@ const PIPELINE = [
   { key: 'RECIBIDO',   label: 'Recibido',   dot: 'bg-green-500',  num: 'text-green-600 dark:text-green-400' },
 ];
 
-const HOY    = hoyLocal();
-const HACE30 = fechaHaceDiasLocal(30);
-
 const inputCls = 'px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-shadow placeholder:text-zinc-400';
 
 export default function Compras() {
@@ -46,8 +42,13 @@ export default function Compras() {
   const [page, setPage]   = useState(1);
   const [resumen, setResumen] = useState({ byEstado: {}, saldoTotal: 0, total: 0 });
   const LIMIT = 20;
+  // Sin filtro de fechas por defecto: cuando arrancaba en los últimos 30 días,
+  // una orden cargada con la fecha real del documento del proveedor (anterior a
+  // ese rango) se guardaba bien pero no aparecía en la lista, y el usuario la
+  // volvía a registrar — así se crearon CMP-202610-0007/0009/0010, la misma
+  // orden tres veces. La lista ya está paginada, así que mostrar todo no cuesta.
   const [filtros,    setFiltros]    = useState({
-    q: '', estado: '', fecha_desde: HACE30, fecha_hasta: HOY, id_sucursal: '', id_deposito_destino: '', id_proveedor: '',
+    q: '', estado: '', fecha_desde: '', fecha_hasta: '', id_sucursal: '', id_deposito_destino: '', id_proveedor: '',
   });
 
   const depositosDeSucursal = filtros.id_sucursal
@@ -256,12 +257,14 @@ export default function Compras() {
             )}
             <button
               onClick={() => {
-                const limpios = { q: '', estado: '', fecha_desde: '', fecha_hasta: '', id_sucursal: '', id_deposito_destino: '' };
-                setFiltros(limpios);
+                setFiltros({
+                  q: '', estado: '', fecha_desde: '', fecha_hasta: '',
+                  id_sucursal: '', id_deposito_destino: '', id_proveedor: '',
+                });
               }}
               className="text-xs text-amber-500 hover:text-amber-600 underline underline-offset-2 transition-colors"
             >
-              Ver todo el historial (sin filtro de fechas)
+              Limpiar todos los filtros
             </button>
           </div>
         ) : (
