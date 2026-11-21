@@ -781,6 +781,7 @@ function ModalRecibir({ detalle, depositos, idDepositoSugerido, onConfirm, onClo
               return (
                 <div key={d.id_detalle} className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3">
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">{d.producto}</p>
+                  {specLinea(d) && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{specLinea(d)}</p>}
                   <p className="text-[11px] font-mono text-zinc-400 mb-2">{d.codigo_interno}</p>
                   <div className="flex items-start gap-3">
                     <div className="flex-1">
