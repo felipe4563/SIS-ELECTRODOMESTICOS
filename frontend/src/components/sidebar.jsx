@@ -345,7 +345,7 @@ function SidebarFull({ onClose, onColapsar } = {}) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-1">
+      <div className="px-3 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-zinc-100 dark:border-zinc-800/80 space-y-1">
         <div className="flex items-center justify-between px-3 py-2 rounded-lg">
           <div className="flex items-center gap-2">
             <Ic id="sun" size={13} className="text-zinc-400 dark:text-zinc-500" />
@@ -434,7 +434,7 @@ function SidebarMobile() {
 
       {/* Drawer */}
       <aside
-        className={`lg:hidden fixed left-0 top-0 h-screen w-64 z-50 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${abierto ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`lg:hidden fixed left-0 top-0 h-dvh w-64 z-50 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${abierto ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Botón cerrar encima del logo */}
         <div className="absolute top-3 right-3 z-10">
@@ -477,7 +477,7 @@ export default function Sidebar() {
       {/* Desktop lg+: sidebar completo — no se renderiza nada cuando está colapsado
           (App.jsx dibuja la fila con el botón "Mostrar menú" en su propio lugar en el layout) */}
       {!colapsado && (
-        <aside className="hidden lg:flex w-60 shrink-0 flex-col h-screen sticky top-0 z-30">
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col h-dvh sticky top-0 z-30">
           <SidebarFull onColapsar={() => setColapsado(true)} />
         </aside>
       )}
